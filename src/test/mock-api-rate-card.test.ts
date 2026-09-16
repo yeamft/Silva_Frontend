@@ -46,6 +46,7 @@ describe("rate card mock API", () => {
       benchmarkFarmARate: 1000,
       benchmarkFarmBRate: 1000,
       justificationNote: "",
+      budgetYear: 2025,
       effectiveFrom: null,
       effectiveTo: null,
     });
@@ -63,6 +64,7 @@ describe("rate card mock API", () => {
       benchmarkFarmARate: 10,
       benchmarkFarmBRate: 10,
       justificationNote: "",
+      budgetYear: 2025,
       effectiveFrom: null,
       effectiveTo: null,
     });
@@ -78,6 +80,7 @@ describe("rate card mock API", () => {
         benchmarkFarmARate: line.benchmarkFarmARate,
         benchmarkFarmBRate: line.benchmarkFarmBRate,
         justificationNote: "Quoted shortage — three suppliers.",
+        budgetYear: line.budgetYear,
         effectiveFrom: line.effectiveFrom,
         effectiveTo: line.effectiveTo,
       });
@@ -120,6 +123,7 @@ describe("rate card mock API", () => {
       benchmarkFarmARate: null,
       benchmarkFarmBRate: null,
       justificationNote: "",
+      budgetYear: 2025,
       effectiveFrom: null,
       effectiveTo: null,
     });
@@ -135,9 +139,29 @@ describe("rate card mock API", () => {
         benchmarkFarmARate: null,
         benchmarkFarmBRate: null,
         justificationNote: "",
+        budgetYear: 2025,
         effectiveFrom: null,
         effectiveTo: null,
       }),
     ).rejects.toThrow(/categor/i);
+  });
+
+  it("archives and restores rates by budget year for reference", async () => {
+    const { archiveRateCardYear, unarchiveRateCardYear, getRateCardBudgetYears } = await import(
+      "@/lib/mock-api/rate-card"
+    );
+    const result = await archiveRateCardYear(2025);
+    expect(result.archived).toBeGreaterThan(0);
+    const archived = await getRateCardLines({ budgetYear: 2025, archived: "archived" });
+    expect(archived.length).toBe(result.archived);
+    expect(archived.every((l) => l.archivedAt)).toBe(true);
+
+    const restored = await unarchiveRateCardYear(2025);
+    expect(restored.restored).toBe(result.archived);
+    const active = await getRateCardLines({ budgetYear: 2025, archived: "active" });
+    expect(active.length).toBeGreaterThan(0);
+
+    const years = await getRateCardBudgetYears();
+    expect(years.some((y) => y.budgetYear === 2025)).toBe(true);
   });
 });

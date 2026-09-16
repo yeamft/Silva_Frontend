@@ -5,6 +5,7 @@
 import { apiFetch } from "@/lib/api/http";
 import { ApiError } from "@/lib/api/types";
 import type {
+  RateCardBudgetYear,
   RateCardCategoryConfig,
   RateCardCategoryInput,
   RateCardLine,
@@ -17,6 +18,8 @@ function asError(err: unknown): Error {
   if (err instanceof Error) return err;
   return new Error("Request failed");
 }
+
+export type RateCardArchivedFilter = "active" | "archived" | "all";
 
 export async function getRateCardCategories(): Promise<RateCardCategoryConfig[]> {
   try {
@@ -61,9 +64,24 @@ export async function deleteRateCardCategory(id: string): Promise<void> {
   }
 }
 
-export async function getRateCardLines(): Promise<RateCardLine[]> {
+export async function getRateCardBudgetYears(): Promise<RateCardBudgetYear[]> {
   try {
-    return await apiFetch<RateCardLine[]>("/rate-card/lines");
+    return await apiFetch<RateCardBudgetYear[]>("/rate-card/budget-years");
+  } catch (err) {
+    throw asError(err);
+  }
+}
+
+export async function getRateCardLines(opts?: {
+  budgetYear?: number;
+  archived?: RateCardArchivedFilter;
+}): Promise<RateCardLine[]> {
+  try {
+    const params = new URLSearchParams();
+    if (opts?.budgetYear != null) params.set("budgetYear", String(opts.budgetYear));
+    if (opts?.archived) params.set("archived", opts.archived);
+    const qs = params.toString();
+    return await apiFetch<RateCardLine[]>(`/rate-card/lines${qs ? `?${qs}` : ""}`);
   } catch (err) {
     throw asError(err);
   }
@@ -135,6 +153,32 @@ export async function returnRateCardLine(id: string, comment: string): Promise<R
   }
 }
 
+export async function archiveRateCardYear(
+  budgetYear: number,
+): Promise<{ budgetYear: number; label: string; archived: number }> {
+  try {
+    return await apiFetch("/rate-card/archive-year", {
+      method: "POST",
+      body: { budgetYear },
+    });
+  } catch (err) {
+    throw asError(err);
+  }
+}
+
+export async function unarchiveRateCardYear(
+  budgetYear: number,
+): Promise<{ budgetYear: number; label: string; restored: number }> {
+  try {
+    return await apiFetch("/rate-card/unarchive-year", {
+      method: "POST",
+      body: { budgetYear },
+    });
+  } catch (err) {
+    throw asError(err);
+  }
+}
+
 export function getRateCardSummary(source: RateCardLine[]) {
   return {
     total: source.length,
@@ -146,4 +190,4 @@ export function getRateCardSummary(source: RateCardLine[]) {
   };
 }
 
-export type { RateCardStatus };
+export type { RateCardStatus, RateCardBudgetYear };

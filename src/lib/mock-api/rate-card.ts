@@ -4,13 +4,18 @@
  * Tenant is derived from session on the server — never send tenant_id from the client.
  */
 import type {
+  RateCardBudgetYear,
   RateCardCategoryConfig,
   RateCardCategoryInput,
   RateCardLine,
   RateCardLineInput,
   RateCardStatus,
 } from "@/types/cropfort-modules";
-import { DEFAULT_RATE_CARD_CATEGORIES } from "@/types/cropfort-modules";
+import {
+  currentBudgetYear,
+  DEFAULT_RATE_CARD_CATEGORIES,
+  formatBudgetYearLabel,
+} from "@/types/cropfort-modules";
 import { recordAudit } from "./audit";
 import { isoNow, mockDelay, newId } from "./delay";
 import { SEED_RATE_CARD } from "./seed";
@@ -146,19 +151,63 @@ export async function deleteRateCardCategory(id: string): Promise<void> {
   });
 }
 
-export async function getRateCardLines(): Promise<RateCardLine[]> {
+export async function getRateCardBudgetYears(): Promise<RateCardBudgetYear[]> {
+  await mockDelay(80);
+  const years = new Map<number, RateCardBudgetYear>();
+  for (const line of lines) {
+    const existing = years.get(line.budgetYear) ?? {
+      budgetYear: line.budgetYear,
+      label: formatBudgetYearLabel(line.budgetYear),
+      total: 0,
+      activeCount: 0,
+      archivedCount: 0,
+    };
+    existing.total += 1;
+    if (line.archivedAt) existing.archivedCount += 1;
+    else existing.activeCount += 1;
+    years.set(line.budgetYear, existing);
+  }
+  const current = currentBudgetYear();
+  if (!years.has(current)) {
+    years.set(current, {
+      budgetYear: current,
+      label: formatBudgetYearLabel(current),
+      total: 0,
+      activeCount: 0,
+      archivedCount: 0,
+    });
+  }
+  return [...years.values()].sort((a, b) => b.budgetYear - a.budgetYear);
+}
+
+export async function getRateCardLines(opts?: {
+  budgetYear?: number;
+  archived?: "active" | "archived" | "all";
+}): Promise<RateCardLine[]> {
   await mockDelay();
-  return structuredClone(lines);
+  let result = lines;
+  if (opts?.budgetYear != null) {
+    result = result.filter((l) => l.budgetYear === opts.budgetYear);
+  }
+  const archived = opts?.archived ?? "active";
+  if (archived === "active") result = result.filter((l) => !l.archivedAt);
+  else if (archived === "archived") result = result.filter((l) => Boolean(l.archivedAt));
+  return structuredClone(result);
 }
 
 export async function createRateCardLine(input: RateCardLineInput): Promise<RateCardLine> {
   await mockDelay();
   assertActiveCategory(input.category);
+  if (!Number.isInteger(input.budgetYear)) {
+    throw new Error("Budget year is required");
+  }
   const now = isoNow();
   const created: RateCardLine = {
     ...input,
     id: newId("rc"),
     status: input.status ?? "draft",
+    archivedAt: null,
+    budgetYearLabel: formatBudgetYearLabel(input.budgetYear),
     ...applyVariance(input),
     createdAt: now,
     updatedAt: now,
@@ -181,6 +230,7 @@ export async function updateRateCardLine(id: string, input: RateCardLineInput): 
   const idx = lines.findIndex((l) => l.id === id);
   if (idx < 0) throw new Error("Rate card line not found");
   const before = lines[idx];
+  if (before.archivedAt) throw new Error("Archived rates are read-only");
   if (before.status === "approved" || before.status === "submitted") {
     throw new Error("Only draft or returned lines can be edited");
   }
@@ -188,6 +238,8 @@ export async function updateRateCardLine(id: string, input: RateCardLineInput): 
     ...before,
     ...input,
     id: before.id,
+    archivedAt: before.archivedAt,
+    budgetYearLabel: formatBudgetYearLabel(input.budgetYear),
     status: before.status === "returned" ? "draft" : before.status,
     ...applyVariance(input),
     createdAt: before.createdAt,
@@ -209,6 +261,7 @@ export async function deleteRateCardLine(id: string): Promise<void> {
   await mockDelay();
   const existing = lines.find((l) => l.id === id);
   if (!existing) throw new Error("Rate card line not found");
+  if (existing.archivedAt) throw new Error("Archived rates cannot be deleted");
   if (existing.status !== "draft") throw new Error("Only draft lines can be deleted");
   lines = lines.filter((l) => l.id !== id);
   recordAudit({
@@ -223,14 +276,17 @@ export async function deleteRateCardLine(id: string): Promise<void> {
 
 export async function submitRateCardLines(): Promise<{ submitted: number }> {
   await mockDelay();
-  const drafts = lines.filter((l) => l.status === "draft");
+  const drafts = lines.filter((l) => l.status === "draft" && !l.archivedAt);
   if (drafts.length === 0) throw new Error("No draft lines to submit");
   const missing = drafts.filter((l) => l.flagged && !l.justificationNote.trim());
   if (missing.length > 0) {
     throw new Error("Flagged draft lines require an SPX justification note");
   }
   const now = isoNow();
-  lines = lines.map((l) => (l.status === "draft" ? { ...l, status: "submitted" as RateCardStatus, updatedAt: now } : l));
+  const ids = new Set(drafts.map((d) => d.id));
+  lines = lines.map((l) =>
+    ids.has(l.id) ? { ...l, status: "submitted" as RateCardStatus, updatedAt: now } : l,
+  );
   recordAudit({
     ...ACTOR,
     action: "rate_card.submit",
@@ -240,6 +296,26 @@ export async function submitRateCardLines(): Promise<{ submitted: number }> {
     after: { submitted: drafts.length },
   });
   return { submitted: drafts.length };
+}
+
+export async function archiveRateCardYear(budgetYear: number) {
+  await mockDelay(120);
+  const targets = lines.filter((l) => l.budgetYear === budgetYear && !l.archivedAt);
+  if (targets.length === 0) throw new Error(`No active rates found for ${formatBudgetYearLabel(budgetYear)}`);
+  const now = isoNow();
+  const ids = new Set(targets.map((t) => t.id));
+  lines = lines.map((l) => (ids.has(l.id) ? { ...l, archivedAt: now, updatedAt: now } : l));
+  return { budgetYear, label: formatBudgetYearLabel(budgetYear), archived: targets.length };
+}
+
+export async function unarchiveRateCardYear(budgetYear: number) {
+  await mockDelay(120);
+  const targets = lines.filter((l) => l.budgetYear === budgetYear && l.archivedAt);
+  if (targets.length === 0) throw new Error(`No archived rates found for ${formatBudgetYearLabel(budgetYear)}`);
+  const now = isoNow();
+  const ids = new Set(targets.map((t) => t.id));
+  lines = lines.map((l) => (ids.has(l.id) ? { ...l, archivedAt: null, updatedAt: now } : l));
+  return { budgetYear, label: formatBudgetYearLabel(budgetYear), restored: targets.length };
 }
 
 export async function approveRateCardLine(id: string): Promise<RateCardLine> {

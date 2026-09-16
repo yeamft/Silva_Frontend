@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Building2, ChevronDown, LogOut, Menu, Search, User } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
-import LanguageToggle from "./LanguageToggle";
 import { useAuthStore } from "@/store/authStore";
 import { useLocaleStore } from "@/store/localeStore";
 import { useOrgStore } from "@/store/orgStore";
@@ -140,7 +139,6 @@ const TopBar = ({ title, onNavigate, onOpenMenu }: TopBarProps) => {
           </div>
         )}
 
-        <LanguageToggle />
         <ThemeToggle />
 
         <Popover open={searchOpen} onOpenChange={setSearchOpen}>

@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { useAuthStore, MIN_PASSWORD_LENGTH } from "@/store/authStore";
 import { useLocaleStore } from "@/store/localeStore";
 import { t } from "@/lib/translations";
-import LanguageToggle from "@/components/LanguageToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import { FormField } from "@/components/cropfort/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -227,16 +226,6 @@ const LoginPage = () => {
                 Sign in to your organization&apos;s programme govern, validate, or execute without
                 crossing the wrong desk.
               </p>
-              <ul className="flex flex-wrap gap-2 pt-1">
-                {["Silva", "SPX", "Vendors"].map((label) => (
-                  <li
-                    key={label}
-                    className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs font-medium backdrop-blur-sm"
-                  >
-                    {label}
-                  </li>
-                ))}
-              </ul>
             </motion.div>
           </div>
         </div>
@@ -263,7 +252,6 @@ const LoginPage = () => {
             <span className="font-display text-base font-semibold tracking-tight">Cropfort</span>
           </button>
           <div className="ml-auto flex items-center gap-1.5">
-            <LanguageToggle variant="segmented" />
             <ThemeToggle />
           </div>
         </header>

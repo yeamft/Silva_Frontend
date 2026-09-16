@@ -20,54 +20,115 @@ import { Button } from "@/components/ui/button";
 
 const HERO_IMAGES = [
   {
-    src: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=2400&q=80",
+    // Smaller assets load faster on Unsplash; auto=format serves WebP when supported
+    src: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=65",
     alt: "Tractor working cultivated farmland",
   },
   {
-    src: "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=2400&q=80",
+    src: "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=1600&q=65",
     alt: "Farm workers inspecting crop rows",
   },
   {
-    src: "https://images.unsplash.com/photo-1464226184884-fa280b87c0b0?auto=format&fit=crop&w=2400&q=80",
+    src: "https://images.unsplash.com/photo-1464226184884-fa280b87c0b0?auto=format&fit=crop&w=1600&q=65",
     alt: "Active crop rows across estate land",
   },
   {
-    src: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=2400&q=80",
+    src: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1600&q=65",
     alt: "Rolling farmland ready for field work",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1560493676-04071c5f7500?auto=format&fit=crop&w=2400&q=80",
-    alt: "Young crops under field management",
   },
 ] as const;
 
 const ease = [0.16, 1, 0.3, 1] as const;
-const HERO_ROTATE_MS = 7000;
+const HERO_ROTATE_MS = 8000;
 
 function HeroBackground() {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [ready, setReady] = useState<boolean[]>(() => HERO_IMAGES.map(() => false));
 
+  // Preload first image immediately, then the rest so the hero isn't blank for long
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % HERO_IMAGES.length);
-    }, HERO_ROTATE_MS);
-    return () => window.clearInterval(timer);
+    let cancelled = false;
+    const markReady = (index: number) => {
+      if (cancelled) return;
+      setReady((prev) => {
+        if (prev[index]) return prev;
+        const next = [...prev];
+        next[index] = true;
+        return next;
+      });
+    };
+
+    const load = (index: number) =>
+      new Promise<void>((resolve) => {
+        const img = new window.Image();
+        img.decoding = "async";
+        img.onload = () => {
+          markReady(index);
+          resolve();
+        };
+        img.onerror = () => {
+          markReady(index);
+          resolve();
+        };
+        img.src = HERO_IMAGES[index].src;
+      });
+
+    // Preload hint for the browser (first slide only)
+    const preload = document.createElement("link");
+    preload.rel = "preload";
+    preload.as = "image";
+    preload.href = HERO_IMAGES[0].src;
+    document.head.appendChild(preload);
+
+    void (async () => {
+      await load(0);
+      // Remaining slides after first paint — avoids competing with LCP
+      for (let i = 1; i < HERO_IMAGES.length; i += 1) {
+        if (cancelled) return;
+        await load(i);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      preload.remove();
+    };
   }, []);
+
+  // Rotate only after the first image is ready; skip slides that haven't loaded yet
+  useEffect(() => {
+    if (!ready[0]) return;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => {
+        for (let step = 1; step <= HERO_IMAGES.length; step += 1) {
+          const next = (current + step) % HERO_IMAGES.length;
+          if (ready[next]) return next;
+        }
+        return current;
+      });
+    }, HERO_ROTATE_MS);
+
+    return () => window.clearInterval(timer);
+  }, [ready]);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
       <div className="absolute inset-0 bg-[#1a2a22]" />
 
-      {HERO_IMAGES.map((image, index) => (
-        <div
-          key={image.src}
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-[1400ms] ease-out"
-          style={{
-            opacity: index === activeIndex ? 1 : 0,
-            backgroundImage: `url("${image.src}")`,
-          }}
-        />
-      ))}
+      {HERO_IMAGES.map((image, index) => {
+        const visible = ready[index] && index === activeIndex;
+        return (
+          <div
+            key={image.src}
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 ease-out"
+            style={{
+              opacity: visible ? 1 : 0,
+              backgroundImage: ready[index] ? `url("${image.src}")` : undefined,
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -155,8 +216,8 @@ export default function LandingPage() {
               className="flex items-center gap-3 text-white"
               aria-label="Cropfort home"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C9A86A] shadow-sm">
-                <Sprout className="h-5 w-5 text-[#14261C]" />
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-sm">
+                <Sprout className="h-5 w-5 text-primary-foreground" />
               </span>
 
               <div className="leading-none">
@@ -195,13 +256,6 @@ export default function LandingPage() {
             transition={{ duration: 0.7, ease }}
             className="max-w-3xl"
           >
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-2 backdrop-blur-md">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#D6B875]" />
-              <span className="text-xs font-medium uppercase tracking-[0.15em] text-white/75">
-                Estate Operations Platform
-              </span>
-            </div>
-
             <h1 className="max-w-3xl font-display text-4xl font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-5xl lg:text-[68px]">
               Control field operations
               <span className="block text-white/65">from plan to payment.</span>
@@ -218,7 +272,7 @@ export default function LandingPage() {
               <Button
                 asChild
                 size="lg"
-                className="h-12 rounded-full bg-[#C9A86A] px-7 font-medium text-[#132219] hover:bg-[#D8BB82]"
+                className="h-12 rounded-full bg-primary px-7 font-medium text-primary-foreground hover:bg-[#D8BB82]"
               >
                 <Link href="/login">
                   Open Cropfort
@@ -237,17 +291,17 @@ export default function LandingPage() {
             {/* TRUST STATEMENT */}
             <div className="mt-12 flex flex-wrap gap-x-8 gap-y-4 border-t border-white/15 pt-6 text-sm text-white/55">
               <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-[#D6B875]" />
+                <CheckCircle2 className="h-4 w-4 text-primary" />
                 Controlled approvals
               </span>
 
               <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-[#D6B875]" />
+                <CheckCircle2 className="h-4 w-4 text-primary" />
                 Verifiable field delivery
               </span>
 
               <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-[#D6B875]" />
+                <CheckCircle2 className="h-4 w-4 text-primary" />
                 Accountable settlement
               </span>
             </div>
@@ -264,11 +318,7 @@ export default function LandingPage() {
             viewport={{ once: true }}
             transition={{ duration: 0.5, ease }}
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              One operating system
-            </p>
-
-            <h2 className="mt-4 max-w-md font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className="max-w-md font-display text-3xl font-semibold tracking-tight sm:text-4xl">
               One source of truth for estate execution.
             </h2>
           </motion.div>
@@ -294,11 +344,7 @@ export default function LandingPage() {
       <section className="bg-muted/25 py-20 sm:py-28">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Designed around responsibility
-            </p>
-
-            <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
               Clear access for every participant.
             </h2>
 
@@ -329,11 +375,7 @@ export default function LandingPage() {
                     <Icon className="h-5 w-5 text-foreground" />
                   </div>
 
-                  <p className="mt-8 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                    {role.label}
-                  </p>
-
-                  <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight">
+                  <h3 className="mt-8 font-display text-2xl font-semibold tracking-tight">
                     {role.title}
                   </h3>
 
@@ -366,11 +408,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <div className="grid gap-10 lg:grid-cols-[0.75fr_1.25fr]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-                Operating workflow
-              </p>
-
-              <h2 className="mt-4 max-w-md font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h2 className="max-w-md font-display text-3xl font-semibold tracking-tight sm:text-4xl">
                 From approved plan to verified settlement.
               </h2>
 
@@ -425,11 +463,7 @@ export default function LandingPage() {
       <section className="bg-[#17231B] py-20 text-white sm:py-28">
         <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-10">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#D4B77A]">
-              Operational control
-            </p>
-
-            <h2 className="mt-4 max-w-xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
               Field execution you can verify before you pay.
             </h2>
 
@@ -453,7 +487,7 @@ export default function LandingPage() {
                 key={item}
                 className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-4"
               >
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-[#D4B77A]" />
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
                 <span className="text-sm text-white/75">{item}</span>
               </div>
             ))}
@@ -464,11 +498,7 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="bg-background px-5 py-20 sm:px-8 sm:py-28">
         <div className="mx-auto max-w-4xl text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-            Cropfort
-          </p>
-
-          <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
+          <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
             Bring estate operations into one controlled workflow.
           </h2>
 

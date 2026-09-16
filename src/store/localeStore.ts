@@ -1,24 +1,17 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type Locale = "en" | "am";
+export type Locale = "en";
 
 interface LocaleStore {
   locale: Locale;
-  setLocale: (locale: Locale) => void;
-  toggleLocale: () => void;
   formatCurrency: (amount: number) => string;
 }
 
 export const useLocaleStore = create<LocaleStore>()(
   persist(
-    (set, get) => ({
+    () => ({
       locale: "en",
-
-      setLocale: (locale) => set({ locale }),
-
-      toggleLocale: () =>
-        set({ locale: get().locale === "en" ? "am" : "en" }),
 
       formatCurrency: (amount: number) => {
         const formatted = amount.toLocaleString("en", {
@@ -30,7 +23,9 @@ export const useLocaleStore = create<LocaleStore>()(
     }),
     {
       name: "bunalink-locale",
-      partialize: (s) => ({ locale: s.locale }),
+      partialize: () => ({ locale: "en" as const }),
+      version: 1,
+      migrate: () => ({ locale: "en" as const }),
     }
   )
 );

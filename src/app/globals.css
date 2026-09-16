@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    /* Estate field: soft parchment content + deep green brand */
+    /* Estate field: soft parchment + landing wheat gold (#C9A86A) */
     --background: 48 22% 97%;
     --foreground: 152 22% 12%;
 
@@ -14,8 +14,9 @@
     --popover: 0 0% 100%;
     --popover-foreground: 152 22% 12%;
 
-    --primary: 152 42% 28%;
-    --primary-foreground: 48 30% 98%;
+    /* Landing CTA gold #C9A86A */
+    --primary: 39 47% 60%;
+    --primary-foreground: 150 28% 10%;
 
     --secondary: 150 14% 93%;
     --secondary-foreground: 152 18% 24%;
@@ -23,8 +24,9 @@
     --muted: 48 14% 94%;
     --muted-foreground: 152 12% 32%;
 
-    --accent: 36 90% 48%;
-    --accent-foreground: 30 20% 10%;
+    /* Soft gold wash for hover / selected surfaces */
+    --accent: 39 42% 92%;
+    --accent-foreground: 150 28% 12%;
 
     --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -32,15 +34,15 @@
     --success: 152 48% 32%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 35 92% 48%;
-    --warning-foreground: 30 20% 10%;
+    --warning: 39 55% 48%;
+    --warning-foreground: 150 28% 10%;
 
     --info: 198 70% 42%;
     --info-foreground: 0 0% 100%;
 
     --border: 150 12% 88%;
     --input: 150 12% 88%;
-    --ring: 152 42% 28%;
+    --ring: 39 47% 55%;
 
     --overlay: 152 24% 8%;
 
@@ -48,14 +50,14 @@
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 152 22% 12%;
-    --sidebar-primary: 152 42% 28%;
-    --sidebar-primary-foreground: 48 30% 98%;
-    --sidebar-accent: 150 14% 95%;
+    --sidebar-primary: 39 47% 60%;
+    --sidebar-primary-foreground: 150 28% 10%;
+    --sidebar-accent: 39 40% 94%;
     --sidebar-accent-foreground: 152 22% 12%;
     --sidebar-border: 150 12% 90%;
-    --sidebar-ring: 152 42% 28%;
+    --sidebar-ring: 39 47% 55%;
 
-    --gold-glow: 36 100% 52%;
+    --gold-glow: 39 55% 58%;
     --surface-elevated: 0 0% 100%;
     --surface-overlay: 48 16% 95%;
   }
@@ -70,8 +72,9 @@
     --popover: 152 16% 11%;
     --popover-foreground: 48 18% 94%;
 
-    --primary: 152 40% 42%;
-    --primary-foreground: 48 30% 98%;
+    /* Landing hover gold #D8BB82 — readable on dark shells */
+    --primary: 40 52% 68%;
+    --primary-foreground: 150 28% 10%;
 
     --secondary: 152 14% 16%;
     --secondary-foreground: 48 12% 86%;
@@ -79,8 +82,8 @@
     --muted: 152 12% 14%;
     --muted-foreground: 48 8% 58%;
 
-    --accent: 38 86% 52%;
-    --accent-foreground: 152 20% 8%;
+    --accent: 39 28% 18%;
+    --accent-foreground: 40 45% 78%;
 
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
@@ -88,15 +91,15 @@
     --success: 145 50% 40%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 35 92% 55%;
-    --warning-foreground: 30 20% 8%;
+    --warning: 40 55% 58%;
+    --warning-foreground: 150 28% 8%;
 
     --info: 198 70% 50%;
     --info-foreground: 0 0% 100%;
 
     --border: 152 12% 18%;
     --input: 152 12% 18%;
-    --ring: 152 40% 42%;
+    --ring: 40 52% 68%;
 
     --overlay: 152 30% 4%;
 
@@ -104,14 +107,14 @@
 
     --sidebar-background: 152 22% 9%;
     --sidebar-foreground: 48 14% 92%;
-    --sidebar-primary: 38 86% 52%;
-    --sidebar-primary-foreground: 152 20% 8%;
-    --sidebar-accent: 152 16% 14%;
+    --sidebar-primary: 40 52% 68%;
+    --sidebar-primary-foreground: 150 28% 10%;
+    --sidebar-accent: 39 22% 16%;
     --sidebar-accent-foreground: 48 14% 92%;
     --sidebar-border: 152 14% 16%;
-    --sidebar-ring: 38 86% 52%;
+    --sidebar-ring: 40 52% 68%;
 
-    --gold-glow: 38 100% 60%;
+    --gold-glow: 40 60% 62%;
     --surface-elevated: 152 14% 13%;
     --surface-overlay: 152 16% 10%;
   }
@@ -147,8 +150,8 @@
     --lp-espresso: hsl(150 18% 8%);
     --lp-cream: hsl(42 38% 94%);
     --lp-cream-muted: hsl(42 18% 72%);
-    --lp-gold: hsl(38 48% 62%);
-    --lp-gold-ink: hsl(32 42% 38%);
+    --lp-gold: hsl(var(--primary));
+    --lp-gold-ink: hsl(39 35% 38%);
     --lp-paper: hsl(42 28% 96%);
     --lp-ink: hsl(152 18% 12%);
     --lp-mute: hsl(150 8% 38%);
@@ -160,7 +163,7 @@
     --lp-ink: hsl(42 28% 94%);
     --lp-mute: hsl(42 12% 62%);
     --lp-rule: hsl(150 10% 18%);
-    --lp-gold-ink: hsl(38 48% 62%);
+    --lp-gold-ink: hsl(var(--primary));
   }
 
   .lp-grain {
@@ -173,8 +176,8 @@
     background: linear-gradient(
       180deg,
       transparent,
-      hsl(38 48% 62% / 0.55) 20%,
-      hsl(38 48% 62% / 0.55) 80%,
+      hsl(var(--primary) / 0.55) 20%,
+      hsl(var(--primary) / 0.55) 80%,
       transparent
     );
   }
@@ -182,11 +185,11 @@
 
 @layer utilities {
   .gold-gradient {
-    background: linear-gradient(145deg, hsl(36 92% 46%), hsl(42 94% 56%));
+    background: linear-gradient(145deg, hsl(39 47% 56%), hsl(40 52% 68%));
   }
 
   .gold-text {
-    background: linear-gradient(145deg, hsl(36 92% 46%), hsl(42 94% 56%));
+    background: linear-gradient(145deg, hsl(39 47% 52%), hsl(40 52% 66%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

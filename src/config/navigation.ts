@@ -55,6 +55,7 @@ export const CROPFORT_ROUTES = {
   blocksActivities: "/cropfort/blocks-activities",
   rateCard: "/cropfort/rate-card",
   rateCardCategories: "/cropfort/rate-card/categories",
+  rateCardArchive: "/cropfort/rate-card/archive",
   afp: "/cropfort/afp",
   validationQueue: "/cropfort/validation-queue",
   afe: "/cropfort/afe",
@@ -96,6 +97,11 @@ export const NAVIGATION_ITEMS: NavItem[] = [
     roles: ["spx_validator", "farm_owner", "spx_platform_admin"],
     children: [
       { id: "rate-card-rates", label: "Rates", href: CROPFORT_ROUTES.rateCard },
+      {
+        id: "rate-card-archive",
+        label: "Archive",
+        href: CROPFORT_ROUTES.rateCardArchive,
+      },
       {
         id: "rate-card-categories",
         label: "Categories",

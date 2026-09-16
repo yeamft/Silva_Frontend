@@ -1,9 +1,8 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Flag, MoreHorizontal, Plus, Send, Tags } from "lucide-react";
+import { Archive, Flag, MoreHorizontal, Plus, Send } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
@@ -40,10 +39,12 @@ import { formatBirr, formatPct } from "@/lib/formatBirr";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   approveRateCardLine,
+  archiveRateCardYear,
   createRateCardCategory,
   createRateCardLine,
   deleteRateCardCategory,
   deleteRateCardLine,
+  getRateCardBudgetYears,
   getRateCardCategories,
   getRateCardLines,
   getRateCardSummary,
@@ -54,11 +55,13 @@ import {
 } from "@/lib/api/rate-card";
 import { VARIANCE_FLAG_THRESHOLD_PCT, computeVariance } from "@/lib/mock-api/variance";
 import type {
+  RateCardBudgetYear,
   RateCardCategory,
   RateCardCategoryConfig,
   RateCardLine,
   RateCardStatus,
 } from "@/types/cropfort-modules";
+import { currentBudgetYear, formatBudgetYearLabel } from "@/types/cropfort-modules";
 
 const PAGE_SIZE = 12;
 const EMPTY_FORM = {
@@ -70,6 +73,7 @@ const EMPTY_FORM = {
   benchmarkFarmARate: "",
   benchmarkFarmBRate: "",
   justificationNote: "",
+  budgetYear: String(currentBudgetYear()),
   effectiveFrom: "",
   effectiveTo: "",
 };
@@ -91,10 +95,12 @@ export default function RateCardPage() {
   const canDecide = canDecideRateCard(user.role);
 
   const [lines, setLines] = useState<RateCardLine[]>([]);
+  const [budgetYears, setBudgetYears] = useState<RateCardBudgetYear[]>([]);
   const [categories, setCategories] = useState<RateCardCategoryConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
+  const [budgetYear, setBudgetYear] = useState(currentBudgetYear());
   const [status, setStatus] = useState<"all" | RateCardStatus>("all");
   const [category, setCategory] = useState<"all" | RateCardCategory>("all");
   const [flagged, setFlagged] = useState<"all" | "flagged" | "not_flagged">("all");
@@ -117,6 +123,8 @@ export default function RateCardPage() {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<RateCardLine | null>(null);
   const [approveTarget, setApproveTarget] = useState<RateCardLine | null>(null);
@@ -143,10 +151,17 @@ export default function RateCardPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [data] = await Promise.all([getRateCardLines(), reloadCategories()]);
+      const [data, years] = await Promise.all([
+        getRateCardLines({ budgetYear, archived: "active" }),
+        getRateCardBudgetYears(),
+        reloadCategories(),
+      ]);
       setLines(data);
+      setBudgetYears(years);
       setSelectedIds((prev) => {
-        const draftIds = new Set(data.filter((l) => l.status === "draft").map((l) => l.id));
+        const draftIds = new Set(
+          data.filter((l) => l.status === "draft" && !l.archivedAt).map((l) => l.id),
+        );
         return new Set([...prev].filter((id) => draftIds.has(id)));
       });
     } catch (err) {
@@ -154,11 +169,25 @@ export default function RateCardPage() {
     } finally {
       setLoading(false);
     }
-  }, [reloadCategories]);
+  }, [budgetYear, reloadCategories]);
 
   useEffect(() => {
     if (canView) void reload();
   }, [canView, reload]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [budgetYear]);
+
+  const yearMeta = budgetYears.find((y) => y.budgetYear === budgetYear);
+  const budgetYearOptions = useMemo(() => {
+    const years = new Set(budgetYears.map((y) => y.budgetYear));
+    years.add(budgetYear);
+    years.add(currentBudgetYear());
+    years.add(currentBudgetYear() + 1);
+    years.add(currentBudgetYear() - 1);
+    return [...years].sort((a, b) => b - a);
+  }, [budgetYears, budgetYear]);
 
   const visible = useMemo(() => {
     let rows = lines;
@@ -189,12 +218,12 @@ export default function RateCardPage() {
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const summary = getRateCardSummary(canDecide && !canEdit ? lines.filter((l) => l.status === "submitted" || l.status === "approved") : lines);
-  const drafts = lines.filter((l) => l.status === "draft");
+  const drafts = lines.filter((l) => l.status === "draft" && !l.archivedAt);
   const selectedDrafts = drafts.filter((l) => selectedIds.has(l.id));
   const flaggedSelected = selectedDrafts.filter((l) => l.flagged);
   const missingJustification = flaggedSelected.filter((l) => !l.justificationNote.trim());
   const canSubmit = selectedDrafts.length > 0 && missingJustification.length === 0;
-  const visibleDrafts = visible.filter((l) => l.status === "draft");
+  const visibleDrafts = visible.filter((l) => l.status === "draft" && !l.archivedAt);
   const allVisibleDraftsSelected =
     visibleDrafts.length > 0 && visibleDrafts.every((l) => selectedIds.has(l.id));
 
@@ -246,12 +275,22 @@ export default function RateCardPage() {
       return;
     }
     setEditing(null);
-    setForm({ ...EMPTY_FORM, category: activeCategories[0].value });
+    setForm({
+      ...EMPTY_FORM,
+      category: activeCategories[0].value,
+      budgetYear: String(budgetYear),
+    });
     setFormErrors({});
     setFormOpen(true);
   };
 
   const openEdit = (line: RateCardLine) => {
+    if (line.archivedAt) {
+      toast.message("Archived rates are read-only", {
+        description: "Switch to Active rates or restore this budget year to edit.",
+      });
+      return;
+    }
     setEditing(line);
     setForm({
       resourceCode: line.resourceCode,
@@ -262,6 +301,7 @@ export default function RateCardPage() {
       benchmarkFarmARate: line.benchmarkFarmARate == null ? "" : String(line.benchmarkFarmARate),
       benchmarkFarmBRate: line.benchmarkFarmBRate == null ? "" : String(line.benchmarkFarmBRate),
       justificationNote: line.justificationNote,
+      budgetYear: String(line.budgetYear),
       effectiveFrom: line.effectiveFrom ?? "",
       effectiveTo: line.effectiveTo ?? "",
     });
@@ -317,6 +357,10 @@ export default function RateCardPage() {
     if (preview.flagged && !form.justificationNote.trim()) {
       errors.justificationNote = `Justification is required when variance exceeds ±${VARIANCE_FLAG_THRESHOLD_PCT}%`;
     }
+    const by = Number(form.budgetYear);
+    if (!Number.isInteger(by) || by < 2000 || by > 2100) {
+      errors.budgetYear = "Select a budget year";
+    }
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -331,6 +375,7 @@ export default function RateCardPage() {
         benchmarkFarmARate: a && !Number.isNaN(a) ? a : null,
         benchmarkFarmBRate: b && !Number.isNaN(b) ? b : null,
         justificationNote: form.justificationNote.trim(),
+        budgetYear: by,
         effectiveFrom: form.effectiveFrom || null,
         effectiveTo: form.effectiveTo || null,
       };
@@ -346,6 +391,21 @@ export default function RateCardPage() {
     }
   };
 
+  const confirmArchiveYear = async () => {
+    setArchiving(true);
+    try {
+      const result = await archiveRateCardYear(budgetYear);
+      toast.success(`Archived ${result.archived} rate${result.archived === 1 ? "" : "s"} for ${result.label}`);
+      setArchiveOpen(false);
+      await reload();
+      router.push(CROPFORT_ROUTES.rateCardArchive);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Archive action failed");
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   if (!canView) {
     return <NotAuthorized title="Rate Card" />;
   }
@@ -356,14 +416,19 @@ export default function RateCardPage() {
     <PageContainer>
       <PageHeader
         title="Rate Card"
+        description={`${formatBudgetYearLabel(budgetYear)} · Active rates`}
         actions={
           canEdit ? (
             <>
-              <Button variant="outline" size="sm" className="h-11 w-full sm:h-9 sm:w-auto" asChild>
-                <Link href={CROPFORT_ROUTES.rateCardCategories}>
-                  <Tags className="h-4 w-4" aria-hidden />
-                  Categories
-                </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11 w-full sm:h-9 sm:w-auto"
+                disabled={!(yearMeta?.activeCount ?? lines.length)}
+                onClick={() => setArchiveOpen(true)}
+              >
+                <Archive className="h-4 w-4" aria-hidden />
+                Archive year
               </Button>
               <Button
                 variant="outline"
@@ -410,6 +475,21 @@ export default function RateCardPage() {
             }}
             filters={
               <>
+                <Select
+                  value={String(budgetYear)}
+                  onValueChange={(v) => setBudgetYear(Number(v))}
+                >
+                  <SelectTrigger className="h-11 min-w-[9rem] shrink-0 sm:h-9 sm:w-[150px]" aria-label="Budget year">
+                    <SelectValue placeholder="Budget year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {budgetYearOptions.map((y) => (
+                      <SelectItem key={y} value={String(y)}>
+                        {formatBudgetYearLabel(y)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                   <SelectTrigger className="h-11 min-w-[8.5rem] shrink-0 sm:h-9 sm:w-[140px]" aria-label="Filter by status">
                     <SelectValue placeholder="Status" />
@@ -483,6 +563,7 @@ export default function RateCardPage() {
               ) : null}
               <SortableHead label="Code" column="resourceCode" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead label="Name" column="resourceName" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <TableHead scope="col">Budget year</TableHead>
               <TableHead scope="col">Category</TableHead>
               <TableHead scope="col">UoM</TableHead>
               <SortableHead label="Rate" column="rateBirr" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
@@ -506,15 +587,15 @@ export default function RateCardPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableSkeleton rows={8} columns={showBenchmarks ? 12 : 7} />
+              <TableSkeleton rows={8} columns={showBenchmarks ? 13 : 8} />
             ) : paged.length === 0 ? (
-              <TableMessageRow colSpan={showBenchmarks ? 12 : 7} icon={Flag} title="No rate card lines" />
+              <TableMessageRow colSpan={showBenchmarks ? 13 : 8} icon={Flag} title="No rate card lines" />
             ) : (
               paged.map((line) => (
                 <TableRow key={line.id} data-state={selectedIds.has(line.id) ? "selected" : undefined}>
                   {canEdit ? (
                     <TableCell className="pr-0">
-                      {line.status === "draft" ? (
+                      {line.status === "draft" && !line.archivedAt ? (
                         <Checkbox
                           checked={selectedIds.has(line.id)}
                           onCheckedChange={(v) => toggleSelect(line.id, v === true)}
@@ -527,6 +608,14 @@ export default function RateCardPage() {
                   ) : null}
                   <TableCell className="font-mono text-xs">{line.resourceCode}</TableCell>
                   <TableCell className="font-medium">{line.resourceName}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {line.budgetYearLabel ?? formatBudgetYearLabel(line.budgetYear)}
+                    {line.archivedAt ? (
+                      <Badge variant="muted" className="ml-1.5 font-normal">
+                        Archived
+                      </Badge>
+                    ) : null}
+                  </TableCell>
                   <TableCell>{categoryLabelFor(line.category)}</TableCell>
                   <TableCell className="text-muted-foreground">{line.unitOfMeasure}</TableCell>
                   <TableCell className="cf-numeric text-right">{formatBirr(line.rateBirr)}</TableCell>
@@ -552,10 +641,13 @@ export default function RateCardPage() {
                     </>
                   ) : null}
                   <TableCell>
-                    <StatusBadge status={line.status} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusBadge status={line.status} />
+                      {line.archivedAt ? <StatusBadge status="archived" /> : null}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    {canEdit && (line.status === "draft" || line.status === "returned") ? (
+                    {canEdit && !line.archivedAt && (line.status === "draft" || line.status === "returned") ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${line.resourceCode}`}>
@@ -571,7 +663,7 @@ export default function RateCardPage() {
                           ) : null}
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    ) : canDecide && line.status === "submitted" ? (
+                    ) : canDecide && line.status === "submitted" && !line.archivedAt ? (
                       <div className="flex justify-end gap-1">
                         <Button size="xs" variant="outline" onClick={() => setApproveTarget(line)}>
                           Approve
@@ -618,6 +710,28 @@ export default function RateCardPage() {
               error={formErrors.resourceName}
               render={(props) => (
                 <Input {...props} value={form.resourceName} onChange={(e) => setForm({ ...form, resourceName: e.target.value })} />
+              )}
+            />
+            <FormField
+              label="Budget year"
+              required
+              error={formErrors.budgetYear}
+              render={({ id }) => (
+                <Select
+                  value={form.budgetYear || undefined}
+                  onValueChange={(v) => setForm({ ...form, budgetYear: v })}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue placeholder="Select FY" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {budgetYearOptions.map((y) => (
+                      <SelectItem key={y} value={String(y)}>
+                        {formatBudgetYearLabel(y)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             />
             <FormField
@@ -886,6 +1000,16 @@ export default function RateCardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        title="Archive budget year?"
+        description={`Archive all active rates for ${formatBudgetYearLabel(budgetYear)}. You can review and restore them later from the Archive page.`}
+        confirmLabel="Archive year"
+        loading={archiving}
+        onConfirm={confirmArchiveYear}
+      />
 
       <ConfirmDialog
         open={Boolean(categoryDeleteTarget)}

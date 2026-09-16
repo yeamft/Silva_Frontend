@@ -50,6 +50,10 @@ export interface RateCardLine {
   flagged: boolean;
   justificationNote: string;
   status: RateCardStatus;
+  /** Fiscal year start (e.g. 2026 = FY 2026/27). */
+  budgetYear: number;
+  budgetYearLabel?: string;
+  archivedAt: string | null;
   effectiveFrom: string | null;
   effectiveTo: string | null;
   createdAt: string;
@@ -58,10 +62,30 @@ export interface RateCardLine {
 
 export type RateCardLineInput = Omit<
   RateCardLine,
-  "id" | "variancePct" | "flagged" | "status" | "createdAt" | "updatedAt"
+  "id" | "variancePct" | "flagged" | "status" | "createdAt" | "updatedAt" | "archivedAt" | "budgetYearLabel"
 > & {
   status?: RateCardStatus;
+  archivedAt?: string | null;
 };
+
+export interface RateCardBudgetYear {
+  budgetYear: number;
+  label: string;
+  total: number;
+  activeCount: number;
+  archivedCount: number;
+}
+
+/** Ethiopian coffee FY starts in July. */
+export function currentBudgetYear(date = new Date()): number {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  return month >= 6 ? year : year - 1;
+}
+
+export function formatBudgetYearLabel(budgetYear: number): string {
+  return `FY ${budgetYear}/${String(budgetYear + 1).slice(-2)}`;
+}
 
 export type AccountStatus = "invited" | "active" | "suspended";
 

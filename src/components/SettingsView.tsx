@@ -14,19 +14,11 @@ import {
 } from "lucide-react";
 import { useFieldOsStore } from "@/store/fieldOsStore";
 import { ROLE_LABELS } from "@/lib/rbac";
-import { useLocaleStore } from "@/store/localeStore";
 import { useThemeStore } from "@/store/themeStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -138,8 +130,6 @@ function FirewallsTab() {
 function AppearanceTab() {
   const dark = useThemeStore((s) => s.dark);
   const setDark = useThemeStore((s) => s.setDark);
-  const locale = useLocaleStore((s) => s.locale);
-  const setLocale = useLocaleStore((s) => s.setLocale);
   const [saved, setSaved] = useState(false);
   const theme = dark ? "dark" : "light";
 
@@ -183,19 +173,6 @@ function AppearanceTab() {
               );
             })}
           </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Language</Label>
-          <Select value={locale} onValueChange={(v) => setLocale(v as "en" | "am")}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">English</SelectItem>
-              <SelectItem value="am">አማርኛ (Amharic)</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         <Button
