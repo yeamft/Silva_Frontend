@@ -241,7 +241,7 @@ const SideNav = ({
   return (
     <aside
       className={cn(
-        "fixed bottom-0 left-0 top-0 z-50 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out",
+        "fixed bottom-0 left-0 top-0 z-50 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[4px_0_24px_-8px_rgba(15,23,20,0.14),1px_0_4px_rgba(15,23,20,0.06)] transition-[width] duration-200 ease-out",
         collapsed ? "w-[4.5rem]" : "w-64"
       )}
     >

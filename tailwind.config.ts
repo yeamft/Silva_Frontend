@@ -89,10 +89,10 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        xs: "0 1px 2px hsl(var(--overlay) / 0.05)",
-        card: "0 1px 2px hsl(var(--overlay) / 0.04), 0 1px 3px hsl(var(--overlay) / 0.06)",
-        raised: "0 2px 4px hsl(var(--overlay) / 0.06), 0 8px 20px -8px hsl(var(--overlay) / 0.14)",
-        overlay: "0 8px 32px -8px hsl(var(--overlay) / 0.22)",
+        xs: "0 1px 2px rgb(15 23 20 / 0.08)",
+        card: "0 1px 2px rgb(15 23 20 / 0.08), 0 6px 16px -4px rgb(15 23 20 / 0.12), 0 16px 32px -10px rgb(15 23 20 / 0.14)",
+        raised: "0 2px 8px rgb(15 23 20 / 0.1), 0 12px 28px -8px rgb(15 23 20 / 0.18)",
+        overlay: "0 8px 32px -8px rgb(15 23 20 / 0.24)",
       },
       keyframes: {
         "accordion-down": {

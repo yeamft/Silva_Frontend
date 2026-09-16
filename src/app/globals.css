@@ -199,8 +199,9 @@
     background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
     box-shadow:
-      0 1px 2px hsl(var(--overlay) / 0.04),
-      0 1px 3px hsl(var(--overlay) / 0.06);
+      0 1px 2px rgb(15 23 20 / 0.08),
+      0 6px 16px -4px rgb(15 23 20 / 0.12),
+      0 16px 32px -10px rgb(15 23 20 / 0.14);
   }
 
   .glow-gold {
@@ -237,7 +238,11 @@
   }
 
   .farm-soft-panel {
-    @apply rounded-2xl border border-border/70 bg-card p-5 shadow-sm;
+    @apply rounded-2xl border border-border/70 bg-card p-5;
+    box-shadow:
+      0 1px 2px rgb(15 23 20 / 0.08),
+      0 6px 16px -4px rgb(15 23 20 / 0.12),
+      0 16px 32px -10px rgb(15 23 20 / 0.14);
   }
 
   /* ---- Cropfort premium surfaces ---- */
@@ -247,7 +252,7 @@
   }
 
   .cf-table-scroll {
-    @apply -mx-3 overflow-x-auto overscroll-x-contain sm:mx-0;
+    @apply overflow-x-auto overscroll-x-contain;
   }
 
   .cf-tab-scroll {
@@ -261,7 +266,11 @@
   }
 
   .cf-card {
-    @apply rounded-lg border border-border bg-card shadow-card;
+    @apply rounded-lg border border-border bg-card;
+    box-shadow:
+      0 1px 2px rgb(15 23 20 / 0.08),
+      0 6px 16px -4px rgb(15 23 20 / 0.12),
+      0 16px 32px -10px rgb(15 23 20 / 0.14);
   }
 
   .cf-card-interactive {

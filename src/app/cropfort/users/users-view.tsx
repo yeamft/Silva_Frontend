@@ -224,7 +224,7 @@ export default function UsersAdminPage() {
     if (!form.email.trim()) errors.email = "Email is required";
     else if (!EMAIL_RE.test(form.email)) errors.email = "Enter a valid email address";
     if (form.roles.length === 0) errors.roles = "Select at least one role";
-    if (form.tenantIds.length === 0) errors.tenants = "Select at least one tenant / farm area";
+    if (form.tenantIds.length === 0) errors.tenants = "Select at least one program";
     setFormErrors(errors);
     if (Object.keys(errors).length) return;
 
@@ -235,11 +235,27 @@ export default function UsersAdminPage() {
         toast.success("User updated");
       } else {
         const result = await createUser(toInput(form, programs));
-        toast.success(
-          result.temporaryPassword
-            ? `User created. Temporary password: ${result.temporaryPassword}`
-            : "User created",
-        );
+        if (form.status === "invited") {
+          if (result.inviteSent) {
+            toast.success("Invitation email sent");
+          } else if (result.inviteUrl) {
+            toast.success("Invite created — email not configured; copy the invite link");
+            try {
+              await navigator.clipboard.writeText(result.inviteUrl);
+              toast.message("Invite link copied to clipboard");
+            } catch {
+              toast.message(result.inviteUrl);
+            }
+          } else {
+            toast.success("User invite created");
+          }
+        } else {
+          toast.success(
+            result.temporaryPassword
+              ? `User created. Temporary password: ${result.temporaryPassword}`
+              : "User created",
+          );
+        }
       }
       setFormOpen(false);
       await reload();
@@ -305,7 +321,7 @@ export default function UsersAdminPage() {
               onChange={(v) => setRoleFilter(v as CropfortRole[])}
             />
             <MultiCheck
-              legend="Tenant / farm area"
+              legend="Program"
               options={programs.map((t) => ({ value: t.tenantId, label: t.tenantName }))}
               values={tenantFilter}
               onChange={setTenantFilter}
@@ -478,7 +494,7 @@ export default function UsersAdminPage() {
               error={formErrors.roles}
             />
             <MultiCheck
-              legend="Tenants / farm areas"
+              legend="Programs"
               options={programs.map((t) => ({ value: t.tenantId, label: t.tenantName }))}
               values={form.tenantIds}
               onChange={(tenantIds) => setForm({ ...form, tenantIds })}

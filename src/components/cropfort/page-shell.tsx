@@ -150,7 +150,7 @@ export function StatCard({
   const trendClass = good === null ? "text-muted-foreground" : good ? "text-success" : "text-destructive";
 
   return (
-    <Card className={cn("overflow-hidden", emphasis && "border-primary/25 bg-primary/[0.03]")}>
+    <Card className={cn("shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.12),0_16px_32px_-10px_rgba(15,23,20,0.14)]", emphasis && "border-primary/25 bg-primary/[0.03]")}>
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <p className="truncate text-[11px] font-medium text-muted-foreground sm:text-xs">{label}</p>
@@ -235,7 +235,7 @@ export function SectionCard({
 }) {
   const showHeader = Boolean(title || action);
   return (
-    <Card className={cn("flex flex-col overflow-hidden", className)}>
+    <Card className={cn("flex flex-col shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.12),0_16px_32px_-10px_rgba(15,23,20,0.14)]", className)}>
       {showHeader ? (
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b py-3">
           <div className="min-w-0">
@@ -245,7 +245,7 @@ export function SectionCard({
           {action ? <div className="shrink-0">{action}</div> : null}
         </CardHeader>
       ) : null}
-      <CardContent className={cn(flush ? "flex-1 p-0" : "flex-1 p-4", bodyClassName)}>{children}</CardContent>
+      <CardContent className={cn(flush ? "flex-1 p-3 sm:p-4" : "flex-1 p-4 sm:p-5", bodyClassName)}>{children}</CardContent>
     </Card>
   );
 }

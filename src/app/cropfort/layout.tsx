@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { Search } from "lucide-react";
 import { MainNav, MobileNavTrigger } from "@/components/navigation/main-nav";
 import { CropfortMobileNav } from "@/components/navigation/mobile-nav";
 import { CropfortAuthProvider, useCropfortAuth } from "@/components/navigation/auth-context";
@@ -10,7 +9,6 @@ import { WorkspaceChip } from "@/components/navigation/workspace-switcher";
 import { NotificationBell } from "@/components/navigation/notification-bell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 const UserMenu = dynamic(
   () => import("@/components/navigation/user-menu").then((m) => m.UserMenu),
@@ -37,24 +35,11 @@ function CropfortShell({ children }: { children: ReactNode }) {
       <MainNav mobileOpen={mobileOpen} onMobileOpenChange={setMobileOpen} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-sidebar-border bg-sidebar text-sidebar-foreground supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
+        <header className="sticky top-0 z-30 border-b border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
           <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6">
             <MobileNavTrigger open={mobileOpen} onOpenChange={setMobileOpen} />
 
             <WorkspaceChip />
-
-            <div className="relative hidden max-w-sm flex-1 md:block">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                type="search"
-                placeholder="Search…"
-                aria-label="Search"
-                className="bg-muted/40 pl-9"
-              />
-            </div>
 
             <div className="ml-auto flex items-center gap-0.5 sm:gap-1.5">
               <NotificationBell />

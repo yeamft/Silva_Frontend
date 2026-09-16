@@ -35,9 +35,21 @@ export async function getUsersMeta(): Promise<UsersMeta> {
 
 export async function createUser(
   input: AdminUserInput,
-): Promise<{ user: AdminUser; temporaryPassword?: string }> {
+): Promise<{
+  user: AdminUser;
+  temporaryPassword?: string;
+  inviteSent?: boolean;
+  inviteUrl?: string;
+  inviteExpiresAt?: string;
+}> {
   try {
-    return await apiFetch<{ user: AdminUser; temporaryPassword?: string }>("/users", {
+    return await apiFetch<{
+      user: AdminUser;
+      temporaryPassword?: string;
+      inviteSent?: boolean;
+      inviteUrl?: string;
+      inviteExpiresAt?: string;
+    }>("/users", {
       method: "POST",
       body: input,
     });

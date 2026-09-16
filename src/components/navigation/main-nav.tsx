@@ -355,7 +355,7 @@ export function MainNav({
   return (
     <>
       <aside
-        className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col border-r border-sidebar-border bg-sidebar md:flex"
+        className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col border-r border-sidebar-border bg-sidebar shadow-[4px_0_24px_-8px_rgba(15,23,20,0.14),1px_0_4px_rgba(15,23,20,0.06)] md:flex"
         style={{ width: SIDEBAR_WIDTH }}
         aria-label="Cropfort sidebar"
       >
@@ -398,7 +398,7 @@ export function MainNav({
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="absolute inset-y-0 left-0 flex h-full max-h-[100dvh] w-full max-w-[300px] flex-col bg-sidebar shadow-2xl"
+            className="absolute inset-y-0 left-0 flex h-full max-h-[100dvh] w-full max-w-[300px] flex-col bg-sidebar shadow-[8px_0_32px_-8px_rgba(15,23,20,0.22),2px_0_8px_rgba(15,23,20,0.08)]"
           >
             <SidebarChrome>
               <div className="flex items-center justify-between border-y border-sidebar-border/70 px-4 py-2">

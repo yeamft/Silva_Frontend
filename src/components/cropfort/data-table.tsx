@@ -109,7 +109,7 @@ export function TablePagination({
   return (
     <div
       className={cn(
-        "flex flex-col-reverse items-stretch gap-3 border-t px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col-reverse items-stretch gap-3 border-t px-1 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-2",
         className
       )}
     >

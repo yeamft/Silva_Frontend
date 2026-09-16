@@ -79,7 +79,7 @@ const TopBar = ({ title, onNavigate, onOpenMenu }: TopBarProps) => {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background px-3 sm:gap-3 sm:px-6"
+      className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background px-3 shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] sm:gap-3 sm:px-6"
       style={{ paddingTop: "max(0px, env(safe-area-inset-top))" }}
     >
       <div className="flex min-w-0 items-center gap-2">

@@ -28,7 +28,7 @@ export function CropfortMobileNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur-md md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-[0_-1px_2px_rgba(15,23,20,0.06),0_-6px_20px_-8px_rgba(15,23,20,0.14)] backdrop-blur-md md:hidden"
       style={{ paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))" }}
     >
       <ul

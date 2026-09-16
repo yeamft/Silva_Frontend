@@ -109,7 +109,7 @@ function DataTableCard({
   return (
     <Card
       className={cn(
-        "overflow-hidden border-border/70 bg-card/90 shadow-sm backdrop-blur-sm",
+        "border-border/70 bg-card/90 shadow-card backdrop-blur-sm",
         className
       )}
     >
@@ -184,7 +184,7 @@ export function FarmDashboardView() {
         title={settings.farmName}
         action={
           <Button
-            className="gap-2 gold-gradient text-primary-foreground shadow-sm hover:brightness-105"
+            className="gap-2 gold-gradient text-primary-foreground shadow-card hover:brightness-105"
             onClick={() => {
               const n = rolloverOverdue();
               toast.success(n ? `Rolled over ${n} overdue activities` : "No overdue activities");
@@ -243,7 +243,7 @@ export function FarmDashboardView() {
           </Table>
         </DataTableCard>
 
-        <Card className="border-border/70 bg-card/90 shadow-sm backdrop-blur-sm">
+        <Card className="border-border/70 bg-card/90 shadow-card backdrop-blur-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold tracking-wide">Attention</CardTitle>
           </CardHeader>
@@ -298,7 +298,7 @@ export function BlocksView() {
       <PageHeader
         title="Blocks / Plots"
         action={
-          <Button className="gap-2 gold-gradient text-primary-foreground shadow-sm hover:brightness-105" onClick={() => setOpen(true)}>
+          <Button className="gap-2 gold-gradient text-primary-foreground shadow-card hover:brightness-105" onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" /> Add block
           </Button>
         }
@@ -411,7 +411,7 @@ export function ActivityLibraryView() {
       <PageHeader title="Activity library" />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {templates.map((t) => (
-          <Card key={t.id} className="farm-card-hover border-border/70 bg-card/90 shadow-sm">
+          <Card key={t.id} className="farm-card-hover border-border/70 bg-card/90 shadow-card">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -478,7 +478,7 @@ export function BlockPlanningView() {
     <div className="farm-page">
       <PageHeader title="Block planning" />
 
-      <Card className="border-border/70 bg-card/90 shadow-sm backdrop-blur-sm">
+      <Card className="border-border/70 bg-card/90 shadow-card backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-base">Assign activity</CardTitle>
         </CardHeader>
@@ -603,7 +603,7 @@ export function ProgressTrackingView() {
     <div className="farm-page">
       <PageHeader title="Progress tracking" />
 
-      <Card className="border-border/70 bg-card/90 shadow-sm backdrop-blur-sm">
+      <Card className="border-border/70 bg-card/90 shadow-card backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-base">Daily entry</CardTitle>
         </CardHeader>
@@ -831,7 +831,7 @@ export function ChangeApprovalsView() {
     <div className="farm-page">
       <PageHeader title="Changes & approvals" />
 
-      <Card className="border-border/70 bg-card/90 shadow-sm backdrop-blur-sm">
+      <Card className="border-border/70 bg-card/90 shadow-card backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-base">Request a change</CardTitle>
         </CardHeader>
@@ -955,7 +955,7 @@ export function LaborRatesView() {
     <div className="farm-page">
       <PageHeader title="Labor rates" />
 
-      <Card className="border-border/70 bg-card/90 shadow-sm backdrop-blur-sm">
+      <Card className="border-border/70 bg-card/90 shadow-card backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-base">Add labor role</CardTitle>
         </CardHeader>
@@ -1017,7 +1017,7 @@ export function MaterialsView() {
     <div className="farm-page">
       <PageHeader title="Materials" />
 
-      <Card className="border-border/70 bg-card/90 shadow-sm backdrop-blur-sm">
+      <Card className="border-border/70 bg-card/90 shadow-card backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-base">Add material</CardTitle>
         </CardHeader>

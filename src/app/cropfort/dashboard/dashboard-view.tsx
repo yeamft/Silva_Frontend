@@ -51,7 +51,9 @@ export default function DashboardPage() {
                 href={item.href}
                 className={cn(
                   "cf-focus group flex items-center gap-3 rounded-lg border border-border/80 bg-card px-4 py-3.5",
-                  "transition-colors hover:border-border hover:bg-muted/40"
+                  "shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.12),0_16px_32px_-10px_rgba(15,23,20,0.14)]",
+                  "transition-[colors,box-shadow,transform] hover:-translate-y-0.5 hover:border-border hover:bg-muted/40",
+                  "hover:shadow-[0_2px_8px_rgba(15,23,20,0.1),0_12px_28px_-8px_rgba(15,23,20,0.18)]"
                 )}
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">

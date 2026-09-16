@@ -93,7 +93,7 @@ function DataTableCard({
   empty?: boolean;
 }) {
   return (
-    <Card className="overflow-hidden border-border/70 bg-card/90 shadow-sm backdrop-blur-sm">
+    <Card className="border-border/70 bg-card/90 shadow-card backdrop-blur-sm">
       {title ? (
         <CardHeader className="border-b border-border/60 bg-muted/25 py-3.5">
           <CardTitle className="text-sm font-semibold tracking-wide">{title}</CardTitle>
@@ -247,7 +247,7 @@ export function FieldDashboardView() {
 
   return (
     <div className="farm-page">
-      <Card className="border-border/70 bg-card shadow-sm">
+      <Card className="border-border/70 bg-card shadow-card">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
@@ -320,7 +320,7 @@ export function FieldDashboardView() {
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
-            <Card className="border-border/70 bg-card shadow-sm lg:col-span-2">
+            <Card className="border-border/70 bg-card shadow-card lg:col-span-2">
               <CardHeader>
                 <CardTitle className="text-base">Budget vs actual by AFP line</CardTitle>
                 <CardDescription>Planned spend against field actuals</CardDescription>
@@ -354,7 +354,7 @@ export function FieldDashboardView() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/70 bg-card shadow-sm">
+            <Card className="border-border/70 bg-card shadow-card">
               <CardHeader>
                 <CardTitle className="text-base">AFE by Schedule 3 band</CardTitle>
                 <CardDescription>Authorization mix by band</CardDescription>
@@ -395,7 +395,7 @@ export function FieldDashboardView() {
             </Card>
           </div>
 
-          <Card className="border-border/70 bg-card shadow-sm">
+          <Card className="border-border/70 bg-card shadow-card">
             <CardHeader>
               <CardTitle className="text-base">Instrument chain</CardTitle>
               <CardDescription>Live status across the operating path</CardDescription>
@@ -404,7 +404,7 @@ export function FieldDashboardView() {
               <div className="flex flex-wrap items-center gap-2">
                 {chain.map((step, i) => (
                   <div key={step.label} className="flex items-center gap-2">
-                    <Card className="border-border/60 bg-muted/30 shadow-none">
+                    <Card className="border-border/60 bg-muted/30 shadow-xs">
                       <CardContent className="flex items-center gap-2 px-3 py-2">
                         <step.icon className="h-4 w-4 text-primary" />
                         <div>
@@ -425,7 +425,7 @@ export function FieldDashboardView() {
 
         <TabsContent value="financial" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
-            <Card className="border-border/70 bg-card shadow-sm">
+            <Card className="border-border/70 bg-card shadow-card">
               <CardHeader>
                 <CardTitle className="text-base">Spend utilization</CardTitle>
                 <CardDescription>Actual against AFP budget</CardDescription>
@@ -462,7 +462,7 @@ export function FieldDashboardView() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/70 bg-card shadow-sm lg:col-span-2">
+            <Card className="border-border/70 bg-card shadow-card lg:col-span-2">
               <CardHeader>
                 <CardTitle className="text-base">AFE status value</CardTitle>
                 <CardDescription>Count and USD by authorization status</CardDescription>
@@ -492,7 +492,7 @@ export function FieldDashboardView() {
           </div>
 
           {showRevenue ? (
-            <Card className="border-border/70 bg-card shadow-sm">
+            <Card className="border-border/70 bg-card shadow-card">
               <CardHeader>
                 <CardTitle className="text-base">SPX revenue ledger</CardTitle>
                 <CardDescription>Account Manager–only fee view (firewall)</CardDescription>
@@ -527,7 +527,7 @@ export function FieldDashboardView() {
         </TabsContent>
 
         <TabsContent value="pipeline" className="space-y-4">
-          <Card className="border-border/70 bg-card shadow-sm">
+          <Card className="border-border/70 bg-card shadow-card">
             <CardHeader>
               <CardTitle className="text-base">Chain volume</CardTitle>
               <CardDescription>
@@ -549,7 +549,7 @@ export function FieldDashboardView() {
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
+            <Card className="border-border/70 bg-card shadow-card">
               <CardHeader className="border-b border-border/60 bg-muted/25 py-3.5">
                 <CardTitle className="text-sm font-semibold tracking-wide">AFE pipeline</CardTitle>
               </CardHeader>
@@ -588,7 +588,7 @@ export function FieldDashboardView() {
               </CardContent>
             </Card>
 
-            <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
+            <Card className="border-border/70 bg-card shadow-card">
               <CardHeader className="border-b border-border/60 bg-muted/25 py-3.5">
                 <CardTitle className="text-sm font-semibold tracking-wide">Work orders</CardTitle>
               </CardHeader>
@@ -719,7 +719,7 @@ export function AfeView() {
       <PageHeader title="Authorizations for Expenditure" />
 
       {user?.role === "spx_principal" ? (
-        <Card className="border-border/70 bg-card/90 shadow-sm">
+        <Card className="border-border/70 bg-card/90 shadow-card">
           <CardHeader>
             <CardTitle className="text-base">Author AFE</CardTitle>
           </CardHeader>
@@ -852,7 +852,7 @@ export function WorkOrdersView() {
       <PageHeader title="Work Orders" />
 
       {user && canIssueInstruments(user.role) ? (
-        <Card className="border-border/70 bg-card/90 shadow-sm">
+        <Card className="border-border/70 bg-card/90 shadow-card">
           <CardHeader>
             <CardTitle className="text-base">Issue work order</CardTitle>
           </CardHeader>
@@ -930,7 +930,7 @@ export function FieldTicketsView() {
       <PageHeader title="Field Tickets" />
 
       {user && canSubmitFieldWork(user.role) ? (
-        <Card className="border-border/70 bg-card/90 shadow-sm">
+        <Card className="border-border/70 bg-card/90 shadow-card">
           <CardHeader>
             <CardTitle className="text-base">Submit field ticket</CardTitle>
           </CardHeader>
@@ -1044,7 +1044,7 @@ export function PaymentRequestsView() {
       <PageHeader title="Payment Requests" />
 
       {user && canSubmitFieldWork(user.role) && validated.length > 0 ? (
-        <Card className="border-border/70 bg-card/90 shadow-sm">
+        <Card className="border-border/70 bg-card/90 shadow-card">
           <CardHeader>
             <CardTitle className="text-base">Bill validated tickets</CardTitle>
           </CardHeader>
@@ -1122,7 +1122,7 @@ export function SettlementsView() {
       <PageHeader title="Owner Settlements" />
 
       {user?.role === "spx_principal" && ready.length > 0 ? (
-        <Card className="border-border/70 bg-card/90 shadow-sm">
+        <Card className="border-border/70 bg-card/90 shadow-card">
           <CardHeader>
             <CardTitle className="text-base">Release settlement to Silva</CardTitle>
           </CardHeader>
@@ -1301,7 +1301,7 @@ export function SeasonCalendarView() {
       <PageHeader title="Season Calendar" />
       <div className="grid gap-3 md:grid-cols-3">
         {seasonEvents.map((e) => (
-          <Card key={e.id} className="farm-card-hover border-border/70 bg-card/90 shadow-sm">
+          <Card key={e.id} className="farm-card-hover border-border/70 bg-card/90 shadow-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">{e.title}</CardTitle>
             </CardHeader>
@@ -1341,7 +1341,7 @@ export function FieldFormsView() {
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {forms.map((f) => (
-          <Card key={f} className="farm-card-hover border-border/70 bg-card/90 p-4 shadow-sm">
+          <Card key={f} className="farm-card-hover border-border/70 bg-card/90 p-4 shadow-card">
             <p className="font-medium">{f}</p>
             <p className="mt-1 text-xs text-muted-foreground">Shared instrument · vendor entry</p>
           </Card>
@@ -1355,7 +1355,7 @@ export function FieldReportsView() {
   return (
     <div className="farm-page">
       <PageHeader title="Reports" />
-      <Card className="border-border/70 bg-card/90 p-6 shadow-sm">
+      <Card className="border-border/70 bg-card/90 p-6 shadow-card">
         <p className="font-medium">Schedule 5 cadence</p>
         <p className="mt-2 text-sm text-muted-foreground">
           Weekly / monthly / quarterly / annual narratives are authored by SPX and released to Silva.

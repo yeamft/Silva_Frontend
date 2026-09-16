@@ -201,9 +201,9 @@ const LoginPage = () => {
             onClick={() => router.push("/")}
             className="cf-focus inline-flex w-fit items-center gap-2.5 rounded-lg"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-              <Sprout className="h-5 w-5" aria-hidden />
-            </span>
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.14)]">
+                <Sprout className="h-5 w-5" aria-hidden />
+              </span>
             <span className="text-left">
               <span className="block font-display text-lg font-semibold tracking-tight">Cropfort</span>
               <span className="block text-xs text-muted-foreground">SPX Farm OS</span>
@@ -246,7 +246,7 @@ const LoginPage = () => {
             onClick={() => router.push("/")}
             className="cf-focus flex items-center gap-2.5 rounded-lg lg:invisible lg:pointer-events-none"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.14)]">
               <Sprout className="h-4 w-4" aria-hidden />
             </span>
             <span className="font-display text-base font-semibold tracking-tight">Cropfort</span>
@@ -275,14 +275,14 @@ const LoginPage = () => {
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-border/70 bg-card/95 p-5 shadow-sm backdrop-blur-sm sm:p-6">
+            <div className="rounded-2xl border border-border/70 bg-card/95 p-5 shadow-[0_1px_2px_rgba(15,23,20,0.08),0_8px_24px_-6px_rgba(15,23,20,0.14),0_20px_40px_-16px_rgba(15,23,20,0.12)] backdrop-blur-sm sm:p-6">
               <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-4">
                 {mfaStep?.kind === "enroll" && mfaStep.qrDataUrl ? (
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground">
                       Scan this QR code, then enter the first code from your app.
                     </p>
-                    <div className="flex justify-center rounded-xl border border-border/70 bg-background p-4">
+                    <div className="flex justify-center rounded-xl border border-border/70 bg-background p-4 shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_12px_-4px_rgba(15,23,20,0.1)]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={mfaStep.qrDataUrl}
@@ -453,10 +453,11 @@ const LoginPage = () => {
                         type="button"
                         onClick={() => pickDemo(account.email)}
                         className={cn(
-                          "cf-focus group rounded-xl border px-3.5 py-3 text-left transition-[border-color,background-color,transform] duration-200",
-                          "hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.04]",
+                          "cf-focus group rounded-xl border px-3.5 py-3 text-left transition-[border-color,background-color,box-shadow,transform] duration-200",
+                          "shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_12px_-4px_rgba(15,23,20,0.1)]",
+                          "hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.04] hover:shadow-[0_2px_8px_rgba(15,23,20,0.1),0_12px_24px_-8px_rgba(15,23,20,0.16)]",
                           active
-                            ? "border-primary/40 bg-primary/[0.06] shadow-sm"
+                            ? "border-primary/40 bg-primary/[0.06] shadow-[0_2px_8px_rgba(15,23,20,0.1),0_12px_24px_-8px_rgba(15,23,20,0.16)]"
                             : "border-border/70 bg-card/80",
                         )}
                       >

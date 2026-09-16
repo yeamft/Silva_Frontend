@@ -89,6 +89,10 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     }
   }
 
+  if (typeof window !== "undefined" && window.location?.origin) {
+    headers["X-App-Base-Url"] = window.location.origin;
+  }
+
   const res = await fetch(`${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`, {
     method: options.method || (options.body !== undefined ? "POST" : "GET"),
     headers,

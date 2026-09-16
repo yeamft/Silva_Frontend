@@ -2,18 +2,14 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, Loader2, LogOut, MonitorSmartphone, ShieldCheck, UserRound } from "lucide-react";
-import { toast } from "sonner";
+import { ChevronDown, LogOut, MonitorSmartphone, UserRound } from "lucide-react";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { CROPFORT_ROLE_LABELS } from "@/types/cropfort";
-import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/lib/utils";
 
 export function UserMenu() {
-  const { user, logout, activeProgram, programs, switchProgram } = useCropfortAuth();
-  const mfaEnabled = useAuthStore((s) => s.me?.mfaEnabled);
-  const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const { user, logout } = useCropfortAuth();
 
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -114,59 +110,6 @@ export function UserMenu() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 border-b border-border/70 px-4 py-2.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden />
-            <span className="text-xs text-muted-foreground">
-              {mfaEnabled ? "2FA active" : "JWT session"} · {CROPFORT_ROLE_LABELS[user.role]}
-            </span>
-          </div>
-
-          {programs.length > 0 ? (
-            <div className="border-b border-border/70 p-1.5">
-              <p className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Program
-              </p>
-              {programs.map((program) => {
-                const selected = program.id === activeProgram?.id;
-                const busy = switchingId === program.id;
-                return (
-                  <button
-                    key={program.id}
-                    type="button"
-                    role="menuitem"
-                    disabled={!!switchingId}
-                    className={itemClass}
-                    onClick={async () => {
-                      if (selected || switchingId) return;
-                      setSwitchingId(program.id);
-                      const result = await switchProgram(program.id);
-                      setSwitchingId(null);
-                      if (result.ok) {
-                        toast.success(`Switched to ${program.name}`);
-                        setOpen(false);
-                      } else {
-                        toast.error(result.error);
-                      }
-                    }}
-                  >
-                    {busy ? (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden />
-                    ) : (
-                      <Check
-                        className={cn(
-                          "h-4 w-4 shrink-0 text-muted-foreground",
-                          selected ? "opacity-100" : "opacity-0",
-                        )}
-                        aria-hidden
-                      />
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-left">{program.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
           <div className="p-1.5">
             <Link
               href={CROPFORT_ROUTES.sessions}
@@ -177,9 +120,6 @@ export function UserMenu() {
               <MonitorSmartphone className="h-4 w-4 text-muted-foreground" aria-hidden />
               Active sessions
             </Link>
-          </div>
-
-          <div className="border-t border-border/70 p-1.5">
             <Link
               href={CROPFORT_ROUTES.profile}
               role="menuitem"
@@ -189,6 +129,9 @@ export function UserMenu() {
               <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden />
               Profile settings
             </Link>
+          </div>
+
+          <div className="border-t border-border/70 p-1.5">
             <button
               type="button"
               role="menuitem"
