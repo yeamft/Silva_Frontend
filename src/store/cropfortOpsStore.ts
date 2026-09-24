@@ -530,6 +530,28 @@ const TICKETS: FieldTicket[] = [
   },
 ];
 
+export type ProjectFormState = {
+  title: string;
+  blockId: string;
+  vendor: string;
+  budget: string;
+  notes: string;
+};
+
+const EMPTY_PROJECT_FORM: ProjectFormState = {
+  title: "",
+  blockId: "",
+  vendor: "",
+  budget: "120000",
+  notes: "",
+};
+
+/** Vendor org names for project create (from EXEC_CREW + estate fallback). */
+export function projectVendorOptions(): string[] {
+  const orgs = [...new Set(EXEC_CREW.vendors.map((v) => v.org))];
+  return orgs.length ? [...orgs, "Estate crew"] : ["RFSP", "GreenLine", "Estate crew"];
+}
+
 type Store = {
   nodes: FarmNode[];
   projects: Project[];
@@ -537,6 +559,19 @@ type Store = {
   afes: AfeDoc[];
   workOrders: WorkOrder[];
   tickets: FieldTicket[];
+  /** Projects desk UI (not persisted). */
+  projectsSearch: string;
+  projectsPage: number;
+  projectsCreateOpen: boolean;
+  projectsManageId: string | null;
+  projectsForm: ProjectFormState;
+  setProjectsSearch: (q: string) => void;
+  setProjectsPage: (page: number) => void;
+  setProjectsCreateOpen: (open: boolean) => void;
+  setProjectsManageId: (id: string | null) => void;
+  patchProjectsForm: (patch: Partial<ProjectFormState>) => void;
+  resetProjectsForm: () => void;
+  activeBlocks: () => FarmNode[];
   addNode: (input: { kind: NodeKind; parentId: string | null; name: string; code: string; hectares: number }) => FarmNode;
   createProgram: (input: { name: string; code: string; hectares: number }) => FarmNode;
   createFarm: (input: { programId: string; name: string; code: string; hectares: number }) => FarmNode;
@@ -623,9 +658,39 @@ export const useCropfortOpsStore = create<Store>()(
       afes: AFES,
       workOrders: WORK_ORDERS,
       tickets: TICKETS,
+      projectsSearch: "",
+      projectsPage: 1,
+      projectsCreateOpen: false,
+      projectsManageId: null,
+      projectsForm: { ...EMPTY_PROJECT_FORM },
 
       childrenOf: (id) => get().nodes.filter((n) => n.parentId === id),
       blockName: (id) => get().nodes.find((n) => n.id === id)?.name ?? "—",
+      activeBlocks: () =>
+        get().nodes.filter((n) => n.kind === "block" && n.status === "active"),
+
+      setProjectsSearch: (q) => set({ projectsSearch: q, projectsPage: 1 }),
+      setProjectsPage: (page) => set({ projectsPage: page }),
+      setProjectsCreateOpen: (open) => {
+        if (open) {
+          const blocks = get().activeBlocks();
+          const vendors = projectVendorOptions();
+          set({
+            projectsCreateOpen: true,
+            projectsForm: {
+              ...EMPTY_PROJECT_FORM,
+              blockId: blocks[0]?.id ?? "",
+              vendor: vendors[0] ?? "",
+            },
+          });
+          return;
+        }
+        set({ projectsCreateOpen: false });
+      },
+      setProjectsManageId: (id) => set({ projectsManageId: id }),
+      patchProjectsForm: (patch) =>
+        set({ projectsForm: { ...get().projectsForm, ...patch } }),
+      resetProjectsForm: () => set({ projectsForm: { ...EMPTY_PROJECT_FORM } }),
 
       addNode: ({ kind, parentId, name, code, hectares }) => {
         const prefix = kind === "program" ? "prog" : kind === "farm" ? "farm" : kind === "area" ? "area" : "blk";
@@ -670,7 +735,12 @@ export const useCropfortOpsStore = create<Store>()(
             { id: uid("m"), title: "Works complete", done: false },
           ],
         };
-        set({ projects: [row, ...get().projects] });
+        set({
+          projects: [row, ...get().projects],
+          projectsCreateOpen: false,
+          projectsManageId: row.id,
+          projectsForm: { ...EMPTY_PROJECT_FORM },
+        });
         return row;
       },
 
@@ -1012,7 +1082,17 @@ export const useCropfortOpsStore = create<Store>()(
         return next;
       },
     }),
-    { name: "cropfort.ops.v2" },
+    {
+      name: "cropfort.ops.v2",
+      partialize: (s) => ({
+        nodes: s.nodes,
+        projects: s.projects,
+        interventions: s.interventions,
+        afes: s.afes,
+        workOrders: s.workOrders,
+        tickets: s.tickets,
+      }),
+    },
   ),
 );
 

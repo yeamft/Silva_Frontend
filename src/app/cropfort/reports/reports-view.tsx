@@ -532,7 +532,18 @@ export default function ReportsView() {
                       size="sm"
                       onClick={() => {
                         release(selected.id, undefined, user.name || "SPX");
-                        toast.success("Released to Silva");
+                        if (selected.cadence === "monthly") {
+                          toast.success("Released to Silva — create next monthly WO with Loop G", {
+                            action: {
+                              label: "Create next MWO",
+                              onClick: () => {
+                                window.location.href = `${CROPFORT_ROUTES.monthlyWorkOrders}?fromReport=${selected.id}`;
+                              },
+                            },
+                          });
+                        } else {
+                          toast.success("Released to Silva");
+                        }
                       }}
                     >
                       Release to Silva
@@ -559,7 +570,18 @@ export default function ReportsView() {
                         return;
                       }
                       release(selected.id, undefined, user.name || "SPX");
-                      toast.success("Released to Silva");
+                      if (selected.cadence === "monthly") {
+                        toast.success("Released — create next monthly WO with Loop G", {
+                          action: {
+                            label: "Create next MWO",
+                            onClick: () => {
+                              window.location.href = `${CROPFORT_ROUTES.monthlyWorkOrders}?fromReport=${selected.id}`;
+                            },
+                          },
+                        });
+                      } else {
+                        toast.success("Released to Silva");
+                      }
                     }}
                   >
                     Release draft

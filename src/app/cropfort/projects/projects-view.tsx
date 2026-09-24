@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FolderKanban, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -53,118 +52,63 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { useBlocks, useVendors } from "@/lib/query";
 import { cn } from "@/lib/utils";
 import {
   fmtEtb,
+  projectVendorOptions,
   useCropfortOpsStore,
-  type Project,
 } from "@/store/cropfortOpsStore";
 
 const PAGE_SIZE = 12;
-const FALLBACK_VENDORS = ["RFSP", "GreenLine", "Estate crew"];
 
 export default function ProjectsView() {
   const { activeProgram } = useCropfortAuth();
   const area = getCropfortArea("projects");
+
   const projects = useCropfortOpsStore((s) => s.projects);
-  const nodes = useCropfortOpsStore((s) => s.nodes);
+  const search = useCropfortOpsStore((s) => s.projectsSearch);
+  const page = useCropfortOpsStore((s) => s.projectsPage);
+  const createOpen = useCropfortOpsStore((s) => s.projectsCreateOpen);
+  const manageId = useCropfortOpsStore((s) => s.projectsManageId);
+  const form = useCropfortOpsStore((s) => s.projectsForm);
+  const blockName = useCropfortOpsStore((s) => s.blockName);
+  const activeBlocks = useCropfortOpsStore((s) => s.activeBlocks);
   const createProject = useCropfortOpsStore((s) => s.createProject);
   const submitProject = useCropfortOpsStore((s) => s.submitProject);
   const startProject = useCropfortOpsStore((s) => s.startProject);
   const toggleMilestone = useCropfortOpsStore((s) => s.toggleMilestone);
   const raiseAfe = useCropfortOpsStore((s) => s.raiseAfe);
   const afeForSource = useCropfortOpsStore((s) => s.afeForSource);
+  const setProjectsSearch = useCropfortOpsStore((s) => s.setProjectsSearch);
+  const setProjectsPage = useCropfortOpsStore((s) => s.setProjectsPage);
+  const setProjectsCreateOpen = useCropfortOpsStore((s) => s.setProjectsCreateOpen);
+  const setProjectsManageId = useCropfortOpsStore((s) => s.setProjectsManageId);
+  const patchProjectsForm = useCropfortOpsStore((s) => s.patchProjectsForm);
 
-  const blocksQuery = useBlocks();
-  const vendorsQuery = useVendors();
+  const blocks = activeBlocks();
+  const vendors = projectVendorOptions();
 
-  const adminBlocks = useMemo(
-    () => (blocksQuery.data ?? []).filter((b) => b.status !== "inactive"),
-    [blocksQuery.data],
-  );
-  const storeBlocks = useMemo(
-    () => nodes.filter((n) => n.kind === "block" && n.status === "active"),
-    [nodes],
-  );
-  const blocks = adminBlocks.length
-    ? adminBlocks.map((b) => ({ id: b.id, name: `${b.code} · ${b.name}` }))
-    : storeBlocks.map((b) => ({ id: b.id, name: b.name }));
-
-  const vendors = useMemo(() => {
-    const fromApi = (vendorsQuery.data ?? [])
-      .filter((v) => v.status === "active" || v.status === "pending")
-      .map((v) => v.name);
-    return fromApi.length ? fromApi : FALLBACK_VENDORS;
-  }, [vendorsQuery.data]);
-
-  const resolveBlock = (blockId: string) => {
-    const admin = adminBlocks.find((b) => b.id === blockId);
-    if (admin) return `${admin.code} · ${admin.name}`;
-    return storeBlocks.find((b) => b.id === blockId)?.name ?? blockId;
-  };
-
-  const [search, setSearch] = useState("");
-  const debounced = useDebouncedValue(search, 300);
-  const [page, setPage] = useState(1);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [manage, setManage] = useState<Project | null>(null);
-  const [form, setForm] = useState({
-    title: "",
-    blockId: "",
-    vendor: "",
-    budget: "120000",
-    notes: "",
-  });
-
-  useEffect(() => {
-    if (!form.blockId && blocks[0]) {
-      setForm((f) => ({
-        ...f,
-        blockId: blocks[0].id,
-        vendor: f.vendor || vendors[0] || "",
-      }));
-    }
-  }, [blocks, vendors, form.blockId]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debounced]);
-
-  useEffect(() => {
-    if (manage) {
-      const fresh = projects.find((p) => p.id === manage.id) ?? null;
-      setManage(fresh);
-    }
-  }, [projects, manage?.id]);
-
-  const visible = useMemo(() => {
-    const q = debounced.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q) ||
-        p.vendor.toLowerCase().includes(q) ||
-        resolveBlock(p.blockId).toLowerCase().includes(q) ||
-        p.status.toLowerCase().includes(q),
-    );
-  }, [projects, debounced, adminBlocks, storeBlocks]);
+  const q = search.trim().toLowerCase();
+  const visible = !q
+    ? projects
+    : projects.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          p.code.toLowerCase().includes(q) ||
+          p.vendor.toLowerCase().includes(q) ||
+          blockName(p.blockId).toLowerCase().includes(q) ||
+          p.status.toLowerCase().includes(q),
+      );
 
   const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const stats = {
+    total: projects.length,
+    open: projects.filter((p) => p.status !== "complete").length,
+    waiting: projects.filter((p) => p.status === "submitted").length,
+  };
 
-  const stats = useMemo(
-    () => ({
-      total: projects.length,
-      open: projects.filter((p) => p.status !== "complete").length,
-      waiting: projects.filter((p) => p.status === "submitted").length,
-    }),
-    [projects],
-  );
-
-  const managed = manage ? projects.find((p) => p.id === manage.id) ?? manage : null;
+  const managed = manageId ? projects.find((p) => p.id === manageId) ?? null : null;
   const linkedAfe = managed ? afeForSource("project", managed.id) : undefined;
   const canEditMilestones =
     managed && (managed.status === "approved" || managed.status === "in_progress");
@@ -190,15 +134,6 @@ export default function ProjectsView() {
       budgetEtb: budget,
       notes: form.notes.trim(),
     });
-    setCreateOpen(false);
-    setForm({
-      title: "",
-      blockId: blocks[0]?.id ?? "",
-      vendor: vendors[0] ?? "",
-      budget: "120000",
-      notes: "",
-    });
-    setManage(row);
     toast.success(`${row.code} created as draft`);
   };
 
@@ -225,7 +160,11 @@ export default function ProjectsView() {
             <Button size="sm" variant="outline" asChild>
               <Link href={CROPFORT_ROUTES.approvals}>Approvals</Link>
             </Button>
-            <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!blocks.length}>
+            <Button
+              size="sm"
+              onClick={() => setProjectsCreateOpen(true)}
+              disabled={!blocks.length}
+            >
               <Plus className="h-3.5 w-3.5" />
               New project
             </Button>
@@ -247,7 +186,7 @@ export default function ProjectsView() {
         <div className="border-b px-4 py-3">
           <TableToolbar
             search={search}
-            onSearchChange={setSearch}
+            onSearchChange={setProjectsSearch}
             searchPlaceholder="Search title, code, block, vendor, status"
           />
         </div>
@@ -280,7 +219,7 @@ export default function ProjectsView() {
                     <TableCell className="font-mono text-xs">{p.code}</TableCell>
                     <TableCell className="font-medium">{p.title}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {resolveBlock(p.blockId)}
+                      {blockName(p.blockId)}
                     </TableCell>
                     <TableCell>{p.vendor}</TableCell>
                     <TableCell className="cf-numeric text-right">{fmtEtb(p.budgetEtb)}</TableCell>
@@ -303,7 +242,7 @@ export default function ProjectsView() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setManage(p)}>
+                          <DropdownMenuItem onClick={() => setProjectsManageId(p.id)}>
                             Manage
                           </DropdownMenuItem>
                           {(p.status === "draft" || p.status === "returned") && (
@@ -369,11 +308,11 @@ export default function ProjectsView() {
           pageCount={pageCount}
           total={visible.length}
           pageSize={PAGE_SIZE}
-          onPageChange={setPage}
+          onPageChange={setProjectsPage}
         />
       </SectionCard>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={setProjectsCreateOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
@@ -385,7 +324,7 @@ export default function ProjectsView() {
               <Input
                 {...props}
                 value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                onChange={(e) => patchProjectsForm({ title: e.target.value })}
               />
             )}
           />
@@ -395,7 +334,7 @@ export default function ProjectsView() {
             render={() => (
               <Select
                 value={form.blockId}
-                onValueChange={(blockId) => setForm((f) => ({ ...f, blockId }))}
+                onValueChange={(blockId) => patchProjectsForm({ blockId })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select block" />
@@ -403,7 +342,7 @@ export default function ProjectsView() {
                 <SelectContent>
                   {blocks.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
-                      {b.name}
+                      {b.code} · {b.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -415,7 +354,7 @@ export default function ProjectsView() {
             render={() => (
               <Select
                 value={form.vendor || vendors[0]}
-                onValueChange={(vendor) => setForm((f) => ({ ...f, vendor }))}
+                onValueChange={(vendor) => patchProjectsForm({ vendor })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -439,7 +378,7 @@ export default function ProjectsView() {
                 type="number"
                 min={1}
                 value={form.budget}
-                onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))}
+                onChange={(e) => patchProjectsForm({ budget: e.target.value })}
               />
             )}
           />
@@ -451,12 +390,12 @@ export default function ProjectsView() {
                 {...props}
                 rows={2}
                 value={form.notes}
-                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                onChange={(e) => patchProjectsForm({ notes: e.target.value })}
               />
             )}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button variant="outline" onClick={() => setProjectsCreateOpen(false)}>
               Cancel
             </Button>
             <Button onClick={create} disabled={!form.title.trim() || !form.blockId}>
@@ -466,7 +405,10 @@ export default function ProjectsView() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(managed)} onOpenChange={(o) => !o && setManage(null)}>
+      <Dialog
+        open={Boolean(managed)}
+        onOpenChange={(o) => !o && setProjectsManageId(null)}
+      >
         <DialogContent className="sm:max-w-lg">
           {managed ? (
             <>
@@ -479,7 +421,7 @@ export default function ProjectsView() {
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={managed.status} />
                   <span className="text-muted-foreground">
-                    {resolveBlock(managed.blockId)} · {managed.vendor} ·{" "}
+                    {blockName(managed.blockId)} · {managed.vendor} ·{" "}
                     {fmtEtb(managed.budgetEtb)}
                   </span>
                 </div>
@@ -577,7 +519,7 @@ export default function ProjectsView() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setManage(null)}>
+                <Button variant="outline" onClick={() => setProjectsManageId(null)}>
                   Close
                 </Button>
               </DialogFooter>

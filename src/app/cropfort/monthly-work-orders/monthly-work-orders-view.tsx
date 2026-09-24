@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -42,6 +43,7 @@ const STATUS_ORDER: MonthlyWoStatus[] = [
 
 export default function MonthlyWorkOrdersView() {
   const { activeProgram, user } = useCropfortAuth();
+  const params = useSearchParams();
   const plan = useCoreOpsPlanStore((s) => s.plan);
   const orders = useMonthlyWorkOrderStore((s) => s.orders);
   const createFromPlan = useMonthlyWorkOrderStore((s) => s.createFromPlan);
@@ -49,6 +51,7 @@ export default function MonthlyWorkOrdersView() {
   const decide = useMonthlyWorkOrderStore((s) => s.decide);
   const activate = useMonthlyWorkOrderStore((s) => s.activate);
   const addOutOfPlanLine = useMonthlyWorkOrderStore((s) => s.addOutOfPlanLine);
+  const setAdjustmentAccepted = useMonthlyWorkOrderStore((s) => s.setAdjustmentAccepted);
   const schedule7Blocking = useAgreementConfigStore((s) => s.schedule7Blocking);
 
   const [month, setMonth] = useState<PlanMonth>("sep");
@@ -57,6 +60,21 @@ export default function MonthlyWorkOrdersView() {
   const [outName, setOutName] = useState("");
   const [outQty, setOutQty] = useState("1");
   const [outEtb, setOutEtb] = useState("5000");
+  const [seedHint, setSeedHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fromReport = params.get("fromReport");
+    const fromKpi = params.get("fromKpi");
+    if (fromReport) {
+      setSeedHint(
+        "Released monthly report linked — create a draft MWO to apply Loop G adjustments.",
+      );
+    } else if (fromKpi) {
+      setSeedHint(
+        "KPI / miss causes feed the next monthly WO when you create from plan (Loop G).",
+      );
+    }
+  }, [params]);
 
   const selected = useMemo(
     () => orders.find((o) => o.id === selectedId) ?? orders[0] ?? null,
@@ -85,7 +103,11 @@ export default function MonthlyWorkOrdersView() {
         programId: activeProgram?.id,
       });
       setSelectedId(row.id);
-      toast.success(`Created ${row.code} from ${PLAN_MONTH_LABELS[month]} calendar`);
+      toast.success(
+        row.loop === "G_monthly_feedback"
+          ? `Created ${row.code} with Loop G adjustments from last report`
+          : `Created ${row.code} from ${PLAN_MONTH_LABELS[month]} calendar`,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not create monthly WO");
     }
@@ -159,6 +181,12 @@ export default function MonthlyWorkOrdersView() {
           <p className="text-xs text-muted-foreground">No Core Ops plan loaded</p>
         )}
       </div>
+
+      {seedHint ? (
+        <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground">
+          {seedHint}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
         <SectionCard title="Register">
@@ -274,12 +302,82 @@ export default function MonthlyWorkOrdersView() {
 
             {selected.lastMonthInsights ? (
               <div className="mb-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Last month insights
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Last month insights
+                  </p>
+                  {selected.loop === "G_monthly_feedback" ? (
+                    <StatusBadge status="info" label="Loop G" />
+                  ) : null}
+                </div>
                 <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
                   {selected.lastMonthInsights}
                 </p>
+                {selected.structuredInsights ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    From {selected.structuredInsights.priorReportCode} ·{" "}
+                    {selected.structuredInsights.periodLabel}
+                    {selected.structuredInsights.variancePct != null
+                      ? ` · variance ${selected.structuredInsights.variancePct}%`
+                      : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {selected.recommendedAdjustments.length > 0 ? (
+              <div className="mb-3 overflow-x-auto rounded-lg border border-border">
+                <div className="border-b border-border px-3 py-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Loop G recommended adjustments (±20% cap)
+                  </p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2">Activity</th>
+                      <th className="px-3 py-2">Qty Δ</th>
+                      <th className="px-3 py-2">ETB Δ</th>
+                      <th className="px-3 py-2">Reason</th>
+                      <th className="px-3 py-2">Apply</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selected.recommendedAdjustments.map((a) => (
+                      <tr key={a.id} className="border-t border-border">
+                        <td className="px-3 py-2 font-medium">{a.activityName}</td>
+                        <td className="cf-numeric px-3 py-2">
+                          {a.qtyDeltaPct > 0 ? "+" : ""}
+                          {a.qtyDeltaPct}%
+                        </td>
+                        <td className="cf-numeric px-3 py-2">
+                          {a.etbDeltaPct > 0 ? "+" : ""}
+                          {a.etbDeltaPct}%
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{a.reason}</td>
+                        <td className="px-3 py-2">
+                          {(selected.status === "draft" || selected.status === "returned") &&
+                          canEdit ? (
+                            <Button
+                              size="sm"
+                              variant={a.accepted ? "secondary" : "outline"}
+                              className="h-7"
+                              onClick={() =>
+                                setAdjustmentAccepted(selected.id, a.id, !a.accepted)
+                              }
+                            >
+                              {a.accepted ? "Accepted" : "Rejected"}
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {a.accepted ? "On" : "Off"}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : null}
 

@@ -233,6 +233,13 @@ export default function KpisView() {
         title="Miss cause attribution (RB04.14)"
         description="Code every miss to SPX, Chaka Buna, B-Agro, late Silva decision, Owner Direction, Excluded Deliverable, or outside control"
         className="mt-4"
+        action={
+          <Button size="sm" asChild>
+            <Link href={`${CROPFORT_ROUTES.monthlyWorkOrders}?fromKpi=1`}>
+              Apply to next month plan
+            </Link>
+          </Button>
+        }
       >
         {missRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">No coded misses yet.</p>

@@ -5,6 +5,10 @@ import {
   type PlanMonth,
 } from "@/lib/cropfort/ethiopian-year";
 import { resolveManualRef } from "@/lib/cropfort/activity-manuals";
+import {
+  applyLoopGAdjustments,
+  buildLoopGInsights,
+} from "@/lib/cropfort/loop-g";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
 import { useReportsStore } from "@/store/reportsStore";
 import type {
@@ -15,7 +19,7 @@ import type {
 } from "@/types/agronomic-cycle";
 import type { MonthIntensity } from "@/types/core-ops";
 
-const STORAGE_KEY = "cropfort.monthly-wo.v2";
+const STORAGE_KEY = "cropfort.monthly-wo.v3";
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -112,6 +116,8 @@ type Store = {
     line: Omit<MonthlyWoLine, "id" | "inPlan">,
     reason: string,
   ) => void;
+  setAdjustmentAccepted: (mwoId: string, adjustmentId: string, accepted: boolean) => void;
+  reapplyAdjustments: (mwoId: string) => void;
   submit: (id: string) => void;
   decide: (id: string, decision: "approved" | "returned", note?: string) => void;
   activate: (id: string) => void;
@@ -162,6 +168,8 @@ const DEMO: MonthlyWorkOrder[] = [
     loop: "none",
     totalEtb: 10230,
     lastMonthInsights: "",
+    structuredInsights: null,
+    recommendedAdjustments: [],
     createdAt: "2026-09-01T08:00:00.000Z",
     updatedAt: "2026-09-05T10:00:00.000Z",
     note: "Demo September monthly WO",
@@ -208,6 +216,8 @@ const DEMO: MonthlyWorkOrder[] = [
     loop: "B_out_of_plan",
     totalEtb: 8600,
     lastMonthInsights: "",
+    structuredInsights: null,
+    recommendedAdjustments: [],
     createdAt: "2026-09-18T08:00:00.000Z",
     updatedAt: "2026-09-20T10:00:00.000Z",
     note: "October monthly WO awaiting Silva approval (out-of-plan)",
@@ -224,8 +234,8 @@ export const useMonthlyWorkOrderStore = create<Store>()(
         if (!plan || plan.id !== planId) {
           throw new Error("Core Ops plan not found — open Core Operations first");
         }
-        const lines = deriveMonthlyLinesFromPlan(planId, month);
-        if (!lines.length) {
+        const baseLines = deriveMonthlyLinesFromPlan(planId, month);
+        if (!baseLines.length) {
           throw new Error(
             `No scheduled activities for ${PLAN_MONTH_LABELS[month]} — set calendar intensities first`,
           );
@@ -235,18 +245,12 @@ export const useMonthlyWorkOrderStore = create<Store>()(
           .reports.filter((r) => r.cadence === "monthly" && r.status === "released")
           .sort((a, b) => (a.releasedAt || a.updatedAt).localeCompare(b.releasedAt || b.updatedAt));
         const lastReport = priorMonthly[priorMonthly.length - 1];
-        const insights = lastReport
-          ? [
-              `${lastReport.code} · ${lastReport.periodLabel}`,
-              lastReport.summary?.trim(),
-              lastReport.variancePct != null
-                ? `Variance ${lastReport.variancePct}% · actual ${lastReport.actualEtb} ETB vs plan ${lastReport.planEtb}`
-                : null,
-              lastReport.recommendations?.trim(),
-            ]
-              .filter(Boolean)
-              .join("\n")
-          : "";
+        const { narrative, structured, adjustments } = buildLoopGInsights(lastReport);
+        const lines = applyLoopGAdjustments(baseLines, adjustments);
+        const loopG =
+          Boolean(structured) || adjustments.some((a) => a.accepted)
+            ? ("G_monthly_feedback" as ProcessLoop)
+            : ("none" as ProcessLoop);
         const n = 2600 + get().orders.length;
         const now = new Date().toISOString();
         const row: MonthlyWorkOrder = {
@@ -261,12 +265,16 @@ export const useMonthlyWorkOrderStore = create<Store>()(
           lines,
           sourcePlanId: plan.id,
           outOfPlanReason: "",
-          loop: "none",
+          loop: loopG,
           totalEtb: lines.reduce((s, l) => s + l.etb, 0),
-          lastMonthInsights: insights,
+          lastMonthInsights: narrative,
+          structuredInsights: structured,
+          recommendedAdjustments: adjustments,
           createdAt: now,
           updatedAt: now,
-          note: insights ? "Seeded from last monthly report insights" : "",
+          note: narrative
+            ? "Loop G — seeded from last released monthly report"
+            : "",
         };
         set({ orders: [row, ...get().orders] });
         return row;
@@ -299,6 +307,50 @@ export const useMonthlyWorkOrderStore = create<Store>()(
                   totalEtb: lines.reduce((s, l) => s + l.etb, 0),
                   outOfPlanReason: reason.trim() || o.outOfPlanReason,
                   loop: "B_out_of_plan",
+                  updatedAt: new Date().toISOString(),
+                }
+              : o,
+          ),
+        });
+      },
+
+      setAdjustmentAccepted: (mwoId, adjustmentId, accepted) => {
+        const order = get().orders.find((o) => o.id === mwoId);
+        if (!order || (order.status !== "draft" && order.status !== "returned")) return;
+        const recommendedAdjustments = order.recommendedAdjustments.map((a) =>
+          a.id === adjustmentId ? { ...a, accepted } : a,
+        );
+        set({
+          orders: get().orders.map((o) =>
+            o.id === mwoId
+              ? { ...o, recommendedAdjustments, updatedAt: new Date().toISOString() }
+              : o,
+          ),
+        });
+        get().reapplyAdjustments(mwoId);
+      },
+
+      reapplyAdjustments: (mwoId) => {
+        const order = get().orders.find((o) => o.id === mwoId);
+        if (!order || !order.sourcePlanId) return;
+        if (order.status !== "draft" && order.status !== "returned") return;
+        const base = deriveMonthlyLinesFromPlan(order.sourcePlanId, order.ethiopianMonth);
+        const outOfPlan = order.lines.filter((l) => !l.inPlan);
+        const adjusted = applyLoopGAdjustments(base, order.recommendedAdjustments);
+        const lines = [...adjusted, ...outOfPlan];
+        const hasG = order.recommendedAdjustments.some((a) => a.accepted) || order.structuredInsights;
+        set({
+          orders: get().orders.map((o) =>
+            o.id === mwoId
+              ? {
+                  ...o,
+                  lines,
+                  totalEtb: lines.reduce((s, l) => s + l.etb, 0),
+                  loop: outOfPlan.length
+                    ? "B_out_of_plan"
+                    : hasG
+                      ? "G_monthly_feedback"
+                      : "none",
                   updatedAt: new Date().toISOString(),
                 }
               : o,

@@ -103,6 +103,12 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         description: "Annual and six-month programme planning",
       },
       {
+        id: "projects",
+        label: "Projects",
+        href: CROPFORT_ROUTES.projects,
+        description: "Tier 2 project scopes and commercial agreements",
+      },
+      {
         id: "activities",
         label: "Activities",
         href: CROPFORT_ROUTES.blocksActivities,
@@ -205,6 +211,20 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         href: CROPFORT_ROUTES.validationQueue,
         roles: FIELD_NO_VENDOR,
         description: "Daily field record validation",
+      },
+      {
+        id: "payment-requests",
+        label: "Payment Requests",
+        href: CROPFORT_ROUTES.paymentRequests,
+        roles: ["bagro_office", "field_supervisor", "spx_validator", "spx_platform_admin"],
+        description: "Bill from validated field tickets",
+      },
+      {
+        id: "settlements",
+        label: "Settlements",
+        href: CROPFORT_ROUTES.settlements,
+        roles: ALL_PLAN,
+        description: "Owner settlements after SPX verification",
       },
       {
         id: "exceptions",
@@ -454,7 +474,7 @@ export function resolveWorkspaceFromPath(
     { prefix: "/cropfort/afp", workspaceId: "planning", moduleId: "programme" },
     { prefix: "/cropfort/afp-register", workspaceId: "control", moduleId: "approvals" },
     { prefix: "/cropfort/afe", workspaceId: "control", moduleId: "afe" },
-    { prefix: "/cropfort/projects", workspaceId: "planning", moduleId: "programme" },
+    { prefix: "/cropfort/projects", workspaceId: "planning", moduleId: "projects" },
     { prefix: "/cropfort/farm-structure", workspaceId: "administration", moduleId: "farm-map" },
     { prefix: "/cropfort/admin/farm-map", workspaceId: "administration", moduleId: "farm-map" },
     { prefix: "/cropfort/admin/farm-areas", workspaceId: "administration", moduleId: "farm-areas" },

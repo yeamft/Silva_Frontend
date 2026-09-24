@@ -63,8 +63,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
+import { canCreatePaymentRequest } from "@/lib/cropfort/commercial-access";
 import { cn } from "@/lib/utils";
 import { CROPFORT_ROLE_LABELS } from "@/types/cropfort";
+import { useCommercialStore } from "@/store/commercialStore";
 import {
   EXEC_CREW,
   TICKET_NEXT,
@@ -180,7 +182,10 @@ export default function FieldExecutionView() {
   const assignTicket = useCropfortOpsStore((s) => s.assignTicket);
   const advanceTicket = useCropfortOpsStore((s) => s.advanceTicket);
   const reassignTicket = useCropfortOpsStore((s) => s.reassignTicket);
+  const createPaymentRequest = useCommercialStore((s) => s.createPaymentRequest);
+  const paymentRequests = useCommercialStore((s) => s.paymentRequests);
   const canAssign = party === "spx" || party === "asset_owner" || party === "site_owner";
+  const canBill = canCreatePaymentRequest(user.role);
 
   const [filter, setFilter] = useState<Filter>("mine");
   const [view, setView] = useState<ViewMode>("board");
@@ -699,6 +704,36 @@ export default function FieldExecutionView() {
                     >
                       Reassign
                     </Button>
+                  ) : null}
+                  {canBill && selected.status === "validated" ? (
+                    paymentRequests.some(
+                      (p) => p.fieldTicketId === selected.id && p.status !== "returned",
+                    ) ? (
+                      <Button variant="outline" asChild>
+                        <Link href={CROPFORT_ROUTES.paymentRequests}>Open payment request</Link>
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          try {
+                            const row = createPaymentRequest(
+                              selected.id,
+                              {
+                                userId: user.id,
+                                name: user.name,
+                                role: user.role,
+                              },
+                              activeProgram?.id || "prog-1",
+                            );
+                            toast.success(`${row.code} submitted`);
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Could not create PR");
+                          }
+                        }}
+                      >
+                        Request payment
+                      </Button>
+                    )
                   ) : null}
                 </div>
 

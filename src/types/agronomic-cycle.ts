@@ -59,6 +59,27 @@ export type MonthlyWoLine = {
   inPlan: boolean;
 };
 
+export type MonthlyWoRecommendedAdjustment = {
+  id: string;
+  activityId: string;
+  activityCode: string;
+  activityName: string;
+  blockCode: string | null;
+  qtyDeltaPct: number;
+  etbDeltaPct: number;
+  reason: string;
+  /** SPX can reject before submit. */
+  accepted: boolean;
+};
+
+export type MonthlyWoStructuredInsights = {
+  priorReportId: string;
+  priorReportCode: string;
+  periodLabel: string;
+  variancePct: number | null;
+  missAttributions: { cause: MissCause; detail: string; kpiLabel: string }[];
+};
+
 export type MonthlyWorkOrder = {
   id: string;
   code: string;
@@ -75,6 +96,9 @@ export type MonthlyWorkOrder = {
   totalEtb: number;
   /** Prior monthly report insights / variance (RB03.1 / RB04.10). */
   lastMonthInsights: string;
+  /** Typed Loop G carry-forward from released monthly report. */
+  structuredInsights: MonthlyWoStructuredInsights | null;
+  recommendedAdjustments: MonthlyWoRecommendedAdjustment[];
   createdAt: string;
   updatedAt: string;
   note: string;

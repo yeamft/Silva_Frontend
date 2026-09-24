@@ -33,6 +33,8 @@ export const CROPFORT_ROUTES = {
   communications: "/cropfort/communications",
   auditTrail: "/cropfort/audit-trail",
   reports: "/cropfort/reports",
+  paymentRequests: "/cropfort/payment-requests",
+  settlements: "/cropfort/settlements",
   users: "/cropfort/users",
   userRoles: "/cropfort/users/roles",
   farmMap: "/cropfort/admin/farm-map",
