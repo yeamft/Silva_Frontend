@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  // Hide the Next.js route/dev indicator (N icon) in development.
+  devIndicators: false,
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

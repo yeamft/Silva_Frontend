@@ -23,13 +23,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { canManageOrgMap } from "@/lib/cropfortAccess";
 import {
-  createBlock,
-  deleteBlock,
-  getBlocks,
-  getFarmAreas,
-  updateBlock,
-} from "@/lib/api/org-map";
-import type { EntityStatus, FarmArea, FarmBlockRef } from "@/types/cropfort-modules";
+  useBlocks,
+  useCreateBlock,
+  useDeleteBlock,
+  useFarmAreas,
+  useUpdateBlock,
+} from "@/lib/query";
+import type { EntityStatus, FarmBlockRef } from "@/types/cropfort-modules";
 
 const PAGE_SIZE = 12;
 const NONE = "__none__";
@@ -53,9 +53,18 @@ const EMPTY: Form = {
 export default function BlocksPage() {
   const { user } = useCropfortAuth();
   const canEdit = canManageOrgMap(user.role);
-  const [blocks, setBlocks] = useState<FarmBlockRef[]>([]);
-  const [areas, setAreas] = useState<FarmArea[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const blocksQuery = useBlocks();
+  const areasQuery = useFarmAreas();
+  const createBlock = useCreateBlock();
+  const updateBlock = useUpdateBlock();
+  const deleteBlock = useDeleteBlock();
+
+  const blocks = blocksQuery.data ?? [];
+  const areas = areasQuery.data ?? [];
+  const loading = blocksQuery.isLoading || areasQuery.isLoading;
+  const busy = createBlock.isPending || updateBlock.isPending || deleteBlock.isPending;
+
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
@@ -63,24 +72,11 @@ export default function BlocksPage() {
   const [editing, setEditing] = useState<FarmBlockRef | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<FarmBlockRef | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [b, a] = await Promise.all([getBlocks(), getFarmAreas()]);
-      setBlocks(b);
-      setAreas(a);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Load failed");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    const err = blocksQuery.error || areasQuery.error;
+    if (err) toast.error(err instanceof Error ? err.message : "Load failed");
+  }, [blocksQuery.error, areasQuery.error]);
 
   const areaName = useCallback(
     (id?: string | null) => (id ? areas.find((a) => a.id === id)?.name ?? "—" : "Unassigned"),
@@ -128,7 +124,6 @@ export default function BlocksPage() {
       toast.error("Code and name are required");
       return;
     }
-    setBusy(true);
     try {
       const payload = {
         code: form.code.trim(),
@@ -137,15 +132,12 @@ export default function BlocksPage() {
         farmAreaId: form.farmAreaId === NONE ? null : form.farmAreaId,
         status: form.status,
       };
-      if (editing) await updateBlock(editing.id, payload);
-      else await createBlock(payload);
+      if (editing) await updateBlock.mutateAsync({ id: editing.id, input: payload });
+      else await createBlock.mutateAsync(payload);
       toast.success(editing ? "Block updated" : "Block created");
       setOpen(false);
-      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -313,16 +305,12 @@ export default function BlocksPage() {
         loading={busy}
         onConfirm={async () => {
           if (!deleteTarget) return;
-          setBusy(true);
           try {
-            await deleteBlock(deleteTarget.id);
+            await deleteBlock.mutateAsync(deleteTarget.id);
             toast.success("Block deleted");
             setDeleteTarget(null);
-            await reload();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Delete failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />

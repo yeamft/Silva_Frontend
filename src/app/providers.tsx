@@ -1,49 +1,94 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DEFAULT_USERS_DATA, useAuthStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
+import {
+  applyWorkspaceColor,
+  DEFAULT_WORKSPACE_COLOR,
+  type WorkspaceColorId,
+} from "@/lib/workspace-themes";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        retry: 1,
+        refetchOnWindowFocus: false,
+      },
     },
-  },
-});
+  });
+}
 
 const LOCAL_RESET_VERSION_KEY = "coffee-field-os-reset-v1";
 
+/** Marketing / auth surfaces stay on fixed Green (upwork) light, ignoring dashboard theme. */
+function isPublicThemeLockedPath(pathname: string | null | undefined) {
+  if (!pathname) return false;
+  if (pathname === "/" || pathname === "/login" || pathname === "/register") return true;
+  if (pathname === "/invite" || pathname.startsWith("/invite/")) return true;
+  return false;
+}
+
+const PUBLIC_THEME_COLOR: WorkspaceColorId = "upwork";
+
+function applyDocumentTheme(isDark: boolean, color: WorkspaceColorId) {
+  document.documentElement.classList.toggle("dark", isDark);
+  document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+  applyWorkspaceColor(color, isDark);
+}
+
 const ThemeApplier = () => {
+  const pathname = usePathname();
   const dark = useThemeStore((s) => s.dark);
+  const workspaceColor = useThemeStore((s) => s.workspaceColor);
+  const syncForUser = useThemeStore((s) => s.syncForUser);
+  const clearActiveUser = useThemeStore((s) => s.clearActiveUser);
+  const authUser = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const locked = isPublicThemeLockedPath(pathname);
 
   useEffect(() => {
-    const apply = (isDark: boolean) => {
-      document.documentElement.classList.toggle("dark", isDark);
-      document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+    if (isAuthenticated && authUser) {
+      syncForUser(authUser);
+    } else if (!isAuthenticated) {
+      clearActiveUser();
+    }
+  }, [isAuthenticated, authUser?.id, authUser?.role, authUser?.backendRole, syncForUser, clearActiveUser]);
+
+  useEffect(() => {
+    const apply = () => {
+      if (isPublicThemeLockedPath(pathname)) {
+        applyDocumentTheme(false, PUBLIC_THEME_COLOR);
+        return;
+      }
+      const s = useThemeStore.getState();
+      applyDocumentTheme(
+        Boolean(s.dark),
+        s.workspaceColor ?? DEFAULT_WORKSPACE_COLOR,
+      );
     };
 
-    apply(dark);
+    apply();
 
-    // Ensure DOM matches after zustand persist rehydrates
-    const unsub = useThemeStore.persist.onFinishHydration((state) => {
-      apply(Boolean(state?.dark));
+    const unsub = useThemeStore.persist.onFinishHydration(() => {
+      apply();
     });
     if (useThemeStore.persist.hasHydrated()) {
-      apply(useThemeStore.getState().dark);
+      apply();
     }
 
     return unsub;
-  }, [dark]);
+  }, [dark, workspaceColor, pathname, locked, authUser?.id]);
 
   return null;
 };
 
-/** Cheap one-time localStorage wipe — must run before auth init. */
 const StorageResetBootstrap = () => {
   useEffect(() => {
     if (localStorage.getItem(LOCAL_RESET_VERSION_KEY) === "done") return;
@@ -90,8 +135,8 @@ function scheduleIdle(fn: () => void) {
     const id = window.requestIdleCallback(fn, { timeout: 2500 });
     return () => window.cancelIdleCallback(id);
   }
-  const t = window.setTimeout(fn, 1);
-  return () => window.clearTimeout(t);
+  const t = globalThis.setTimeout(fn, 1);
+  return () => globalThis.clearTimeout(t);
 }
 
 const DeferredBootstraps = () => {
@@ -111,6 +156,8 @@ const Sonner = dynamic(() => import("@/components/ui/sonner").then((m) => m.Toas
 });
 
 export function Providers({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(makeQueryClient);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>

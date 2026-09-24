@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -9,14 +9,19 @@ import {
   ClipboardCheck,
   Coins,
   FileCheck2,
+  Loader2,
   MapPinned,
   ShieldCheck,
   Sprout,
   Users,
 } from "lucide-react";
 
-import ThemeToggle from "@/components/ThemeToggle";
+import { submitContactInquiry } from "@/lib/api/contact";
+import { ApiError } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/cropfort/form-field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 const HERO_IMAGES = [
   {
@@ -196,6 +201,189 @@ const STEPS = [
   },
 ] as const;
 
+type ContactFormState = {
+  name: string;
+  email: string;
+  organization: string;
+  message: string;
+  website: string;
+};
+
+const EMPTY_CONTACT: ContactFormState = {
+  name: "",
+  email: "",
+  organization: "",
+  message: "",
+  website: "",
+};
+
+function ContactForm() {
+  const [form, setForm] = useState<ContactFormState>(EMPTY_CONTACT);
+  const [errors, setErrors] = useState<Partial<Record<keyof ContactFormState, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [statusMessage, setStatusMessage] = useState("");
+
+  function validateLocal(values: ContactFormState) {
+    const next: Partial<Record<keyof ContactFormState, string>> = {};
+    if (!values.name.trim()) next.name = "Name is required.";
+    if (!values.email.trim()) next.email = "Email is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
+      next.email = "Enter a valid email.";
+    }
+    if (values.message.trim().length < 10) {
+      next.message = "Message should be at least 10 characters.";
+    }
+    return next;
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = validateLocal(form);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
+
+    setSubmitting(true);
+    setStatus("idle");
+    setStatusMessage("");
+
+    try {
+      await submitContactInquiry({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        organization: form.organization.trim() || undefined,
+        message: form.message.trim(),
+        website: form.website,
+      });
+      setForm(EMPTY_CONTACT);
+      setErrors({});
+      setStatus("success");
+      setStatusMessage("Thanks — we received your message and will get back to you.");
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "Something went wrong. Please try again in a moment.";
+      setStatus("error");
+      setStatusMessage(message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-5" noValidate>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField
+          label="Name"
+          required
+          error={errors.name}
+          render={(props) => (
+            <Input
+              {...props}
+              name="name"
+              autoComplete="name"
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              disabled={submitting}
+            />
+          )}
+        />
+        <FormField
+          label="Email"
+          required
+          error={errors.email}
+          render={(props) => (
+            <Input
+              {...props}
+              type="email"
+              name="email"
+              autoComplete="email"
+              value={form.email}
+              onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+              disabled={submitting}
+            />
+          )}
+        />
+      </div>
+
+      <FormField
+        label="Organization"
+        optional
+        error={errors.organization}
+        render={(props) => (
+          <Input
+            {...props}
+            name="organization"
+            autoComplete="organization"
+            value={form.organization}
+            onChange={(e) => setForm((prev) => ({ ...prev, organization: e.target.value }))}
+            disabled={submitting}
+          />
+        )}
+      />
+
+      <FormField
+        label="Message"
+        required
+        error={errors.message}
+        render={(props) => (
+          <Textarea
+            {...props}
+            name="message"
+            rows={5}
+            value={form.message}
+            onChange={(e) => setForm((prev) => ({ ...prev, message: e.target.value }))}
+            disabled={submitting}
+            className="min-h-[140px] resize-y"
+          />
+        )}
+      />
+
+      {/* Honeypot — hidden from users */}
+      <div className="absolute -left-[9999px] top-auto h-0 w-0 overflow-hidden" aria-hidden>
+        <label htmlFor="contact-website">Website</label>
+        <input
+          id="contact-website"
+          name="website"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          value={form.website}
+          onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
+        />
+      </div>
+
+      {status !== "idle" ? (
+        <p
+          role="status"
+          className={
+            status === "success"
+              ? "text-sm text-primary"
+              : "text-sm text-destructive"
+          }
+        >
+          {statusMessage}
+        </p>
+      ) : null}
+
+      <Button type="submit" size="lg" className="h-12 rounded-full px-8" disabled={submitting}>
+        {submitting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Sending…
+          </>
+        ) : (
+          <>
+            Send message
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </>
+        )}
+      </Button>
+    </form>
+  );
+}
+
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -230,11 +418,13 @@ export default function LandingPage() {
               </div>
             </Link>
 
-            <div className="flex items-center gap-2">
-              <div className="[&_button]:text-white [&_button]:hover:bg-white/10">
-                <ThemeToggle />
-              </div>
-
+            <div className="flex items-center gap-2 sm:gap-3">
+              <a
+                href="#contact"
+                className="hidden h-10 items-center px-3 text-sm font-medium text-white/75 transition hover:text-white sm:inline-flex"
+              >
+                Contact
+              </a>
               <Button
                 asChild
                 className="h-10 rounded-full bg-white px-5 font-medium text-[#17241C] hover:bg-white/90"
@@ -272,7 +462,7 @@ export default function LandingPage() {
               <Button
                 asChild
                 size="lg"
-                className="h-12 rounded-full bg-primary px-7 font-medium text-primary-foreground hover:bg-[#D8BB82]"
+                className="h-12 rounded-full bg-primary px-7 font-medium text-primary-foreground hover:bg-[#108A00]"
               >
                 <Link href="/login">
                   Open Cropfort
@@ -286,24 +476,6 @@ export default function LandingPage() {
               >
                 Explore the platform
               </a>
-            </div>
-
-            {/* TRUST STATEMENT */}
-            <div className="mt-12 flex flex-wrap gap-x-8 gap-y-4 border-t border-white/15 pt-6 text-sm text-white/55">
-              <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                Controlled approvals
-              </span>
-
-              <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                Verifiable field delivery
-              </span>
-
-              <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                Accountable settlement
-              </span>
             </div>
           </motion.div>
         </div>
@@ -495,28 +667,39 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="bg-background px-5 py-20 sm:px-8 sm:py-28">
-        <div className="mx-auto max-w-4xl text-center">
-          <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
-            Bring estate operations into one controlled workflow.
-          </h2>
-
-          <p className="mx-auto mt-5 max-w-xl leading-7 text-muted-foreground">
-            Access your assigned programs, field operations, approvals, and
-            commercial workflows from one workspace.
-          </p>
-
-          <Button
-            asChild
-            size="lg"
-            className="mt-8 h-12 rounded-full px-8"
+      {/* CONTACT */}
+      <section id="contact" className="border-t border-border bg-background py-20 sm:py-28">
+        <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start lg:px-10">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, ease }}
           >
-            <Link href="/login">
-              Sign in to Cropfort
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
+            <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+              Talk to us about Cropfort.
+            </h2>
+            <p className="mt-5 max-w-md leading-7 text-muted-foreground">
+              For partnerships, demos, or onboarding questions, send a message
+              and the SPX team will follow up.
+            </p>
+            <p className="mt-8 text-sm text-muted-foreground">
+              Already have access?{" "}
+              <Link href="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
+                Sign in
+              </Link>
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, ease, delay: 0.08 }}
+            className="relative"
+          >
+            <ContactForm />
+          </motion.div>
         </div>
       </section>
 
@@ -530,7 +713,12 @@ export default function LandingPage() {
             <span>Farm Operations Platform</span>
           </div>
 
-          <p>Powered by SPX</p>
+          <div className="flex items-center gap-4">
+            <a href="#contact" className="hover:text-foreground">
+              Contact
+            </a>
+            <p>Powered by SPX</p>
+          </div>
         </div>
       </footer>
     </main>

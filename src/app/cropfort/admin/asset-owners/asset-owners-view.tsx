@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Landmark, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
@@ -24,15 +24,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { canManageOrgMap } from "@/lib/cropfortAccess";
 import {
-  createAssetOwner,
-  deleteAssetOwner,
-  getAssetOwners,
-  getBlocks,
-  getFarmAreas,
-  getOrganizations,
-  updateAssetOwner,
-} from "@/lib/api/org-map";
-import type { AdminOrganization, AssetOwner, FarmArea, FarmBlockRef } from "@/types/cropfort-modules";
+  useAssetOwners,
+  useBlocks,
+  useCreateAssetOwner,
+  useDeleteAssetOwner,
+  useFarmAreas,
+  useOrganizations,
+  useUpdateAssetOwner,
+} from "@/lib/query";
+import type { AssetOwner } from "@/types/cropfort-modules";
 
 const PAGE_SIZE = 10;
 const NONE = "__none__";
@@ -58,11 +58,24 @@ const EMPTY: Form = {
 export default function AssetOwnersPage() {
   const { user } = useCropfortAuth();
   const canEdit = canManageOrgMap(user.role);
-  const [owners, setOwners] = useState<AssetOwner[]>([]);
-  const [orgs, setOrgs] = useState<AdminOrganization[]>([]);
-  const [areas, setAreas] = useState<FarmArea[]>([]);
-  const [blocks, setBlocks] = useState<FarmBlockRef[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const ownersQuery = useAssetOwners();
+  const orgsQuery = useOrganizations();
+  const areasQuery = useFarmAreas();
+  const blocksQuery = useBlocks();
+  const createAssetOwner = useCreateAssetOwner();
+  const updateAssetOwner = useUpdateAssetOwner();
+  const deleteAssetOwner = useDeleteAssetOwner();
+
+  const owners = ownersQuery.data ?? [];
+  const orgs = orgsQuery.data ?? [];
+  const areas = areasQuery.data ?? [];
+  const blocks = blocksQuery.data ?? [];
+  const loading =
+    ownersQuery.isLoading || orgsQuery.isLoading || areasQuery.isLoading || blocksQuery.isLoading;
+  const busy =
+    createAssetOwner.isPending || updateAssetOwner.isPending || deleteAssetOwner.isPending;
+
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
@@ -70,26 +83,11 @@ export default function AssetOwnersPage() {
   const [editing, setEditing] = useState<AssetOwner | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<AssetOwner | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [ao, o, a, b] = await Promise.all([getAssetOwners(), getOrganizations(), getFarmAreas(), getBlocks()]);
-      setOwners(ao);
-      setOrgs(o);
-      setAreas(a);
-      setBlocks(b);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Load failed");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    const err = ownersQuery.error || orgsQuery.error || areasQuery.error || blocksQuery.error;
+    if (err) toast.error(err instanceof Error ? err.message : "Load failed");
+  }, [ownersQuery.error, orgsQuery.error, areasQuery.error, blocksQuery.error]);
 
   const visible = useMemo(() => {
     const q = debounced.trim().toLowerCase();
@@ -140,17 +138,13 @@ export default function AssetOwnersPage() {
       farmAreaIds: form.farmAreaIds,
       blockIds: form.blockIds,
     };
-    setBusy(true);
     try {
-      if (editing) await updateAssetOwner(editing.id, payload);
-      else await createAssetOwner(payload);
+      if (editing) await updateAssetOwner.mutateAsync({ id: editing.id, input: payload });
+      else await createAssetOwner.mutateAsync(payload);
       toast.success("Saved");
       setOpen(false);
-      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -311,16 +305,12 @@ export default function AssetOwnersPage() {
         loading={busy}
         onConfirm={async () => {
           if (!deleteTarget) return;
-          setBusy(true);
           try {
-            await deleteAssetOwner(deleteTarget.id);
+            await deleteAssetOwner.mutateAsync(deleteTarget.id);
             toast.success("Deleted");
             setDeleteTarget(null);
-            await reload();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Delete failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />

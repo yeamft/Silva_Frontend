@@ -1,1 +1,7 @@
-﻿export { default } from "../_components/placeholder-page";
+﻿"use client";
+
+import ActivitiesView from "./activities-view";
+
+export default function BlocksActivitiesPage() {
+  return <ActivitiesView />;
+}

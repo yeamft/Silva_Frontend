@@ -27,8 +27,8 @@ export type SyncStatus = "pending" | "syncing" | "synced";
 
 export const CROPFORT_ROLE_LABELS: Record<CropfortRole, string> = {
   field_supervisor: "Field Supervisor",
-  bagro_office: "B-Agro Office",
+  bagro_office: "RFSP Office",
   spx_validator: "SPX Account Manager",
-  farm_owner: "Farm Owner",
+  farm_owner: "Chaka Buna reviewer",
   spx_platform_admin: "Platform Admin",
 };

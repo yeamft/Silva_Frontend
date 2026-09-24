@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Building2, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
-import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { PageContainer, PageHeader, PageMetaStrip, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -29,13 +29,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { canManageOrgMap } from "@/lib/cropfortAccess";
 import {
-  createOrganization,
-  deleteOrganization,
-  getFarmAreas,
-  getOrganizations,
-  getVendors,
-  updateOrganization,
-} from "@/lib/api/org-map";
+  useCreateOrganization,
+  useDeleteOrganization,
+  useFarmAreas,
+  useOrganizations,
+  useUpdateOrganization,
+  useVendors,
+} from "@/lib/query";
 import type { AdminOrganization, EntityStatus, OrganizationType } from "@/types/cropfort-modules";
 import { ORGANIZATION_TYPES, ORG_TYPE_LABELS } from "@/types/cropfort-modules";
 
@@ -44,10 +44,21 @@ const PAGE_SIZE = 12;
 export default function OrganizationsPage() {
   const { user } = useCropfortAuth();
   const canEdit = canManageOrgMap(user.role);
-  const [orgs, setOrgs] = useState<AdminOrganization[]>([]);
-  const [farmCounts, setFarmCounts] = useState<Record<string, number>>({});
-  const [vendorCounts, setVendorCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+
+  const orgsQuery = useOrganizations();
+  const areasQuery = useFarmAreas();
+  const vendorsQuery = useVendors();
+  const createOrganization = useCreateOrganization();
+  const updateOrganization = useUpdateOrganization();
+  const deleteOrganization = useDeleteOrganization();
+
+  const orgs = orgsQuery.data ?? [];
+  const areas = areasQuery.data ?? [];
+  const vendors = vendorsQuery.data ?? [];
+  const loading = orgsQuery.isLoading || areasQuery.isLoading || vendorsQuery.isLoading;
+  const busy =
+    createOrganization.isPending || updateOrganization.isPending || deleteOrganization.isPending;
+
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
@@ -57,32 +68,22 @@ export default function OrganizationsPage() {
   const [type, setType] = useState<OrganizationType>("silva_estate");
   const [status, setStatus] = useState<EntityStatus>("active");
   const [deleteTarget, setDeleteTarget] = useState<AdminOrganization | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [list, areas, vendors] = await Promise.all([getOrganizations(), getFarmAreas(), getVendors()]);
-      setOrgs(list);
-      const fc: Record<string, number> = {};
-      const vc: Record<string, number> = {};
-      for (const o of list) {
-        const areaIds = areas.filter((a) => a.organizationId === o.id).map((a) => a.id);
-        fc[o.id] = areaIds.length;
-        vc[o.id] = vendors.filter((v) => v.farmAreaIds.some((id) => areaIds.includes(id))).length;
-      }
-      setFarmCounts(fc);
-      setVendorCounts(vc);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Load failed");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    const err = orgsQuery.error || areasQuery.error || vendorsQuery.error;
+    if (err) toast.error(err instanceof Error ? err.message : "Load failed");
+  }, [orgsQuery.error, areasQuery.error, vendorsQuery.error]);
+
+  const { farmCounts, vendorCounts } = useMemo(() => {
+    const fc: Record<string, number> = {};
+    const vc: Record<string, number> = {};
+    for (const o of orgs) {
+      const areaIds = areas.filter((a) => a.organizationId === o.id).map((a) => a.id);
+      fc[o.id] = areaIds.length;
+      vc[o.id] = vendors.filter((v) => v.farmAreaIds.some((id) => areaIds.includes(id))).length;
+    }
+    return { farmCounts: fc, vendorCounts: vc };
+  }, [orgs, areas, vendors]);
 
   const visible = useMemo(() => {
     const q = debounced.trim().toLowerCase();
@@ -102,7 +103,17 @@ export default function OrganizationsPage() {
   return (
     <PageContainer>
       <PageHeader
+        eyebrow="Administration"
         title="Organizations"
+        meta={
+          <PageMetaStrip
+            items={[
+              { value: String(orgs.length), label: "Organizations" },
+              { value: String(vendors.length), label: "Vendors" },
+              { value: String(areas.length), label: "Farm areas" },
+            ]}
+          />
+        }
         actions={
           canEdit ? (
             <Button size="sm" onClick={() => startEdit()}>
@@ -231,17 +242,19 @@ export default function OrganizationsPage() {
             <Button
               disabled={!name.trim() || busy}
               onClick={async () => {
-                setBusy(true);
                 try {
-                  if (editing) await updateOrganization(editing.id, { name, type, status });
-                  else await createOrganization({ name, type, status });
+                  if (editing) {
+                    await updateOrganization.mutateAsync({
+                      id: editing.id,
+                      input: { name, type, status },
+                    });
+                  } else {
+                    await createOrganization.mutateAsync({ name, type, status });
+                  }
                   toast.success("Saved");
                   setOpen(false);
-                  await reload();
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "Save failed");
-                } finally {
-                  setBusy(false);
                 }
               }}
             >
@@ -259,16 +272,12 @@ export default function OrganizationsPage() {
         loading={busy}
         onConfirm={async () => {
           if (!deleteTarget) return;
-          setBusy(true);
           try {
-            await deleteOrganization(deleteTarget.id);
+            await deleteOrganization.mutateAsync(deleteTarget.id);
             toast.success("Deleted");
             setDeleteTarget(null);
-            await reload();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Delete failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
@@ -8,11 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  acknowledgeAllNotifications,
-  acknowledgeNotification,
-  getNotifications,
-  type AppNotification,
-} from "@/lib/api/notifications";
+  useAcknowledgeAllNotifications,
+  useAcknowledgeNotification,
+  useNotifications,
+} from "@/lib/query";
 import { cn } from "@/lib/utils";
 
 function relativeTime(iso: string | null) {
@@ -29,29 +28,23 @@ function relativeTime(iso: string | null) {
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<AppNotification[]>([]);
-  const [loading, setLoading] = useState(false);
+  const notificationsQuery = useNotifications(true, { refetchInterval: 60_000 });
+  const acknowledgeOne = useAcknowledgeNotification();
+  const acknowledgeAll = useAcknowledgeAllNotifications();
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      setItems(await getNotifications());
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not load notifications");
-    } finally {
-      setLoading(false);
+  const items = notificationsQuery.data ?? [];
+  const loading = notificationsQuery.isLoading;
+  const { refetch, error } = notificationsQuery;
+
+  useEffect(() => {
+    if (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load notifications");
     }
-  }, []);
+  }, [error]);
 
   useEffect(() => {
-    void reload();
-    const id = window.setInterval(() => void reload(), 60000);
-    return () => window.clearInterval(id);
-  }, [reload]);
-
-  useEffect(() => {
-    if (open) void reload();
-  }, [open, reload]);
+    if (open) void refetch();
+  }, [open, refetch]);
 
   const unread = items.filter((n) => !n.acknowledged).length;
 
@@ -85,8 +78,7 @@ export function NotificationBell() {
               className="h-auto p-0 text-[11px]"
               onClick={async () => {
                 try {
-                  await acknowledgeAllNotifications();
-                  await reload();
+                  await acknowledgeAll.mutateAsync();
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "Could not mark all read");
                 }
@@ -124,10 +116,7 @@ export function NotificationBell() {
               const onOpen = async () => {
                 if (!n.acknowledged) {
                   try {
-                    await acknowledgeNotification(n.id);
-                    setItems((prev) =>
-                      prev.map((x) => (x.id === n.id ? { ...x, acknowledged: true } : x)),
-                    );
+                    await acknowledgeOne.mutateAsync(n.id);
                   } catch {
                     // keep unread if ack fails
                   }

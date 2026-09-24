@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MoreHorizontal, Plus, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
@@ -26,17 +26,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { canManageOrgMap } from "@/lib/cropfortAccess";
 import {
-  createVendor,
-  deleteVendor,
-  getBlocks,
-  getFarmAreas,
-  getVendors,
-  updateVendor,
-} from "@/lib/api/org-map";
+  useBlocks,
+  useCreateVendor,
+  useDeleteVendor,
+  useFarmAreas,
+  useUpdateVendor,
+  useVendors,
+} from "@/lib/query";
 import {
   VENDOR_CATEGORIES,
-  type FarmArea,
-  type FarmBlockRef,
   type VendorRecord,
   type VendorStatus,
 } from "@/types/cropfort-modules";
@@ -67,10 +65,20 @@ const EMPTY: Form = {
 export default function VendorsPage() {
   const { user } = useCropfortAuth();
   const canEdit = canManageOrgMap(user.role);
-  const [vendors, setVendors] = useState<VendorRecord[]>([]);
-  const [areas, setAreas] = useState<FarmArea[]>([]);
-  const [blocks, setBlocks] = useState<FarmBlockRef[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const vendorsQuery = useVendors();
+  const areasQuery = useFarmAreas();
+  const blocksQuery = useBlocks();
+  const createVendor = useCreateVendor();
+  const updateVendor = useUpdateVendor();
+  const deleteVendor = useDeleteVendor();
+
+  const vendors = vendorsQuery.data ?? [];
+  const areas = areasQuery.data ?? [];
+  const blocks = blocksQuery.data ?? [];
+  const loading = vendorsQuery.isLoading || areasQuery.isLoading || blocksQuery.isLoading;
+  const busy = createVendor.isPending || updateVendor.isPending || deleteVendor.isPending;
+
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 300);
   const [status, setStatus] = useState<"all" | VendorStatus>("all");
@@ -79,25 +87,11 @@ export default function VendorsPage() {
   const [editing, setEditing] = useState<VendorRecord | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<VendorRecord | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [v, a, b] = await Promise.all([getVendors(), getFarmAreas(), getBlocks()]);
-      setVendors(v);
-      setAreas(a);
-      setBlocks(b);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Load failed");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    const err = vendorsQuery.error || areasQuery.error || blocksQuery.error;
+    if (err) toast.error(err instanceof Error ? err.message : "Load failed");
+  }, [vendorsQuery.error, areasQuery.error, blocksQuery.error]);
 
   const visible = useMemo(() => {
     let list = vendors;
@@ -132,18 +126,14 @@ export default function VendorsPage() {
       toast.error("Name and category are required");
       return;
     }
-    setBusy(true);
     try {
       const payload = { ...form, name: form.name.trim(), category: form.category.trim() };
-      if (editing) await updateVendor(editing.id, payload);
-      else await createVendor(payload);
+      if (editing) await updateVendor.mutateAsync({ id: editing.id, input: payload });
+      else await createVendor.mutateAsync(payload);
       toast.success("Saved");
       setOpen(false);
-      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -355,16 +345,12 @@ export default function VendorsPage() {
         loading={busy}
         onConfirm={async () => {
           if (!deleteTarget) return;
-          setBusy(true);
           try {
-            await deleteVendor(deleteTarget.id);
+            await deleteVendor.mutateAsync(deleteTarget.id);
             toast.success("Deleted");
             setDeleteTarget(null);
-            await reload();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Delete failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />

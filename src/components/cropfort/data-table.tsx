@@ -58,9 +58,9 @@ export function TableToolbar({
         />
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
           {filters ? (
-            <div className="cf-tab-scroll min-w-0 flex-1 sm:flex-wrap sm:overflow-visible">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               {filters}
             </div>
           ) : null}

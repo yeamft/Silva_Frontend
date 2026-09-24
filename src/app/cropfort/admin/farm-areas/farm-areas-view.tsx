@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapPinned, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { MultiCheck } from "@/components/cropfort/multi-check";
-import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { PageContainer, PageHeader, PageMetaStrip, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -24,23 +24,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { canManageOrgMap } from "@/lib/cropfortAccess";
 import {
-  createFarmArea,
-  deleteFarmArea,
-  getAssetOwners,
-  getBlocks,
-  getFarmAreas,
-  getOrganizations,
-  getVendors,
-  updateFarmArea,
-} from "@/lib/api/org-map";
-import type {
-  AdminOrganization,
-  AssetOwner,
-  EntityStatus,
-  FarmArea,
-  FarmBlockRef,
-  VendorRecord,
-} from "@/types/cropfort-modules";
+  useAssetOwners,
+  useBlocks,
+  useCreateFarmArea,
+  useDeleteFarmArea,
+  useFarmAreas,
+  useOrganizations,
+  useUpdateFarmArea,
+  useVendors,
+} from "@/lib/query";
+import type { EntityStatus, FarmArea } from "@/types/cropfort-modules";
 
 const PAGE_SIZE = 10;
 
@@ -67,12 +60,29 @@ const EMPTY: Form = {
 export default function FarmAreasPage() {
   const { user } = useCropfortAuth();
   const canEdit = canManageOrgMap(user.role);
-  const [areas, setAreas] = useState<FarmArea[]>([]);
-  const [orgs, setOrgs] = useState<AdminOrganization[]>([]);
-  const [blocks, setBlocks] = useState<FarmBlockRef[]>([]);
-  const [vendors, setVendors] = useState<VendorRecord[]>([]);
-  const [owners, setOwners] = useState<AssetOwner[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const areasQuery = useFarmAreas();
+  const orgsQuery = useOrganizations();
+  const blocksQuery = useBlocks();
+  const vendorsQuery = useVendors();
+  const ownersQuery = useAssetOwners();
+  const createFarmArea = useCreateFarmArea();
+  const updateFarmArea = useUpdateFarmArea();
+  const deleteFarmArea = useDeleteFarmArea();
+
+  const areas = areasQuery.data ?? [];
+  const orgs = orgsQuery.data ?? [];
+  const blocks = blocksQuery.data ?? [];
+  const vendors = vendorsQuery.data ?? [];
+  const owners = ownersQuery.data ?? [];
+  const loading =
+    areasQuery.isLoading ||
+    orgsQuery.isLoading ||
+    blocksQuery.isLoading ||
+    vendorsQuery.isLoading ||
+    ownersQuery.isLoading;
+  const busy = createFarmArea.isPending || updateFarmArea.isPending || deleteFarmArea.isPending;
+
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
@@ -80,33 +90,16 @@ export default function FarmAreasPage() {
   const [editing, setEditing] = useState<FarmArea | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<FarmArea | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [a, o, b, v, ao] = await Promise.all([
-        getFarmAreas(),
-        getOrganizations(),
-        getBlocks(),
-        getVendors(),
-        getAssetOwners(),
-      ]);
-      setAreas(a);
-      setOrgs(o);
-      setBlocks(b);
-      setVendors(v);
-      setOwners(ao);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Load failed");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    const err =
+      areasQuery.error ||
+      orgsQuery.error ||
+      blocksQuery.error ||
+      vendorsQuery.error ||
+      ownersQuery.error;
+    if (err) toast.error(err instanceof Error ? err.message : "Load failed");
+  }, [areasQuery.error, orgsQuery.error, blocksQuery.error, vendorsQuery.error, ownersQuery.error]);
 
   const visible = useMemo(() => {
     const q = debounced.trim().toLowerCase();
@@ -158,24 +151,34 @@ export default function FarmAreasPage() {
       vendorIds: form.vendorIds,
       assetOwnerIds: form.assetOwnerIds,
     };
-    setBusy(true);
     try {
-      if (editing) await updateFarmArea(editing.id, payload);
-      else await createFarmArea(payload);
+      if (editing) await updateFarmArea.mutateAsync({ id: editing.id, input: payload });
+      else await createFarmArea.mutateAsync(payload);
       toast.success("Saved");
       setOpen(false);
-      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setBusy(false);
     }
   };
 
   return (
     <PageContainer>
       <PageHeader
+        eyebrow="Administration"
         title="Farm areas"
+        meta={
+          <PageMetaStrip
+            items={[
+              { value: String(areas.length), label: "Farm areas" },
+              {
+                value: String(
+                  areas.reduce((sum, a) => sum + (Number(a.totalHectares) || 0), 0).toLocaleString(),
+                ),
+                label: "ha",
+              },
+            ]}
+          />
+        }
         actions={
           canEdit ? (
             <Button size="sm" onClick={() => startEdit()}>
@@ -349,16 +352,12 @@ export default function FarmAreasPage() {
         loading={busy}
         onConfirm={async () => {
           if (!deleteTarget) return;
-          setBusy(true);
           try {
-            await deleteFarmArea(deleteTarget.id);
+            await deleteFarmArea.mutateAsync(deleteTarget.id);
             toast.success("Deleted");
             setDeleteTarget(null);
-            await reload();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Delete failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />

@@ -9,21 +9,21 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
+        outline: "border border-input bg-background text-foreground hover:bg-muted hover:text-foreground",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
+        ghost: "text-foreground hover:bg-muted hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        xs: "h-7 gap-1.5 px-2 text-xs [&_svg]:size-3.5",
-        sm: "h-8 px-3",
-        default: "h-9 px-4",
-        lg: "h-10 px-6",
-        icon: "h-9 w-9",
-        "icon-sm": "h-8 w-8",
-        "icon-xs": "h-7 w-7 [&_svg]:size-3.5",
+        xs: "h-7 gap-1.5 rounded-md px-2 text-xs [&_svg]:size-3.5",
+        sm: "h-8 rounded-md px-3",
+        default: "h-9 rounded-lg px-4",
+        lg: "h-10 rounded-lg px-6",
+        icon: "h-9 w-9 rounded-lg",
+        "icon-sm": "h-8 w-8 rounded-md",
+        "icon-xs": "h-7 w-7 rounded-md [&_svg]:size-3.5",
       },
     },
     defaultVariants: {

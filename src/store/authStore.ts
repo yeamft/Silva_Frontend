@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 import { authenticateWithPin, callAdminUsersFunction, fetchProfiles } from "@/services/supabaseUserAdmin";
 import * as authApi from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/types";
+import { clearWorkspaceSelectionRequired } from "@/lib/workspace-gate";
 import type { MeResponse } from "@/lib/api/types";
 import { userFromMe } from "@/lib/api/role-map";
 import { clearTokens, readTokens } from "@/lib/api/token-storage";
@@ -74,7 +75,7 @@ export const DEFAULT_USERS_DATA: UsersData = {
     user: {
       id: "u-bagro",
       email: "lead@bagro.example",
-      name: "B-Agro Lead",
+      name: "RFSP Lead",
       role: "vendor_lead",
       organizationId: "org-bagro",
       branchId: "prog-shecha",
@@ -335,6 +336,7 @@ export const useAuthStore = create<AuthStore>()(
       logout: async () => {
         const tokens = readTokens();
         await authApi.logout(tokens?.refreshToken);
+        clearWorkspaceSelectionRequired();
         set({
           user: null,
           me: null,

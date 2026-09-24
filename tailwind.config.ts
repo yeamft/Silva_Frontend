@@ -26,6 +26,7 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--primary-hover))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -89,10 +90,10 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        xs: "0 1px 2px rgb(15 23 20 / 0.08)",
-        card: "0 1px 2px rgb(15 23 20 / 0.08), 0 6px 16px -4px rgb(15 23 20 / 0.12), 0 16px 32px -10px rgb(15 23 20 / 0.14)",
-        raised: "0 2px 8px rgb(15 23 20 / 0.1), 0 12px 28px -8px rgb(15 23 20 / 0.18)",
-        overlay: "0 8px 32px -8px rgb(15 23 20 / 0.24)",
+        xs: "0 1px 2px rgb(23 32 27 / 0.04)",
+        card: "none",
+        raised: "0 4px 16px -4px rgb(23 32 27 / 0.12), 0 2px 6px rgb(23 32 27 / 0.06)",
+        overlay: "0 12px 40px -8px rgb(23 32 27 / 0.2)",
       },
       keyframes: {
         "accordion-down": {

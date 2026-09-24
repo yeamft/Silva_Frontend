@@ -179,7 +179,7 @@ export const ROLE_DASHBOARD_COPY: Record<CropfortRole, RoleDashboardCopy> = {
     primaryAction: "New field ticket",
   },
   bagro_office: {
-    eyebrow: "B-Agro office",
+    eyebrow: "RFSP office",
     title: "Weekly operations",
     description: "Consolidate field tickets into weekly submissions and keep block activities aligned to plan.",
     primaryAction: "Build submission",

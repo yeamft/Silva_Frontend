@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MoreHorizontal, Plus, SearchX } from "lucide-react";
 import { toast } from "sonner";
@@ -37,19 +37,19 @@ import { CROPFORT_ROUTES } from "@/config/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { canManageUsers } from "@/lib/cropfortAccess";
 import {
-  activateUser,
-  createUser,
-  deleteUser,
-  getUserAuditTrail,
-  getUsers,
-  getUsersMeta,
-  revokeUserSessions,
-  suspendUser,
-  updateUser,
-  type UsersMeta,
-} from "@/lib/api/users";
+  useActivateUser,
+  useCreateUser,
+  useDeleteUser,
+  useRevokeUserSessions,
+  useSuspendUser,
+  useUpdateUser,
+  useUserAuditTrail,
+  useUsers,
+  useUsersMeta,
+} from "@/lib/query";
+import type { UsersMeta } from "@/lib/api/users";
 import { CROPFORT_ROLE_LABELS, type CropfortRole } from "@/types/cropfort";
-import type { AccountStatus, AdminUser, AuditEvent, UserOrgKind } from "@/types/cropfort-modules";
+import type { AccountStatus, AdminUser, UserOrgKind } from "@/types/cropfort-modules";
 import { USER_ORG_LABELS } from "@/types/cropfort-modules";
 
 const PAGE_SIZE = 20;
@@ -119,10 +119,20 @@ export default function UsersAdminPage() {
   const { user: current } = useCropfortAuth();
   const allowed = canManageUsers(current.role);
 
-  const [rows, setRows] = useState<AdminUser[]>([]);
-  const [programs, setPrograms] = useState<UsersMeta["programs"]>([]);
-  const [blocks, setBlocks] = useState<UsersMeta["blocks"]>([]);
-  const [loading, setLoading] = useState(true);
+  const usersQuery = useUsers(allowed);
+  const metaQuery = useUsersMeta(allowed);
+  const createUserMutation = useCreateUser();
+  const updateUserMutation = useUpdateUser();
+  const suspendUserMutation = useSuspendUser();
+  const activateUserMutation = useActivateUser();
+  const revokeSessionsMutation = useRevokeUserSessions();
+  const deleteUserMutation = useDeleteUser();
+
+  const rows = usersQuery.data ?? [];
+  const programs = metaQuery.data?.programs ?? [];
+  const blocks = metaQuery.data?.blocks ?? [];
+  const loading = usersQuery.isLoading || metaQuery.isLoading;
+
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
   const [status, setStatus] = useState<"all" | AccountStatus>("all");
@@ -136,15 +146,33 @@ export default function UsersAdminPage() {
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [form, setForm] = useState<UserForm>(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
 
   const [suspendTarget, setSuspendTarget] = useState<AdminUser | null>(null);
   const [activateTarget, setActivateTarget] = useState<AdminUser | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [auditUser, setAuditUser] = useState<AdminUser | null>(null);
-  const [audit, setAudit] = useState<AuditEvent[]>([]);
-  const [busy, setBusy] = useState(false);
+
+  const auditQuery = useUserAuditTrail(auditUser?.id ?? null, Boolean(auditUser));
+  const audit = auditQuery.data ?? [];
+
+  const saving = createUserMutation.isPending || updateUserMutation.isPending;
+  const busy =
+    suspendUserMutation.isPending ||
+    activateUserMutation.isPending ||
+    revokeSessionsMutation.isPending ||
+    deleteUserMutation.isPending;
+
+  useEffect(() => {
+    const err = usersQuery.error || metaQuery.error;
+    if (err) toast.error(err instanceof Error ? err.message : "Could not load users");
+  }, [usersQuery.error, metaQuery.error]);
+
+  useEffect(() => {
+    if (auditQuery.error) {
+      toast.error(auditQuery.error instanceof Error ? auditQuery.error.message : "Could not load audit trail");
+    }
+  }, [auditQuery.error]);
 
   const blockOptions = useMemo(() => {
     const tenantSet = new Set(form.tenantIds);
@@ -152,24 +180,6 @@ export default function UsersAdminPage() {
       .filter((b) => tenantSet.size === 0 || tenantSet.has(b.programId))
       .map((b) => ({ value: b.id, label: `${b.code} · ${b.name}` }));
   }, [blocks, form.tenantIds]);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [users, meta] = await Promise.all([getUsers(), getUsersMeta()]);
-      setRows(users);
-      setPrograms(meta.programs);
-      setBlocks(meta.blocks);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not load users");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (allowed) void reload();
-  }, [allowed, reload]);
 
   const visible = useMemo(() => {
     let list = rows;
@@ -228,13 +238,12 @@ export default function UsersAdminPage() {
     setFormErrors(errors);
     if (Object.keys(errors).length) return;
 
-    setSaving(true);
     try {
       if (editing) {
-        await updateUser(editing.id, toInput(form, programs));
+        await updateUserMutation.mutateAsync({ id: editing.id, input: toInput(form, programs) });
         toast.success("User updated");
       } else {
-        const result = await createUser(toInput(form, programs));
+        const result = await createUserMutation.mutateAsync(toInput(form, programs));
         if (form.status === "invited") {
           if (result.inviteSent) {
             toast.success("Invitation email sent");
@@ -258,11 +267,8 @@ export default function UsersAdminPage() {
         }
       }
       setFormOpen(false);
-      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -396,12 +402,7 @@ export default function UsersAdminPage() {
                           <DropdownMenuItem onClick={() => setSuspendTarget(u)}>Suspend</DropdownMenuItem>
                         )}
                         <DropdownMenuItem onClick={() => setRevokeTarget(u)}>Revoke sessions</DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={async () => {
-                            setAuditUser(u);
-                            setAudit(await getUserAuditTrail(u.id));
-                          }}
-                        >
+                        <DropdownMenuItem onClick={() => setAuditUser(u)}>
                           View audit trail
                         </DropdownMenuItem>
                         {u.neverLoggedIn ? (
@@ -528,16 +529,12 @@ export default function UsersAdminPage() {
         loading={busy}
         onConfirm={async () => {
           if (!suspendTarget) return;
-          setBusy(true);
           try {
-            await suspendUser(suspendTarget.id);
+            await suspendUserMutation.mutateAsync(suspendTarget.id);
             toast.success("Account suspended");
             setSuspendTarget(null);
-            await reload();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />
@@ -551,16 +548,12 @@ export default function UsersAdminPage() {
         loading={busy}
         onConfirm={async () => {
           if (!activateTarget) return;
-          setBusy(true);
           try {
-            await activateUser(activateTarget.id);
+            await activateUserMutation.mutateAsync(activateTarget.id);
             toast.success("Account activated");
             setActivateTarget(null);
-            await reload();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />
@@ -573,15 +566,12 @@ export default function UsersAdminPage() {
         loading={busy}
         onConfirm={async () => {
           if (!revokeTarget) return;
-          setBusy(true);
           try {
-            await revokeUserSessions(revokeTarget.id);
+            await revokeSessionsMutation.mutateAsync(revokeTarget.id);
             toast.success("Sessions revoked");
             setRevokeTarget(null);
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />
@@ -594,16 +584,12 @@ export default function UsersAdminPage() {
         loading={busy}
         onConfirm={async () => {
           if (!deleteTarget) return;
-          setBusy(true);
           try {
-            await deleteUser(deleteTarget.id);
+            await deleteUserMutation.mutateAsync(deleteTarget.id);
             toast.success("User deleted");
             setDeleteTarget(null);
-            await reload();
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Failed");
-          } finally {
-            setBusy(false);
           }
         }}
       />
@@ -613,7 +599,9 @@ export default function UsersAdminPage() {
           <DialogHeader>
             <DialogTitle>Audit trail</DialogTitle>
           </DialogHeader>
-          {audit.length === 0 ? (
+          {auditQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : audit.length === 0 ? (
             <p className="text-sm text-muted-foreground">No events yet.</p>
           ) : (
             <ul className="max-h-72 space-y-2 overflow-y-auto text-sm">

@@ -6,18 +6,16 @@ import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { useNavigation } from "@/hooks/use-navigation";
 import { cn } from "@/lib/utils";
 
-const MOBILE_LABELS: Record<string, string> = {
-  Dashboard: "Home",
-  "Rate Card": "Rates",
-  "User Management": "Users",
-  "Farm Map": "Map",
+const SHORT: Record<string, string> = {
+  Overview: "Home",
+  Planning: "Plan",
+  Execution: "Exec",
+  Control: "Ctrl",
+  Performance: "Perf",
+  "Standards & Rates": "Rates",
+  Administration: "Admin",
 };
 
-function mobileLabel(label: string) {
-  return MOBILE_LABELS[label] ?? label.split(" ")[0];
-}
-
-/** Role-aware bottom navigation for phones and small tablets. */
 export function CropfortMobileNav() {
   const { user } = useCropfortAuth();
   const { isSectionActive } = useNavigation();
@@ -27,8 +25,8 @@ export function CropfortMobileNav() {
 
   return (
     <nav
-      aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-[0_-1px_2px_rgba(15,23,20,0.06),0_-6px_20px_-8px_rgba(15,23,20,0.14)] backdrop-blur-md md:hidden"
+      aria-label="Primary workspaces"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-[0_-6px_20px_-8px_rgba(15,23,20,0.14)] backdrop-blur-md md:hidden"
       style={{ paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))" }}
     >
       <ul
@@ -44,12 +42,12 @@ export function CropfortMobileNav() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "cf-focus flex h-full min-h-12 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-medium leading-tight transition-colors touch-manipulation",
-                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  "cf-focus flex h-full min-h-12 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-medium leading-tight touch-manipulation",
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" aria-hidden />
-                <span className="max-w-full truncate">{mobileLabel(item.label)}</span>
+                <span className="max-w-full truncate">{SHORT[item.label] ?? item.label}</span>
               </Link>
             </li>
           );

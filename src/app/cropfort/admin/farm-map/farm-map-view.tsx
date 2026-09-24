@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MapPinned } from "lucide-react";
 import { toast } from "sonner";
@@ -15,55 +15,50 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
-  getAssetOwners,
-  getBlocks,
-  getFarmAreas,
-  getFarmMapOverview,
-  getVendors,
-} from "@/lib/api/org-map";
-import type { FarmArea, FarmBlockRef, FarmMapRow, VendorRecord, AssetOwner } from "@/types/cropfort-modules";
+  useAssetOwners,
+  useBlocks,
+  useFarmAreas,
+  useFarmMapOverview,
+  useVendors,
+} from "@/lib/query";
 import { ORG_TYPE_LABELS } from "@/types/cropfort-modules";
 
 const PAGE_SIZE = 10;
 
 export default function FarmMapPage() {
-  const [rows, setRows] = useState<FarmMapRow[]>([]);
-  const [farmAreas, setFarmAreas] = useState<FarmArea[]>([]);
-  const [blocks, setBlocks] = useState<FarmBlockRef[]>([]);
-  const [vendors, setVendors] = useState<VendorRecord[]>([]);
-  const [owners, setOwners] = useState<AssetOwner[]>([]);
-  const [loading, setLoading] = useState(true);
+  const overviewQuery = useFarmMapOverview();
+  const areasQuery = useFarmAreas();
+  const blocksQuery = useBlocks();
+  const vendorsQuery = useVendors();
+  const ownersQuery = useAssetOwners();
+
+  const rows = overviewQuery.data ?? [];
+  const farmAreas = areasQuery.data ?? [];
+  const blocks = blocksQuery.data ?? [];
+  const vendors = vendorsQuery.data ?? [];
+  const owners = ownersQuery.data ?? [];
+  const loading =
+    overviewQuery.isLoading ||
+    areasQuery.isLoading ||
+    blocksQuery.isLoading ||
+    vendorsQuery.isLoading ||
+    ownersQuery.isLoading;
+
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 300);
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [overview, areas, blks, vnds, aos] = await Promise.all([
-        getFarmMapOverview(),
-        getFarmAreas(),
-        getBlocks(),
-        getVendors(),
-        getAssetOwners(),
-      ]);
-      setRows(overview);
-      setFarmAreas(areas);
-      setBlocks(blks);
-      setVendors(vnds);
-      setOwners(aos);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not load farm map");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    const err =
+      overviewQuery.error ||
+      areasQuery.error ||
+      blocksQuery.error ||
+      vendorsQuery.error ||
+      ownersQuery.error;
+    if (err) toast.error(err instanceof Error ? err.message : "Could not load farm map");
+  }, [overviewQuery.error, areasQuery.error, blocksQuery.error, vendorsQuery.error, ownersQuery.error]);
 
   const visible = useMemo(() => {
     let list = rows;

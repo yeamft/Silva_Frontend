@@ -1,10 +1,6 @@
-import dynamic from "next/dynamic";
-import { PageSkeleton } from "@/components/cropfort/page-skeleton";
+import { redirect } from "next/navigation";
+import { CROPFORT_ROUTES } from "@/config/navigation";
 
-const CategoriesView = dynamic(() => import("./categories-view"), {
-  loading: () => <PageSkeleton cards={2} />,
-});
-
-export default function RateCardCategoriesPage() {
-  return <CategoriesView />;
+export default function RateCardCategoriesRedirect() {
+  redirect(CROPFORT_ROUTES.standingCards);
 }

@@ -4,119 +4,147 @@
 
 @layer base {
   :root {
-    /* Estate field: soft parchment + landing wheat gold (#C9A86A) */
-    --background: 48 22% 97%;
-    --foreground: 152 22% 12%;
+    /*
+     * CropFort operational planning system
+     * Neutral canvas + forest-green accent (not green everywhere)
+     */
+    /* #F5F6F3 */
+    --background: 90 12% 96%;
+    /* #17201B */
+    --foreground: 150 18% 11%;
 
+    /* #FFFFFF */
     --card: 0 0% 100%;
-    --card-foreground: 152 22% 12%;
+    --card-foreground: 150 18% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 152 22% 12%;
+    --popover-foreground: 150 18% 11%;
 
-    /* Landing CTA gold #C9A86A */
-    --primary: 39 47% 60%;
-    --primary-foreground: 150 28% 10%;
+    /* #1F5A42 primary action */
+    --primary: 154 48% 24%;
+    --primary-foreground: 0 0% 100%;
+    /* #174733 */
+    --primary-hover: 155 51% 18%;
 
-    --secondary: 150 14% 93%;
-    --secondary-foreground: 152 18% 24%;
+    /* Quiet secondary surfaces */
+    --secondary: 90 8% 95%;
+    --secondary-foreground: 150 18% 11%;
 
-    --muted: 48 14% 94%;
-    --muted-foreground: 152 12% 32%;
+    --muted: 90 8% 95%;
+    /* #66706A */
+    --muted-foreground: 150 5% 42%;
 
-    /* Soft gold wash for hover / selected surfaces */
-    --accent: 39 42% 92%;
-    --accent-foreground: 150 28% 12%;
+    /* #E8F1EC selected / soft accent wash */
+    --accent: 150 25% 93%;
+    --accent-foreground: 154 48% 20%;
 
-    --destructive: 0 72% 50%;
+    /* #B42318 */
+    --destructive: 4 76% 40%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 48% 32%;
+    /* #2F7D52 */
+    --success: 148 45% 34%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 39 55% 48%;
-    --warning-foreground: 150 28% 10%;
+    /* #B7791F */
+    --warning: 38 71% 42%;
+    --warning-foreground: 40 30% 10%;
 
-    --info: 198 70% 42%;
+    /* #2563EB */
+    --info: 221 83% 53%;
     --info-foreground: 0 0% 100%;
 
-    --border: 150 12% 88%;
-    --input: 150 12% 88%;
-    --ring: 39 47% 55%;
+    /* #E1E5E1 */
+    --border: 120 6% 89%;
+    --input: 120 6% 89%;
+    --ring: 154 48% 24%;
 
-    --overlay: 152 24% 8%;
+    --overlay: 150 18% 8%;
 
+    /* Precise / operational — avoid oversized radii */
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 152 22% 12%;
-    --sidebar-primary: 39 47% 60%;
-    --sidebar-primary-foreground: 150 28% 10%;
-    --sidebar-accent: 39 40% 94%;
-    --sidebar-accent-foreground: 152 22% 12%;
-    --sidebar-border: 150 12% 90%;
-    --sidebar-ring: 39 47% 55%;
+    /* #F8F9F7 sidebar slightly distinct from canvas */
+    --sidebar-background: 90 10% 97%;
+    --sidebar-foreground: 150 18% 11%;
+    --sidebar-primary: 154 48% 24%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 150 25% 93%;
+    --sidebar-accent-foreground: 154 48% 20%;
+    --sidebar-border: 120 6% 89%;
+    --sidebar-ring: 154 48% 24%;
 
-    --gold-glow: 39 55% 58%;
+    --gold-glow: 38 40% 55%;
     --surface-elevated: 0 0% 100%;
-    --surface-overlay: 48 16% 95%;
+    --surface-overlay: 90 8% 95%;
+
+    --cf-density: 1;
+    --cf-row-h: 48px;
   }
 
   .dark {
-    --background: 152 18% 8%;
-    --foreground: 48 18% 94%;
+    --background: 150 12% 9%;
+    --foreground: 90 10% 94%;
 
-    --card: 152 16% 11%;
-    --card-foreground: 48 18% 94%;
+    --card: 150 10% 11%;
+    --card-foreground: 90 10% 94%;
 
-    --popover: 152 16% 11%;
-    --popover-foreground: 48 18% 94%;
+    --popover: 150 10% 11%;
+    --popover-foreground: 90 10% 94%;
 
-    /* Landing hover gold #D8BB82 — readable on dark shells */
-    --primary: 40 52% 68%;
-    --primary-foreground: 150 28% 10%;
+    --primary: 154 42% 42%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 154 45% 36%;
 
-    --secondary: 152 14% 16%;
-    --secondary-foreground: 48 12% 86%;
+    --secondary: 150 8% 15%;
+    --secondary-foreground: 90 10% 92%;
 
-    --muted: 152 12% 14%;
-    --muted-foreground: 48 8% 58%;
+    --muted: 150 8% 14%;
+    --muted-foreground: 120 6% 62%;
 
-    --accent: 39 28% 18%;
-    --accent-foreground: 40 45% 78%;
+    --accent: 154 18% 16%;
+    --accent-foreground: 150 30% 82%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 4 70% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 145 50% 40%;
+    --success: 148 40% 40%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 40 55% 58%;
-    --warning-foreground: 150 28% 8%;
+    --warning: 38 65% 48%;
+    --warning-foreground: 40 30% 8%;
 
-    --info: 198 70% 50%;
+    --info: 221 75% 58%;
     --info-foreground: 0 0% 100%;
 
-    --border: 152 12% 18%;
-    --input: 152 12% 18%;
-    --ring: 40 52% 68%;
+    --border: 150 8% 18%;
+    --input: 150 8% 18%;
+    --ring: 154 42% 48%;
 
-    --overlay: 152 30% 4%;
+    --overlay: 150 20% 4%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 152 22% 9%;
-    --sidebar-foreground: 48 14% 92%;
-    --sidebar-primary: 40 52% 68%;
-    --sidebar-primary-foreground: 150 28% 10%;
-    --sidebar-accent: 39 22% 16%;
-    --sidebar-accent-foreground: 48 14% 92%;
-    --sidebar-border: 152 14% 16%;
-    --sidebar-ring: 40 52% 68%;
+    --sidebar-background: 150 12% 10%;
+    --sidebar-foreground: 90 10% 92%;
+    --sidebar-primary: 154 42% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 154 16% 15%;
+    --sidebar-accent-foreground: 150 30% 85%;
+    --sidebar-border: 150 8% 16%;
+    --sidebar-ring: 154 42% 48%;
 
-    --gold-glow: 40 60% 62%;
-    --surface-elevated: 152 14% 13%;
-    --surface-overlay: 152 16% 10%;
+    --gold-glow: 38 40% 50%;
+    --surface-elevated: 150 10% 13%;
+    --surface-overlay: 150 10% 10%;
+
+    --cf-density: 1;
+    --cf-row-h: 48px;
+  }
+
+  .cf-density-compact {
+    --cf-density: 0.85;
+    --cf-row-h: 44px;
   }
 }
 
@@ -127,7 +155,9 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-dm-sans), system-ui, sans-serif;
+    font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
     color-scheme: light;
     overflow-x: hidden;
   }
@@ -137,11 +167,14 @@
   }
 
   h1, h2, h3, h4 {
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
+    font-weight: 600;
   }
 
+  /* Display reserved for rare marketing; operational UI uses sans hierarchy */
   .font-display {
-    font-family: var(--font-fraunces), Georgia, serif;
+    font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
   }
 }
 
@@ -184,24 +217,21 @@
 }
 
 @layer utilities {
+  /* Brand solid — no decorative gold gradients in the ops shell */
   .gold-gradient {
-    background: linear-gradient(145deg, hsl(39 47% 56%), hsl(40 52% 68%));
+    background: hsl(var(--primary));
   }
 
   .gold-text {
-    background: linear-gradient(145deg, hsl(39 47% 52%), hsl(40 52% 66%));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: hsl(var(--primary));
+    background: none;
+    -webkit-text-fill-color: unset;
   }
 
   .glass-card {
     background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
-    box-shadow:
-      0 1px 2px rgb(15 23 20 / 0.08),
-      0 6px 16px -4px rgb(15 23 20 / 0.12),
-      0 16px 32px -10px rgb(15 23 20 / 0.14);
+    box-shadow: none;
   }
 
   .glow-gold {
@@ -214,7 +244,7 @@
 
   @keyframes pulse-status {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.55; }
   }
 
   .farm-shell {
@@ -226,7 +256,7 @@
   }
 
   .farm-table-wrap {
-    @apply -mx-3 overflow-x-auto overscroll-x-contain border-y sm:mx-0 sm:rounded-xl sm:border;
+    @apply -mx-3 overflow-x-auto overscroll-x-contain border-y sm:mx-0 sm:rounded-lg sm:border;
   }
 
   .touch-target {
@@ -234,21 +264,17 @@
   }
 
   .farm-card-hover {
-    @apply transition-colors duration-150 hover:border-primary/25;
+    @apply transition-colors duration-150 hover:border-primary/30;
   }
 
   .farm-soft-panel {
-    @apply rounded-2xl border border-border/70 bg-card p-5;
-    box-shadow:
-      0 1px 2px rgb(15 23 20 / 0.08),
-      0 6px 16px -4px rgb(15 23 20 / 0.12),
-      0 16px 32px -10px rgb(15 23 20 / 0.14);
+    @apply rounded-lg border border-border bg-card p-5 shadow-none;
   }
 
-  /* ---- Cropfort premium surfaces ---- */
+  /* ---- CropFort operational surfaces ---- */
 
   .cf-page {
-    @apply mx-auto w-full max-w-[1440px] space-y-4 p-3 sm:p-6;
+    @apply mx-auto w-full max-w-[1440px] space-y-6 px-4 py-5 sm:px-6 sm:py-6 lg:px-8;
   }
 
   .cf-table-scroll {
@@ -256,7 +282,7 @@
   }
 
   .cf-tab-scroll {
-    @apply cf-scroll flex gap-1 overflow-x-auto pb-1;
+    @apply cf-scroll flex gap-0 overflow-x-auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
@@ -266,43 +292,32 @@
   }
 
   .cf-card {
-    @apply rounded-lg border border-border bg-card;
-    box-shadow:
-      0 1px 2px rgb(15 23 20 / 0.08),
-      0 6px 16px -4px rgb(15 23 20 / 0.12),
-      0 16px 32px -10px rgb(15 23 20 / 0.14);
+    @apply rounded-lg border border-border bg-card shadow-none;
   }
 
   .cf-card-interactive {
-    @apply cf-card transition-colors duration-150 hover:border-primary/25;
+    @apply cf-card transition-colors duration-150 hover:border-primary/35;
   }
 
   .cf-eyebrow {
-    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+    @apply text-[13px] font-medium text-muted-foreground;
   }
 
   .cf-focus {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 
+  /* Quiet — no decorative green washes */
   .cf-mesh {
-    background-image:
-      radial-gradient(ellipse 80% 60% at 12% -10%, hsl(var(--primary) / 0.16), transparent 60%),
-      radial-gradient(ellipse 70% 55% at 95% 8%, hsl(var(--accent) / 0.12), transparent 58%),
-      radial-gradient(ellipse 90% 70% at 50% 110%, hsl(152 45% 30% / 0.1), transparent 62%);
+    background-image: none;
   }
 
   .cf-grid-lines {
-    background-image:
-      linear-gradient(to right, hsl(var(--border) / 0.5) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--border) / 0.5) 1px, transparent 1px);
-    background-size: 64px 64px;
-    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent 75%);
-    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent 75%);
+    background-image: none;
   }
 
   .cf-hairline {
-    @apply border-b border-border/60;
+    @apply border-b border-border;
   }
 
   .cf-numeric {
@@ -327,5 +342,39 @@
 
   .cf-scroll::-webkit-scrollbar-track {
     background: transparent;
+  }
+
+  .cf-table {
+    @apply w-full text-[13px];
+  }
+
+  .cf-table th {
+    @apply sticky top-0 z-[1] border-b border-border bg-card px-3 py-2.5 text-left text-xs font-medium text-muted-foreground;
+  }
+
+  .cf-table td {
+    @apply border-b border-border/80 px-3 text-foreground;
+    height: var(--cf-row-h);
+  }
+
+  .cf-table tbody tr:hover td {
+    @apply bg-muted/40;
+  }
+
+  .cf-status-dot {
+    @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
+  }
+
+  /* Odoo-inspired ops desk */
+  .cf-ops-desk {
+    @apply space-y-5;
+  }
+
+  .cf-ops-toolbar {
+    backdrop-filter: saturate(1.1);
+  }
+
+  .cf-ops-surface {
+    @apply shadow-none;
   }
 }

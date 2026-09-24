@@ -1,10 +1,6 @@
-import dynamic from "next/dynamic";
-import { PageSkeleton } from "@/components/cropfort/page-skeleton";
+import { redirect } from "next/navigation";
+import { CROPFORT_ROUTES } from "@/config/navigation";
 
-const ArchiveView = dynamic(() => import("./archive-view"), {
-  loading: () => <PageSkeleton cards={4} />,
-});
-
-export default function RateCardArchivePage() {
-  return <ArchiveView />;
+export default function RateCardArchiveRedirect() {
+  redirect(CROPFORT_ROUTES.rateCardArchive);
 }

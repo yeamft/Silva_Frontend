@@ -779,7 +779,7 @@ export const SEED_BLOCKS: FarmBlockRef[] = [
 
 export const SEED_ORGANIZATIONS: AdminOrganization[] = [
   { id: "org-spx", name: "SPX", type: "spx", status: "active", createdAt: "2025-10-01T00:00:00.000Z" },
-  { id: "org-bagro", name: "B-Agro", type: "bagro", status: "active", createdAt: "2025-10-01T00:00:00.000Z" },
+  { id: "org-bagro", name: "RFSP", type: "bagro", status: "active", createdAt: "2025-10-01T00:00:00.000Z" },
   { id: "org-silva", name: "Silva Estate Holdings", type: "silva_estate", status: "active", createdAt: "2025-10-01T00:00:00.000Z" },
   { id: "org-chaka", name: "Chaka Buna PLC", type: "silva_estate", status: "active", createdAt: "2026-01-12T00:00:00.000Z" },
   { id: "org-jimma", name: "Jimma Highlands Trust", type: "silva_estate", status: "active", createdAt: "2026-02-02T00:00:00.000Z" },
@@ -871,7 +871,7 @@ export const SEED_FARM_AREAS: FarmArea[] = [
 export const SEED_VENDORS: VendorRecord[] = [
   {
     id: "vnd-bagro",
-    name: "B-Agro Operations",
+    name: "RFSP Operations",
     category: "Estate execution",
     status: "active",
     prequalified: true,

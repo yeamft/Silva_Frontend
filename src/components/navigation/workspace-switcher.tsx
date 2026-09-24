@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronsUpDown, Layers3, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCropfortAuth, CROPFORT_ROLE_LABELS } from "@/components/navigation/auth-context";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +14,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SELECT_WORKSPACE_PATH } from "@/lib/workspace-gate";
 import { cn } from "@/lib/utils";
 
 const ORG_TYPE_LABELS: Record<string, string> = {
-  silva: "Silva",
-  spx: "SPX",
+  silva: "Chaka Buna",
+  spx: "SPX (Silva)",
+  bagro: "RFSP",
   vendor: "Vendor",
 };
 
@@ -136,6 +139,13 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
         )}
 
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={SELECT_WORKSPACE_PATH} className="gap-2">
+            <Layers3 className="h-4 w-4 shrink-0" aria-hidden />
+            All workspaces
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <div className="px-2 py-1.5">
           <p className="truncate text-xs font-medium">{orgName}</p>
           <p className="truncate text-[11px] text-muted-foreground">
@@ -172,28 +182,34 @@ export function WorkspaceChip() {
   const chip = (
     <span
       className={cn(
-        "flex min-w-0 max-w-[14rem] items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-2.5 py-1.5 sm:max-w-xs",
-        canSwitch && "cursor-pointer transition-colors hover:bg-muted",
+        "flex min-w-0 max-w-[14rem] items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/70 px-2.5 py-1.5 sm:max-w-xs",
+        canSwitch && "cursor-pointer transition-colors hover:bg-sidebar-accent",
       )}
       title={`${orgName} · ${programName}`}
     >
       <span
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary text-[10px] font-semibold text-primary-foreground"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-sidebar-primary text-[10px] font-semibold text-sidebar-primary-foreground"
         aria-hidden
       >
         {orgInitials(orgName)}
       </span>
       <span className="min-w-0 flex-1 truncate text-xs sm:text-sm">
-        <span className="font-medium text-foreground">{programName}</span>
-        <span className="hidden text-muted-foreground sm:inline"> · {orgName}</span>
+        <span className="font-medium text-sidebar-foreground">{programName}</span>
+        <span className="hidden text-sidebar-foreground/55 sm:inline"> · {orgName}</span>
       </span>
       {canSwitch ? (
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/50" aria-hidden />
       ) : null}
     </span>
   );
 
-  if (!canSwitch) return chip;
+  if (!canSwitch) {
+    return (
+      <Link href={SELECT_WORKSPACE_PATH} className="min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md">
+        {chip}
+      </Link>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -237,6 +253,13 @@ export function WorkspaceChip() {
             </DropdownMenuItem>
           );
         })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={SELECT_WORKSPACE_PATH} className="gap-2">
+            <Layers3 className="h-4 w-4 shrink-0" aria-hidden />
+            All workspaces
+          </Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

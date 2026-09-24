@@ -49,8 +49,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
 }
 
 /**
- * Standard page masthead. Title is the page's single h1.
- * Primary action always sits top-right; secondary actions precede it.
+ * Workspace page masthead — typography + spacing establish hierarchy (no card chrome).
  */
 export function PageHeader({
   title,
@@ -58,29 +57,59 @@ export function PageHeader({
   actions,
   breadcrumbs,
   meta,
+  eyebrow,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
   breadcrumbs?: Crumb[];
   meta?: ReactNode;
+  /** Small line above the title (e.g. workspace or section name). */
+  eyebrow?: string;
 }) {
   return (
-    <header className="space-y-2">
+    <header className="space-y-3">
       {breadcrumbs?.length ? <Breadcrumbs items={breadcrumbs} /> : null}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1.5">
-          <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">{title}</h1>
-          {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
-          {meta ? <div className="flex flex-wrap items-center gap-1.5">{meta}</div> : null}
+          {eyebrow ? <p className="cf-eyebrow">{eyebrow}</p> : null}
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.65rem]">
+            {title}
+          </h1>
+          {description ? (
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>
+          ) : null}
+          {meta ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-sm text-muted-foreground">
+              {meta}
+            </div>
+          ) : null}
         </div>
         {actions ? (
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap [&>*]:min-h-11 sm:[&>*]:min-h-9">
+          <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end [&>*]:min-h-10 sm:[&>*]:min-h-9">
             {actions}
           </div>
         ) : null}
       </div>
     </header>
+  );
+}
+
+/** Compact inline metrics under a page title (e.g. "124 Activities · 1,240 ha"). */
+export function PageMetaStrip({
+  items,
+}: {
+  items: { label: string; value: string }[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+      {items.map((item) => (
+        <span key={item.label} className="inline-flex items-baseline gap-1.5">
+          <span className="cf-numeric font-semibold text-foreground">{item.value}</span>
+          <span className="text-muted-foreground">{item.label}</span>
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -150,23 +179,25 @@ export function StatCard({
   const trendClass = good === null ? "text-muted-foreground" : good ? "text-success" : "text-destructive";
 
   return (
-    <Card className={cn("shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.12),0_16px_32px_-10px_rgba(15,23,20,0.14)]", emphasis && "border-primary/25 bg-primary/[0.03]")}>
-      <CardContent className="p-3 sm:p-4">
+    <Card className={cn(emphasis && "border-primary/25")}>
+      <CardContent className="p-5">
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-[11px] font-medium text-muted-foreground sm:text-xs">{label}</p>
+          <p className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
           {Icon ? <Icon className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" aria-hidden /> : null}
         </div>
 
-        <div className="mt-2 flex items-baseline gap-1.5">
+        <div className="mt-3 flex items-baseline gap-1.5">
           <span
             className={cn(
-              "cf-numeric font-semibold leading-none text-foreground",
-              emphasis ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl"
+              "cf-numeric font-semibold leading-none tracking-tight text-foreground",
+              emphasis ? "text-3xl" : "text-2xl"
             )}
           >
             {value}
           </span>
-          {unit ? <span className="text-[11px] text-muted-foreground sm:text-xs">{unit}</span> : null}
+          {unit ? <span className="text-xs text-muted-foreground">{unit}</span> : null}
         </div>
 
         {series?.length ? (
@@ -235,17 +266,17 @@ export function SectionCard({
 }) {
   const showHeader = Boolean(title || action);
   return (
-    <Card className={cn("flex flex-col shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.12),0_16px_32px_-10px_rgba(15,23,20,0.14)]", className)}>
+    <Card className={cn("flex flex-col", className)}>
       {showHeader ? (
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b py-3">
-          <div className="min-w-0">
-            {title ? <CardTitle className="text-sm">{title}</CardTitle> : null}
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-border px-5 py-4">
+          <div className="min-w-0 space-y-0.5">
+            {title ? <CardTitle className="text-sm font-semibold">{title}</CardTitle> : null}
             {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}
         </CardHeader>
       ) : null}
-      <CardContent className={cn(flush ? "flex-1 p-3 sm:p-4" : "flex-1 p-4 sm:p-5", bodyClassName)}>{children}</CardContent>
+      <CardContent className={cn(flush ? "flex-1 p-0" : "flex-1 p-5", bodyClassName)}>{children}</CardContent>
     </Card>
   );
 }
@@ -288,5 +319,60 @@ export function SectionAction({ href, label = "View all" }: { href: string; labe
     </Button>
   );
 }
+
+/** One-click continue-work card for Home. */
+export function NextActionCard({
+  href,
+  title,
+  description,
+  count,
+  icon: Icon,
+  emphasis = false,
+}: {
+  href: string;
+  title: string;
+  description?: string;
+  count?: number | string | null;
+  icon?: LucideIcon;
+  emphasis?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "cf-focus group flex h-full flex-col gap-3 rounded-lg border border-border bg-card p-4",
+        "transition-colors hover:border-foreground/20 hover:bg-muted/40",
+        emphasis && "border-primary/25",
+      )}
+    >
+
+      <div className="flex items-start justify-between gap-2">
+        {Icon ? (
+          <span className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background">
+            <Icon className="h-5 w-5 text-foreground" aria-hidden />
+          </span>
+        ) : (
+          <span />
+        )}
+        {count != null && count !== "" ? (
+          <span className="cf-numeric text-2xl font-semibold tabular-nums tracking-tight">
+            {count}
+          </span>
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        {description ? <p className="text-xs leading-5 text-muted-foreground">{description}</p> : null}
+      </div>
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground">
+        Open
+        <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
+      </span>
+    </Link>
+  );
+}
+
+/** Alias for proof-point style KPI tiles (Cropster-like metric strip). */
+export const MetricCard = StatCard;
 
 export { StatusBadge } from "@/components/cropfort/status-badge";

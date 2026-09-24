@@ -1,7 +1,6 @@
-import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-type Tone = NonNullable<BadgeProps["variant"]>;
+type Tone = "success" | "info" | "warning" | "destructive" | "muted";
 
 /**
  * Single source of truth for status colour across the app.
@@ -19,17 +18,29 @@ const STATUS_TONE: Record<string, Tone> = {
   completed: "success",
   on_track: "success",
   paid: "success",
+  published: "success",
 
   // in-flight
-  submitted: "info",
   in_review: "info",
   pending_owner: "info",
   processing: "info",
   syncing: "info",
+  in_progress: "info",
+  assigned: "info",
+  accepted: "info",
   issued: "info",
   open: "info",
+  planned: "info",
+  executing: "info",
+  info: "info",
+  site_reviewed: "warning",
+  site_checked: "warning",
+  pending_silva: "warning",
+  corrective_action: "warning",
+  not_started: "muted",
 
   // needs attention
+  submitted: "warning",
   pending: "warning",
   at_risk: "warning",
   on_hold: "warning",
@@ -50,13 +61,63 @@ const STATUS_TONE: Record<string, Tone> = {
 
   // neutral
   draft: "muted",
+  finalized: "info",
   archived: "muted",
   inactive: "muted",
   closed: "muted",
 };
 
+const TONE_STYLES: Record<Tone, { wrap: string; mark: string }> = {
+  success: {
+    wrap: "bg-success/10 text-success",
+    mark: "bg-success",
+  },
+  info: {
+    wrap: "bg-info/10 text-info",
+    mark: "bg-info",
+  },
+  warning: {
+    wrap: "bg-warning/10 text-warning",
+    mark: "bg-warning",
+  },
+  destructive: {
+    wrap: "bg-destructive/10 text-destructive",
+    mark: "bg-destructive",
+  },
+  muted: {
+    wrap: "bg-muted text-muted-foreground",
+    mark: "bg-muted-foreground/70",
+  },
+};
+
+/** Symbol per health-style status (● ▲ ■) — still paired with text. */
+function StatusMark({ status, tone }: { status: string; tone: Tone }) {
+  const key = status.toLowerCase().replace(/[\s-]+/g, "_");
+  if (key === "at_risk") {
+    return (
+      <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-[10px] leading-none" aria-hidden>
+        ▲
+      </span>
+    );
+  }
+  if (key === "blocked") {
+    return (
+      <span
+        className={cn("inline-block h-2 w-2 shrink-0 rounded-[1px]", TONE_STYLES[tone].mark)}
+        aria-hidden
+      />
+    );
+  }
+  return <span className={cn("cf-status-dot", TONE_STYLES[tone].mark)} aria-hidden />;
+}
+
 export function statusTone(status: string): Tone {
   return STATUS_TONE[status.toLowerCase().replace(/[\s-]+/g, "_")] ?? "muted";
+}
+
+function sentenceCaseStatus(status: string) {
+  const text = status.replace(/_/g, " ").toLowerCase();
+  return text.length ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
 export function StatusBadge({
@@ -69,9 +130,17 @@ export function StatusBadge({
   label?: string;
   className?: string;
 }) {
+  const tone = statusTone(status);
   return (
-    <Badge variant={statusTone(status)} className={cn("capitalize", className)}>
-      {label ?? status.replace(/_/g, " ")}
-    </Badge>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+        TONE_STYLES[tone].wrap,
+        className,
+      )}
+    >
+      <StatusMark status={status} tone={tone} />
+      {label ?? sentenceCaseStatus(status)}
+    </span>
   );
 }

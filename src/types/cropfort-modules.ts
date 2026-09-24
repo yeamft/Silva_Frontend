@@ -127,9 +127,9 @@ export type EntityStatus = "active" | "inactive";
 export type VendorStatus = "active" | "pending" | "expired" | "terminated";
 
 export const ORGANIZATION_TYPES: { value: OrganizationType; label: string }[] = [
-  { value: "spx", label: "SPX" },
-  { value: "bagro", label: "B-Agro" },
-  { value: "silva_estate", label: "Silva estate" },
+  { value: "spx", label: "SPX (Silva)" },
+  { value: "bagro", label: "RFSP" },
+  { value: "silva_estate", label: "Chaka Buna (Farm Co.)" },
   { value: "vendor_org", label: "Vendor" },
   { value: "other", label: "Other" },
 ];
@@ -229,14 +229,14 @@ export interface AuditEvent {
 
 export const USER_ORG_LABELS: Record<UserOrgKind, string> = {
   spx: "SPX",
-  bagro: "B-Agro",
-  silva: "Silva",
+  bagro: "RFSP",
+  silva: "Chaka Buna",
 };
 
 export const ORG_TYPE_LABELS: Record<OrganizationType, string> = {
-  spx: "SPX",
-  bagro: "B-Agro",
-  silva_estate: "Silva estate",
+  spx: "SPX (Silva)",
+  bagro: "RFSP",
+  silva_estate: "Chaka Buna (Farm Co.)",
   vendor_org: "Vendor",
   other: "Other",
 };

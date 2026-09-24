@@ -18,7 +18,10 @@ import { toast } from "sonner";
 import { useAuthStore, MIN_PASSWORD_LENGTH } from "@/store/authStore";
 import { useLocaleStore } from "@/store/localeStore";
 import { t } from "@/lib/translations";
-import ThemeToggle from "@/components/ThemeToggle";
+import {
+  markWorkspaceSelectionRequired,
+  SELECT_WORKSPACE_PATH,
+} from "@/lib/workspace-gate";
 import { FormField } from "@/components/cropfort/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +50,7 @@ const DEMO_ACCOUNTS = [
   },
   {
     email: "lead@bagro.example",
-    label: "B-Agro Lead",
+    label: "RFSP Lead",
     org: "Vendor",
     hint: "Field execution",
   },
@@ -88,7 +91,10 @@ const LoginPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    if (isHydrated && isAuthenticated) router.replace("/cropfort/dashboard");
+    if (isHydrated && isAuthenticated) {
+      markWorkspaceSelectionRequired();
+      router.replace(SELECT_WORKSPACE_PATH);
+    }
   }, [isAuthenticated, isHydrated, router]);
 
   if (!isHydrated || isAuthenticated) {
@@ -106,7 +112,8 @@ const LoginPage = () => {
 
   const finishSuccess = () => {
     toast.success(t(locale, "login_welcomeBack"));
-    router.replace("/cropfort/dashboard");
+    markWorkspaceSelectionRequired();
+    router.replace(SELECT_WORKSPACE_PATH);
   };
 
   const pickDemo = (accountEmail: string) => {
@@ -251,9 +258,6 @@ const LoginPage = () => {
             </span>
             <span className="font-display text-base font-semibold tracking-tight">Cropfort</span>
           </button>
-          <div className="ml-auto flex items-center gap-1.5">
-            <ThemeToggle />
-          </div>
         </header>
 
         <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8">

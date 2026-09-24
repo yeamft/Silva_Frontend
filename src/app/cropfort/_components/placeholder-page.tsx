@@ -1,32 +1,28 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { Construction } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { EmptyState, PageContainer, PageHeader } from "@/components/cropfort/page-shell";
-import { CROPFORT_ROUTES } from "@/config/navigation";
+import { getCropfortAreaByHref } from "@/config/cropfort-areas";
+import { CropfortAreaWorkspace } from "@/components/cropfort/area-workspace";
 
-const ROUTE_LABELS: Record<string, string> = {
-  [CROPFORT_ROUTES.fieldTickets]: "Field Tickets",
-  [CROPFORT_ROUTES.weeklySubmissions]: "Weekly Submissions",
-  [CROPFORT_ROUTES.blocksActivities]: "Blocks & Activities",
-  [CROPFORT_ROUTES.afp]: "AFP",
-  [CROPFORT_ROUTES.validationQueue]: "Validation Queue",
-  [CROPFORT_ROUTES.afe]: "AFE",
-  [CROPFORT_ROUTES.auditTrail]: "Audit Trail",
-  [CROPFORT_ROUTES.reports]: "Reports",
-  [CROPFORT_ROUTES.tenantConfig]: "Tenant Configuration",
-  [CROPFORT_ROUTES.activityTemplates]: "Activity Templates",
-  [CROPFORT_ROUTES.systemSettings]: "System Settings",
-};
-
+/** Fallback for legacy stub routes — prefer area shells when known. */
 export default function CropfortPlaceholderPage() {
   const pathname = usePathname();
-  const label = ROUTE_LABELS[pathname] ?? "Page";
+  const area = getCropfortAreaByHref(pathname);
+
+  if (area && area.readiness === "shell") {
+    return <CropfortAreaWorkspace area={area} />;
+  }
 
   return (
     <PageContainer>
-      <PageHeader title={label} />
-      <EmptyState icon={Construction} title="Coming soon" />
+      <PageHeader title={area?.label ?? "Page"} />
+      <EmptyState
+        icon={Construction}
+        title="Coming soon"
+        description={area?.interfaceLabel}
+      />
     </PageContainer>
   );
 }
