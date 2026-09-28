@@ -46,9 +46,9 @@ export default function AfpRegisterView() {
     try {
       const afe = await createAfe.mutateAsync({
         title: `${plan.name || plan.farmName || "Estate"} AFP · ${plan.budgetYearLabel ?? ""}`.trim(),
-        amountEtb: promo.totalEtb,
+        amountEtb: Number(promo.totalEtb) || 0,
         band: promo.band,
-        sourceType: "afp",
+        sourceType: "afp_line",
         sourceId: plan.id,
       });
       toast.success(`AFE drafted`, {

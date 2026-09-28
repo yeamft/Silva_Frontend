@@ -48,6 +48,7 @@ function useInvalidate() {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: queryKeys.programmePlans.all });
+    void qc.invalidateQueries({ queryKey: queryKeys.notifications.all });
   };
 }
 

@@ -21,7 +21,10 @@ export function useCreateAfe() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: createAfe,
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.afes.all }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.afes.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
   });
 }
 
@@ -29,7 +32,10 @@ export function useSubmitAfe() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => submitAfe(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.afes.all }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.afes.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
   });
 }
 
@@ -45,6 +51,9 @@ export function useDecideAfe() {
       decision: "approve" | "return";
       comment?: string;
     }) => decideAfe(id, decision, comment),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.afes.all }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.afes.all });
+      void qc.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
   });
 }

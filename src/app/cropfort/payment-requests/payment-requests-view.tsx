@@ -41,6 +41,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import {
+  canAuthorizeSettlement,
   canCreatePaymentRequest,
   canSeePaymentRequests,
   canVerifyPaymentRequest,
@@ -71,6 +72,7 @@ export default function PaymentRequestsView() {
   const canView = canSeePaymentRequests(user.role);
   const canCreate = canCreatePaymentRequest(user.role);
   const canVerify = canVerifyPaymentRequest(user.role);
+  const canAuthorize = canAuthorizeSettlement(user.role);
 
   const enabled = Boolean(activeProgram?.id);
   const prQuery = usePaymentRequests(enabled);
@@ -246,7 +248,7 @@ export default function PaymentRequestsView() {
                             </Button>
                           </>
                         ) : null}
-                        {canVerify && r.status === "verified" ? (
+                        {canAuthorize && r.status === "verified" ? (
                           <Button
                             size="sm"
                             className="h-8"

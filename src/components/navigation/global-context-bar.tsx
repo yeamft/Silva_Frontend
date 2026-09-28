@@ -3,8 +3,9 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Check, ChevronDown, HelpCircle, Search } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, HelpCircle, Search } from "lucide-react";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
+import { NotificationBell } from "@/components/navigation/notification-bell";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -270,6 +271,7 @@ export function GlobalContextBar({
         >
           <Search className="h-4 w-4" aria-hidden />
         </Button>
+        <NotificationBell />
         <Button
           type="button"
           variant="ghost"
@@ -282,7 +284,7 @@ export function GlobalContextBar({
               : "Needs attention"
           }
         >
-          <Bell className="h-4 w-4" aria-hidden />
+          <AlertTriangle className="h-4 w-4" aria-hidden />
           {attentionCount > 0 ? (
             <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-destructive-foreground">
               {attentionCount > 99 ? "99+" : attentionCount}

@@ -121,24 +121,43 @@ export function mapTicketDto(dto: FieldTicketDto, wo?: WorkOrderDto | null): Fie
   };
 }
 
-export function useWorkOrders(enabled = true) {
+const LIVE_POLL_MS = 5_000;
+
+export function useWorkOrders(
+  enabled = true,
+  options?: { refetchIntervalMs?: number | false },
+) {
+  const interval =
+    options?.refetchIntervalMs === false
+      ? false
+      : (options?.refetchIntervalMs ?? LIVE_POLL_MS);
+
   return useQuery({
     queryKey: queryKeys.workOrders.list(),
     queryFn: () => listWorkOrders(),
     enabled,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: enabled ? interval : false,
   });
 }
 
 function useInvalidateWorkOrders() {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: queryKeys.workOrders.all });
+  return async () => {
+    await qc.invalidateQueries({ queryKey: queryKeys.workOrders.all });
+    void qc.invalidateQueries({ queryKey: queryKeys.notifications.all });
+  };
 }
 
 export function useCreateWorkOrder() {
   const invalidate = useInvalidateWorkOrders();
   return useMutation({
     mutationFn: createWorkOrder,
-    onSuccess: () => invalidate(),
+    onSuccess: async () => {
+      await invalidate();
+    },
   });
 }
 
@@ -147,7 +166,9 @@ export function useTransitionWorkOrder() {
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: WorkOrderStatus }) =>
       transitionWorkOrder(id, status),
-    onSuccess: () => invalidate(),
+    onSuccess: async () => {
+      await invalidate();
+    },
   });
 }
 
@@ -156,7 +177,9 @@ export function useUpdateWorkOrder() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: Record<string, unknown> }) =>
       updateWorkOrder(id, input),
-    onSuccess: () => invalidate(),
+    onSuccess: async () => {
+      await invalidate();
+    },
   });
 }
 
@@ -170,7 +193,9 @@ export function useCreateFieldTicket() {
       workOrderId: string;
       input: Parameters<typeof createFieldTicket>[1];
     }) => createFieldTicket(workOrderId, input),
-    onSuccess: () => invalidate(),
+    onSuccess: async () => {
+      await invalidate();
+    },
   });
 }
 
@@ -186,6 +211,8 @@ export function useTransitionFieldTicket() {
       status: FieldTicketStatus;
       comment?: string;
     }) => transitionFieldTicket(ticketId, status, comment),
-    onSuccess: () => invalidate(),
+    onSuccess: async () => {
+      await invalidate();
+    },
   });
 }

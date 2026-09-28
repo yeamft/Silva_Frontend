@@ -212,6 +212,7 @@ export default function DashboardPage() {
 
   const [tab, setTab] = useState<HomeTab>("attention");
   const [query, setQuery] = useState("");
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
   const { workOrders, tickets, afes, dfrs, weekly, isLoading } = usePerformanceLiveData(
     Boolean(activeProgram?.id),
@@ -321,8 +322,14 @@ export default function DashboardPage() {
     return items
       .filter((i) => i.at)
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 10);
+      .slice(0, 20);
   }, [tickets, afes, workOrders, dfrs, weekly]);
+
+  const ACTIVITY_PREVIEW = 5;
+  const visibleActivity = activityExpanded
+    ? activityFeed
+    : activityFeed.slice(0, ACTIVITY_PREVIEW);
+  const activityHasMore = activityFeed.length > ACTIVITY_PREVIEW;
 
   const workspaceName = activeProgram?.name || "Workspace";
   const orgName = tenant?.displayName || tenant?.name || user.tenantName;
@@ -599,7 +606,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+      <section className="grid items-start gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
           <div className="mb-4 flex items-start justify-between gap-2">
             <div>
@@ -674,8 +681,8 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card shadow-xs">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
+        <div className="flex max-h-[28rem] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-5">
             <div>
               <h2 className="text-sm font-semibold">Recent activity</h2>
               <p className="text-xs text-muted-foreground">Tickets, AFEs, plans, and DFRs</p>
@@ -689,33 +696,50 @@ export default function DashboardPage() {
               {isLoading ? "Loading activity…" : "No recent activity yet."}
             </p>
           ) : (
-            <ul className="divide-y divide-border">
-              {activityFeed.map((item) => (
-                <li key={item.id}>
-                  <Link
-                    href={item.href}
-                    className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40 sm:px-5"
+            <>
+              <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
+                {visibleActivity.map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      href={item.href}
+                      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40 sm:px-5"
+                    >
+                      <span
+                        className={cn(
+                          "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                          item.tone === "warning" && "bg-warning",
+                          item.tone === "success" && "bg-primary",
+                          item.tone === "default" && "bg-muted-foreground/40",
+                        )}
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{item.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{item.detail}</p>
+                      </div>
+                      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                        {formatRelative(item.at)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {activityHasMore ? (
+                <div className="shrink-0 border-t border-border px-4 py-2.5 sm:px-5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-full text-xs"
+                    onClick={() => setActivityExpanded((v) => !v)}
                   >
-                    <span
-                      className={cn(
-                        "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-                        item.tone === "warning" && "bg-warning",
-                        item.tone === "success" && "bg-primary",
-                        item.tone === "default" && "bg-muted-foreground/40",
-                      )}
-                      aria-hidden
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{item.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">{item.detail}</p>
-                    </div>
-                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                      {formatRelative(item.at)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+                    {activityExpanded
+                      ? "Show less"
+                      : `See more (${activityFeed.length - ACTIVITY_PREVIEW} more)`}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
         </div>
       </section>

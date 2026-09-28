@@ -149,6 +149,41 @@
     --cf-density: 0.85;
     --cf-row-h: 44px;
   }
+
+  /*
+   * Marketing / auth surfaces only (home + login).
+   * Keeps Cropfort ops shell on forest green.
+   */
+  .cf-gold-marketing {
+    --background: 40 32% 97%;
+    --foreground: 30 28% 12%;
+
+    --card: 40 40% 99%;
+    --card-foreground: 30 28% 12%;
+
+    --popover: 40 40% 99%;
+    --popover-foreground: 30 28% 12%;
+
+    /* Warm harvest gold — readable as primary actions */
+    --primary: 40 78% 40%;
+    --primary-foreground: 40 45% 98%;
+    --primary-hover: 38 82% 33%;
+
+    --secondary: 40 28% 94%;
+    --secondary-foreground: 30 28% 14%;
+
+    --muted: 40 22% 93%;
+    --muted-foreground: 30 12% 40%;
+
+    --accent: 40 48% 92%;
+    --accent-foreground: 36 55% 28%;
+
+    --border: 38 18% 86%;
+    --input: 38 18% 86%;
+    --ring: 40 78% 40%;
+
+    --gold-glow: 40 70% 48%;
+  }
 }
 
 @layer base {
@@ -174,31 +209,48 @@
     font-weight: 600;
   }
 
-  /* Display reserved for rare marketing; operational UI uses sans hierarchy */
+  /* Display reserved for marketing / auth; operational UI uses sans hierarchy */
   .font-display {
-    font-family: var(--font-sans, var(--font-fraunces)), ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-fraunces), var(--font-sans), ui-sans-serif, system-ui, serif;
     font-weight: 600;
   }
 }
 
 @layer components {
+  .cf-auth-shell {
+    background:
+      radial-gradient(ellipse 90% 60% at 12% -10%, hsl(40 85% 70% / 0.28), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 100% 0%, hsl(36 70% 55% / 0.16), transparent 50%),
+      radial-gradient(ellipse 50% 40% at 50% 100%, hsl(42 60% 60% / 0.12), transparent 55%),
+      linear-gradient(180deg, hsl(40 40% 98%) 0%, hsl(38 28% 94%) 100%);
+  }
+
+  .cf-auth-card {
+    border: 1px solid hsl(38 30% 82% / 0.9);
+    background: hsl(0 0% 100% / 0.88);
+    box-shadow:
+      0 1px 0 hsl(40 50% 96% / 0.9) inset,
+      0 18px 40px -24px hsl(35 40% 20% / 0.35);
+    backdrop-filter: blur(10px);
+  }
+
   .lp {
-    --lp-espresso: hsl(150 18% 8%);
+    --lp-espresso: hsl(30 28% 10%);
     --lp-cream: hsl(42 38% 94%);
     --lp-cream-muted: hsl(42 18% 72%);
     --lp-gold: hsl(var(--primary));
-    --lp-gold-ink: hsl(39 35% 38%);
-    --lp-paper: hsl(42 28% 96%);
-    --lp-ink: hsl(152 18% 12%);
-    --lp-mute: hsl(150 8% 38%);
-    --lp-rule: hsl(150 10% 86%);
+    --lp-gold-ink: hsl(36 55% 32%);
+    --lp-paper: hsl(40 32% 97%);
+    --lp-ink: hsl(30 28% 12%);
+    --lp-mute: hsl(30 12% 40%);
+    --lp-rule: hsl(38 18% 86%);
   }
 
   .dark .lp {
-    --lp-paper: hsl(150 16% 8%);
+    --lp-paper: hsl(30 16% 8%);
     --lp-ink: hsl(42 28% 94%);
     --lp-mute: hsl(42 12% 62%);
-    --lp-rule: hsl(150 10% 18%);
+    --lp-rule: hsl(30 10% 18%);
     --lp-gold-ink: hsl(var(--primary));
   }
 

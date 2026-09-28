@@ -908,7 +908,7 @@ export default function ApprovalsView() {
                   </div>
                 ) : (
                   <p className="border-t border-border pt-3 text-sm text-muted-foreground">
-                    Waiting for Silva / asset-owner decision. You can review the
+                    Waiting for asset-owner decision. You can review the
                     detail but cannot approve from this desk.
                   </p>
                 )}

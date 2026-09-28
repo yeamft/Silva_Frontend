@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Building2, ChevronDown, LogOut, Menu, Search, User } from "lucide-react";
+import { Building2, ChevronDown, LogOut, Menu, Search, User } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import { NotificationBell } from "@/components/navigation/notification-bell";
 import { useAuthStore } from "@/store/authStore";
 import { useLocaleStore } from "@/store/localeStore";
 import { useOrgStore } from "@/store/orgStore";
@@ -183,19 +184,7 @@ const TopBar = ({ title, onNavigate, onOpenMenu }: TopBarProps) => {
           </PopoverContent>
         </Popover>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-              <Bell className="h-4 w-4" aria-hidden />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 p-0">
-            <div className="border-b border-border px-4 py-3">
-              <p className="text-sm font-medium">Notifications</p>
-            </div>
-            <p className="py-10 text-center text-xs text-muted-foreground">No notifications right now.</p>
-          </PopoverContent>
-        </Popover>
+        <NotificationBell />
 
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
@@ -28,9 +28,10 @@ function relativeTime(iso: string | null) {
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const notificationsQuery = useNotifications(true, { refetchInterval: 60_000 });
+  const notificationsQuery = useNotifications(true);
   const acknowledgeOne = useAcknowledgeNotification();
   const acknowledgeAll = useAcknowledgeAllNotifications();
+  const seenIdsRef = useRef<Set<string> | null>(null);
 
   const items = notificationsQuery.data ?? [];
   const loading = notificationsQuery.isLoading;
@@ -45,6 +46,24 @@ export function NotificationBell() {
   useEffect(() => {
     if (open) void refetch();
   }, [open, refetch]);
+
+  useEffect(() => {
+    if (!notificationsQuery.data) return;
+    const next = notificationsQuery.data;
+    const seen = seenIdsRef.current;
+    if (seen == null) {
+      seenIdsRef.current = new Set(next.map((n) => n.id));
+      return;
+    }
+    const fresh = next.filter((n) => !seen.has(n.id) && !n.acknowledged);
+    for (const n of fresh) {
+      seen.add(n.id);
+      toast.message(n.message, {
+        description: relativeTime(n.sentAt) || "Just now",
+      });
+    }
+    for (const n of next) seen.add(n.id);
+  }, [notificationsQuery.data]);
 
   const unread = items.filter((n) => !n.acknowledged).length;
 

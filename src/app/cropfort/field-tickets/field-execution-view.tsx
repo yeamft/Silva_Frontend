@@ -70,6 +70,7 @@ import {
   useCreatePaymentRequest,
   usePaymentRequests,
 } from "@/lib/query/hooks/use-payment-requests";
+import { useUsersDirectory } from "@/lib/query/hooks/use-users";
 import {
   mapTicketDto,
   mapWorkOrderDto,
@@ -79,7 +80,6 @@ import {
   useWorkOrders,
 } from "@/lib/query/hooks/use-work-orders";
 import {
-  EXEC_CREW,
   TICKET_NEXT,
   execPartyForRole,
   fmtEtb,
@@ -223,6 +223,25 @@ export default function FieldExecutionView() {
   const createPaymentRequest = useCreatePaymentRequest();
   const paymentRequestsQuery = usePaymentRequests(Boolean(activeProgram?.id));
   const paymentRequests = paymentRequestsQuery.data || [];
+  const usersDirectory = useUsersDirectory(Boolean(activeProgram?.id));
+  const directoryUsers = usersDirectory.data || [];
+
+  const vendorLeads = useMemo(
+    () => directoryUsers.filter((u) => u.organization === "bagro" && u.status === "active"),
+    [directoryUsers],
+  );
+  const siteOwners = useMemo(
+    () =>
+      directoryUsers.filter(
+        (u) => u.organization === "spx" && u.status === "active" && !u.roles.includes("spx_platform_admin"),
+      ),
+    [directoryUsers],
+  );
+  const assetOwners = useMemo(
+    () => directoryUsers.filter((u) => u.organization === "silva" && u.status === "active"),
+    [directoryUsers],
+  );
+
   const canAssign = party === "spx" || party === "asset_owner" || party === "site_owner";
   const canBill = canCreatePaymentRequest(user.role);
 
@@ -237,19 +256,38 @@ export default function FieldExecutionView() {
     workOrderId: params.get("wo") || "",
     title: "",
     description: "",
-    vendorLead: EXEC_CREW.vendors[0].name,
-    siteOwner: EXEC_CREW.siteOwners[0].name,
-    assetOwner: EXEC_CREW.assetOwners[0].name,
+    vendorLead: "",
+    siteOwner: "",
+    assetOwner: "",
     hours: "8",
     amount: "3200",
     due: "Fri",
   });
   const [reassignForm, setReassignForm] = useState({
-    vendorLead: EXEC_CREW.vendors[0].name,
-    siteOwner: EXEC_CREW.siteOwners[0].name,
-    assetOwner: EXEC_CREW.assetOwners[0].name,
+    vendorLead: "",
+    siteOwner: "",
+    assetOwner: "",
     due: "Fri",
   });
+
+  useEffect(() => {
+    const vendorDefault = vendorLeads[0]?.id || "";
+    const siteDefault = siteOwners[0]?.name || "";
+    const assetDefault = assetOwners[0]?.name || "";
+    if (!vendorDefault && !siteDefault && !assetDefault) return;
+    setForm((f) => ({
+      ...f,
+      vendorLead: f.vendorLead || vendorDefault,
+      siteOwner: f.siteOwner || siteDefault,
+      assetOwner: f.assetOwner || assetDefault,
+    }));
+    setReassignForm((f) => ({
+      ...f,
+      vendorLead: f.vendorLead || vendorDefault,
+      siteOwner: f.siteOwner || siteDefault,
+      assetOwner: f.assetOwner || assetDefault,
+    }));
+  }, [vendorLeads, siteOwners, assetOwners]);
 
   const woParam = params.get("wo");
   const ticketParam = params.get("ticket");
@@ -319,13 +357,15 @@ export default function FieldExecutionView() {
       const hours = Number(form.hours) || 0;
       const amount = Number(form.amount) || 0;
       const unitRate = hours > 0 ? amount / hours : amount || null;
+      const vendorUser = vendorLeads.find((u) => u.id === form.vendorLead);
+      const vendorLabel = vendorUser ? `${vendorUser.name} (${vendorUser.email})` : form.vendorLead;
       const created = await createTicket.mutateAsync({
         workOrderId: form.workOrderId,
         input: {
           activityRecorded: title,
           materialsUsed: [
             form.description,
-            `Crew: ${form.vendorLead}`,
+            `Crew: ${vendorLabel}`,
             `Site: ${form.siteOwner}`,
             `Asset: ${form.assetOwner}`,
             `Due: ${form.due}`,
@@ -337,12 +377,13 @@ export default function FieldExecutionView() {
           unitRateEtb: unitRate,
           laborCount: 1,
           areaHa: 0,
+          vendorUserId: vendorUser?.id || form.vendorLead || null,
         },
       });
       setAssignOpen(false);
       setForm((f) => ({ ...f, title: "", description: "" }));
       setOpenId(created.id);
-      toast.success(`Ticket assigned to ${form.vendorLead}`);
+      toast.success(`Ticket assigned to ${vendorLabel}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not assign");
     }
@@ -865,14 +906,15 @@ export default function FieldExecutionView() {
               <Select
                 value={form.vendorLead}
                 onValueChange={(vendorLead) => setForm((f) => ({ ...f, vendorLead }))}
+                disabled={!vendorLeads.length}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={usersDirectory.isLoading ? "Loading users…" : "Select vendor"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {EXEC_CREW.vendors.map((v) => (
-                    <SelectItem key={v.name} value={v.name}>
-                      {v.name} · {v.org}
+                  {vendorLeads.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} · {u.email}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -885,14 +927,15 @@ export default function FieldExecutionView() {
               <Select
                 value={form.siteOwner}
                 onValueChange={(siteOwner) => setForm((f) => ({ ...f, siteOwner }))}
+                disabled={!siteOwners.length}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={usersDirectory.isLoading ? "Loading users…" : "Select site owner"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {EXEC_CREW.siteOwners.map((v) => (
-                    <SelectItem key={v.name} value={v.name}>
-                      {v.name} · {v.site}
+                  {siteOwners.map((u) => (
+                    <SelectItem key={u.id} value={u.name}>
+                      {u.name} · {u.email}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -905,14 +948,15 @@ export default function FieldExecutionView() {
               <Select
                 value={form.assetOwner}
                 onValueChange={(assetOwner) => setForm((f) => ({ ...f, assetOwner }))}
+                disabled={!assetOwners.length}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={usersDirectory.isLoading ? "Loading users…" : "Select asset owner"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {EXEC_CREW.assetOwners.map((v) => (
-                    <SelectItem key={v.name} value={v.name}>
-                      {v.name}
+                  {assetOwners.map((u) => (
+                    <SelectItem key={u.id} value={u.name}>
+                      {u.name} · {u.email}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -985,14 +1029,15 @@ export default function FieldExecutionView() {
                 onValueChange={(vendorLead) =>
                   setReassignForm((f) => ({ ...f, vendorLead }))
                 }
+                disabled={!vendorLeads.length}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select vendor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {EXEC_CREW.vendors.map((v) => (
-                    <SelectItem key={v.name} value={v.name}>
-                      {v.name} · {v.org}
+                  {vendorLeads.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} · {u.email}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1007,14 +1052,15 @@ export default function FieldExecutionView() {
                 onValueChange={(siteOwner) =>
                   setReassignForm((f) => ({ ...f, siteOwner }))
                 }
+                disabled={!siteOwners.length}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select site owner" />
                 </SelectTrigger>
                 <SelectContent>
-                  {EXEC_CREW.siteOwners.map((v) => (
-                    <SelectItem key={v.name} value={v.name}>
-                      {v.name}
+                  {siteOwners.map((u) => (
+                    <SelectItem key={u.id} value={u.name}>
+                      {u.name} · {u.email}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1029,14 +1075,15 @@ export default function FieldExecutionView() {
                 onValueChange={(assetOwner) =>
                   setReassignForm((f) => ({ ...f, assetOwner }))
                 }
+                disabled={!assetOwners.length}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select asset owner" />
                 </SelectTrigger>
                 <SelectContent>
-                  {EXEC_CREW.assetOwners.map((v) => (
-                    <SelectItem key={v.name} value={v.name}>
-                      {v.name}
+                  {assetOwners.map((u) => (
+                    <SelectItem key={u.id} value={u.name}>
+                      {u.name} · {u.email}
                     </SelectItem>
                   ))}
                 </SelectContent>

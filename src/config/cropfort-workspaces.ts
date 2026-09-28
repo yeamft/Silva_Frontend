@@ -199,6 +199,13 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         description: "Plans, AFEs, and monthly WO decisions",
       },
       {
+        id: "afp-register",
+        label: "AFP Register",
+        href: CROPFORT_ROUTES.afpRegister,
+        roles: ALL_PLAN,
+        description: "Approved programme plans ready to raise AFE",
+      },
+      {
         id: "afe",
         label: "AFE",
         href: CROPFORT_ROUTES.afe,
@@ -473,7 +480,7 @@ export function resolveWorkspaceFromPath(
   const aliases: { prefix: string; workspaceId: WorkspaceId; moduleId?: string }[] = [
     { prefix: "/cropfort/planning/programmes", workspaceId: "planning", moduleId: "programme" },
     { prefix: "/cropfort/afp", workspaceId: "planning", moduleId: "programme" },
-    { prefix: "/cropfort/afp-register", workspaceId: "control", moduleId: "approvals" },
+    { prefix: "/cropfort/afp-register", workspaceId: "control", moduleId: "afp-register" },
     { prefix: "/cropfort/afe", workspaceId: "control", moduleId: "afe" },
     { prefix: "/cropfort/projects", workspaceId: "planning", moduleId: "projects" },
     { prefix: "/cropfort/farm-structure", workspaceId: "administration", moduleId: "farm-map" },

@@ -48,6 +48,7 @@ export const queryKeys = {
   users: {
     all: ["users"] as const,
     list: () => [...queryKeys.users.all, "list"] as const,
+    directory: () => [...queryKeys.users.all, "directory"] as const,
     meta: () => [...queryKeys.users.all, "meta"] as const,
     audit: (id: string) => [...queryKeys.users.all, "audit", id] as const,
   },

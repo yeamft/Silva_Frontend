@@ -28,31 +28,84 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const DEMO_ACCOUNTS = [
+  // SPX
   {
     email: "admin@spx.example",
     label: "System Admin",
     org: "SPX",
-    hint: "Platform & users",
+    hint: "admin@spx.example",
   },
   {
     email: "principal@spx.example",
-    label: "SPX Account Manager",
+    label: "SPX Principal",
     org: "SPX",
-    hint: "Run the programme",
+    hint: "principal@spx.example",
   },
+  {
+    email: "handler@spx.example",
+    label: "SPX Account Handler",
+    org: "SPX",
+    hint: "handler@spx.example",
+  },
+  {
+    email: "supervisor@spx.example",
+    label: "SPX Field Supervisor",
+    org: "SPX",
+    hint: "supervisor@spx.example",
+  },
+  // Silva
   {
     email: "owner@silva.example",
     label: "Silva Owner",
     org: "Silva",
-    hint: "Govern & settle",
+    hint: "owner@silva.example",
+  },
+  {
+    email: "cm@silva.example",
+    label: "Silva Country Manager",
+    org: "Silva",
+    hint: "cm@silva.example",
+  },
+  {
+    email: "finance@silva.example",
+    label: "Silva Finance",
+    org: "Silva",
+    hint: "finance@silva.example",
+  },
+  // Vendor (B-Agro / RFSP)
+  {
+    email: "admin@bagro.example",
+    label: "Vendor Admin",
+    org: "Vendor",
+    hint: "admin@bagro.example",
+  },
+  {
+    email: "manager@bagro.example",
+    label: "Vendor Manager",
+    org: "Vendor",
+    hint: "manager@bagro.example",
+  },
+  {
+    email: "supervisor@bagro.example",
+    label: "Vendor Supervisor",
+    org: "Vendor",
+    hint: "supervisor@bagro.example",
   },
   {
     email: "lead@bagro.example",
-    label: "RFSP Lead",
+    label: "Vendor Field Lead",
     org: "Vendor",
-    hint: "Field execution",
+    hint: "lead@bagro.example",
+  },
+  {
+    email: "worker@bagro.example",
+    label: "Vendor Worker",
+    org: "Vendor",
+    hint: "worker@bagro.example",
   },
 ] as const;
+
+const DEMO_ORGS = ["SPX", "Silva", "Vendor"] as const;
 
 const DEMO_PASSWORD = "Password123!";
 
@@ -97,7 +150,7 @@ const LoginPage = () => {
 
   if (!isHydrated || isAuthenticated) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
+      <div className="cf-gold-marketing flex min-h-[100dvh] items-center justify-center cf-auth-shell">
         <Loader2 className="h-6 w-6 animate-spin text-primary" aria-label="Loading" />
       </div>
     );
@@ -190,42 +243,54 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="relative flex min-h-[100dvh] items-center justify-center bg-background px-4 py-8 text-foreground">
+    <div className="cf-gold-marketing relative flex min-h-[100dvh] items-center justify-center cf-auth-shell px-4 py-10 text-foreground">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div className="absolute -left-24 top-16 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -right-16 bottom-10 h-80 w-80 rounded-full bg-[hsl(36_70%_55%/0.14)] blur-3xl" />
+      </div>
+
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease }}
-        className="w-full max-w-[400px] space-y-5"
+        className="relative z-10 w-full max-w-[420px] space-y-6"
       >
         <div className="text-center">
           <button
             type="button"
             onClick={() => router.push("/")}
-            className="cf-focus mx-auto mb-4 inline-flex items-center gap-2 rounded-lg"
+            className="cf-focus mx-auto mb-5 inline-flex items-center gap-2.5 rounded-xl"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-              <Sprout className="h-4 w-4" aria-hidden />
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_hsl(40_78%_30%/0.7)]">
+              <Sprout className="h-5 w-5" aria-hidden />
             </span>
-            <span className="font-display text-base font-semibold tracking-tight">Cropfort</span>
+            <span className="text-left leading-tight">
+              <span className="block font-display text-xl font-semibold tracking-tight">
+                Cropfort
+              </span>
+              <span className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Farm Operations
+              </span>
+            </span>
           </button>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
-            {mfaStep ? "Verify authenticator" : "Sign in"}
-          </h1>
-          {mfaStep ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              Open your authenticator app and enter the 6-digit code.
-            </p>
-          ) : null}
+          {/* <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
+            {mfaStep ? "Verify authenticator" : "Welcome back"}
+          </h1> */}
+          <p className="mt-2 text-sm text-muted-foreground">
+            {mfaStep
+              ? "Open your authenticator app and enter the 6-digit code."
+              : "Sign in to your estate workspace."}
+          </p>
         </div>
 
-        <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
+        <div className="cf-auth-card rounded-2xl p-6 sm:p-7">
           <form onSubmit={handleSubmit} noValidate autoComplete="on" className="space-y-4">
             {mfaStep?.kind === "enroll" && mfaStep.qrDataUrl ? (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
                   Scan this QR code, then enter the first code from your app.
                 </p>
-                <div className="flex justify-center rounded-xl border border-border/70 bg-background p-4">
+                <div className="flex justify-center rounded-xl border border-border/80 bg-background p-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={mfaStep.qrDataUrl}
@@ -245,7 +310,7 @@ const LoginPage = () => {
                   render={(props) => (
                     <div className="relative">
                       <Mail
-                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary/70"
                         aria-hidden
                       />
                       <Input
@@ -263,7 +328,7 @@ const LoginPage = () => {
                           setSelectedDemo(null);
                           clearErrors();
                         }}
-                        className="h-11 pl-10"
+                        className="h-11 border-border/80 bg-background/80 pl-10 focus-visible:ring-primary/40"
                       />
                     </div>
                   )}
@@ -276,7 +341,7 @@ const LoginPage = () => {
                   render={(props) => (
                     <div className="relative">
                       <Lock
-                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary/70"
                         aria-hidden
                       />
                       <Input
@@ -291,13 +356,13 @@ const LoginPage = () => {
                           setSelectedDemo(null);
                           clearErrors();
                         }}
-                        className="h-11 pl-10 pr-11"
+                        className="h-11 border-border/80 bg-background/80 pl-10 pr-11 focus-visible:ring-primary/40"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                        className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         onClick={() => setShowPassword((v) => !v)}
                         aria-label={t(
                           locale,
@@ -322,7 +387,7 @@ const LoginPage = () => {
                 render={(props) => (
                   <div className="relative">
                     <ShieldCheck
-                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary/70"
                       aria-hidden
                     />
                     <Input
@@ -336,7 +401,7 @@ const LoginPage = () => {
                         setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
                         clearErrors();
                       }}
-                      className="h-11 pl-10 tracking-[0.35em]"
+                      className="h-11 border-border/80 bg-background/80 pl-10 tracking-[0.35em] focus-visible:ring-primary/40"
                       maxLength={6}
                     />
                   </div>
@@ -352,7 +417,7 @@ const LoginPage = () => {
 
             <Button
               type="submit"
-              className="h-11 w-full gap-2 text-[15px] font-medium"
+              className="h-11 w-full gap-2 text-[15px] font-semibold shadow-[0_12px_28px_-14px_hsl(40_78%_30%/0.8)] hover:bg-[hsl(var(--primary-hover))]"
               disabled={isLoading}
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
@@ -382,31 +447,46 @@ const LoginPage = () => {
         </div>
 
         {!mfaStep ? (
-          <div className="space-y-2">
-            <p className="text-center text-xs text-muted-foreground">Demo accounts</p>
-            <div className="grid grid-cols-2 gap-2">
-              {DEMO_ACCOUNTS.map((account) => {
-                const active = selectedDemo === account.email;
-                return (
-                  <button
-                    key={account.email}
-                    type="button"
-                    onClick={() => pickDemo(account.email)}
-                    className={cn(
-                      "cf-focus rounded-lg border px-3 py-2 text-left text-sm transition-colors",
-                      active
-                        ? "border-primary/40 bg-primary/[0.06]"
-                        : "border-border/70 bg-card hover:bg-muted/40",
-                    )}
-                  >
-                    <span className="block truncate font-medium">{account.label}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {account.org}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="space-y-3">
+            <p className="text-center text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Quick demo access · Password123!
+            </p>
+            {DEMO_ORGS.map((org) => {
+              const accounts = DEMO_ACCOUNTS.filter((a) => a.org === org);
+              return (
+                <div key={org} className="space-y-1.5">
+                  <p className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary/80">
+                    {org}
+                    {org === "Vendor" ? " · B-Agro / RFSP" : ""}
+                  </p>
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {accounts.map((account) => {
+                      const active = selectedDemo === account.email;
+                      return (
+                        <button
+                          key={account.email}
+                          type="button"
+                          onClick={() => pickDemo(account.email)}
+                          className={cn(
+                            "cf-focus rounded-xl border px-3 py-2 text-left text-sm transition-all",
+                            active
+                              ? "border-primary/50 bg-accent shadow-sm"
+                              : "border-border/80 bg-card/70 hover:border-primary/35 hover:bg-accent/60",
+                          )}
+                        >
+                          <span className="block truncate font-medium text-foreground">
+                            {account.label}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                            {account.hint}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : null}
 
@@ -414,7 +494,7 @@ const LoginPage = () => {
           <Button
             variant="link"
             size="sm"
-            className="gap-1.5 text-muted-foreground"
+            className="gap-1.5 text-muted-foreground hover:text-primary"
             onClick={() => router.push("/")}
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden />

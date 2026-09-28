@@ -114,7 +114,7 @@ function HeroBackground() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-      <div className="absolute inset-0 bg-[#0B3D08]" />
+      <div className="absolute inset-0 bg-[#2A1F0E]" />
 
       {HERO_IMAGES.map((image, index) => {
         const visible = ready[index] && index === activeIndex;
@@ -378,14 +378,14 @@ function ContactForm() {
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <section className="relative isolate min-h-[92vh] overflow-hidden bg-[#0B3D08]">
+    <main className="cf-gold-marketing min-h-screen bg-background text-foreground">
+      <section className="relative isolate min-h-[92vh] overflow-hidden bg-[#2A1F0E]">
         <HeroBackground />
 
-        {/* Layered overlay — keep lighter so photos remain visible */}
-        <div className="absolute inset-0 z-[1] bg-primary/25" />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#062806]/80 via-[#0B3D08]/40 to-transparent" />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#062806]/70 via-transparent to-[#0B3D08]/30" />
+        {/* Darker wash for readable light text — photo still shows through */}
+        <div className="absolute inset-0 z-[1] bg-[#1A140A]/45" />
+        <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#1A140A]/78 via-[#2A1F0E]/40 to-[#2A1F0E]/15" />
+        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#1A140A]/70 via-transparent to-[#1A140A]/25" />
 
         <header className="relative z-30 border-b border-white/10">
           <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10">
@@ -394,13 +394,13 @@ export default function LandingPage() {
               className="flex items-center gap-3 text-white"
               aria-label="Cropfort home"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-sm">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-[0_10px_24px_-12px_hsl(40_78%_30%/0.75)]">
                 <Sprout className="h-5 w-5 text-primary-foreground" />
               </span>
 
               <div className="leading-none">
                 <p className="font-display text-lg font-semibold tracking-tight">Cropfort</p>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.19em] text-white/50">
+                <p className="mt-1 text-[10px] uppercase tracking-[0.19em] text-[#E8D5A3]/75">
                   Farm Operations
                 </p>
               </div>
@@ -409,13 +409,13 @@ export default function LandingPage() {
             <div className="flex items-center gap-2 sm:gap-3">
               <a
                 href="#contact"
-                className="hidden h-10 items-center px-3 text-sm font-medium text-white/75 transition hover:text-white sm:inline-flex"
+                className="hidden h-10 items-center px-3 text-sm font-medium text-white/75 transition hover:text-[#F3E2B4] sm:inline-flex"
               >
                 Contact
               </a>
               <Button
                 asChild
-                className="h-10 rounded-full bg-white px-5 font-medium text-primary hover:bg-white/90"
+                className="h-10 rounded-xl bg-primary px-5 font-semibold text-primary-foreground shadow-[0_10px_24px_-12px_hsl(40_78%_30%/0.75)] hover:bg-[hsl(var(--primary-hover))]"
               >
                 <Link href="/login">
                   Sign in
@@ -433,12 +433,15 @@ export default function LandingPage() {
             transition={{ duration: 0.7, ease }}
             className="max-w-3xl"
           >
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-[#E8D5A3]">
+              Cropfort
+            </p>
             <h1 className="max-w-3xl font-display text-4xl font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-5xl lg:text-[68px]">
               Control field operations
-              <span className="block text-white/65">from plan to payment.</span>
+              <span className="block text-[#E8D5A3]">from plan to payment.</span>
             </h1>
 
-            <p className="mt-6 max-w-2xl text-base leading-7 text-white/70 sm:text-lg sm:leading-8">
+            <p className="mt-6 max-w-2xl text-base leading-7 text-white/80 sm:text-lg sm:leading-8">
               Cropfort gives estate owners, SPX managers, and delivery partners one controlled
               operating environment for planning, work execution, verification, commercial
               governance, and settlement.
@@ -448,7 +451,7 @@ export default function LandingPage() {
               <Button
                 asChild
                 size="lg"
-                className="h-12 rounded-full bg-primary px-7 font-medium text-primary-foreground hover:bg-[hsl(var(--primary-hover))]"
+                className="h-12 rounded-xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_14px_30px_-14px_hsl(40_78%_30%/0.8)] hover:bg-[hsl(var(--primary-hover))]"
               >
                 <Link href="/login">
                   Open Cropfort
@@ -458,7 +461,7 @@ export default function LandingPage() {
 
               <a
                 href="#platform"
-                className="inline-flex h-12 items-center justify-center rounded-full border border-white/20 bg-white/5 px-7 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/10"
+                className="inline-flex h-12 items-center justify-center rounded-xl border border-[#E8D5A3]/40 bg-black/20 px-7 text-sm font-medium text-white backdrop-blur-sm transition hover:border-[#E8D5A3]/60 hover:bg-black/30"
               >
                 Explore the platform
               </a>
@@ -526,8 +529,8 @@ export default function LandingPage() {
                   }}
                   className="group rounded-2xl border border-border bg-card p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-muted">
-                    <Icon className="h-5 w-5 text-foreground" />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 bg-accent">
+                    <Icon className="h-5 w-5 text-primary" />
                   </div>
 
                   <h3 className="mt-8 font-display text-2xl font-semibold tracking-tight">
@@ -591,7 +594,7 @@ export default function LandingPage() {
                     <div className="flex items-start justify-between">
                       <span className="font-mono text-xs text-muted-foreground">{step.number}</span>
 
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-primary">
                         <Icon className="h-4 w-4" />
                       </div>
                     </div>
@@ -662,7 +665,7 @@ export default function LandingPage() {
               Already have access?{" "}
               <Link
                 href="/login"
-                className="font-medium text-foreground underline-offset-4 hover:underline"
+                className="font-medium text-primary underline-offset-4 hover:underline"
               >
                 Sign in
               </Link>

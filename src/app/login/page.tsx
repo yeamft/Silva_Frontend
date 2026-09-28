@@ -2,8 +2,11 @@ import dynamic from "next/dynamic";
 
 const LoginPage = dynamic(() => import("@/views/LoginPage"), {
   loading: () => (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-[#F3FBF3]">
-      <div className="h-40 w-full max-w-sm animate-pulse rounded-lg border border-primary/15 bg-card" aria-label="Loading" />
+    <div className="cf-gold-marketing flex min-h-[100dvh] items-center justify-center cf-auth-shell px-4">
+      <div
+        className="h-48 w-full max-w-sm animate-pulse rounded-2xl border border-primary/20 bg-card/80"
+        aria-label="Loading"
+      />
     </div>
   ),
 });

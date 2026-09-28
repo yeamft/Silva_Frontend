@@ -113,6 +113,7 @@ export function createFieldTicket(
     actualMandays?: number | null;
     unitRateEtb?: number | null;
     ticketDate?: string;
+    vendorUserId?: string | null;
   },
 ) {
   return apiFetch<FieldTicketDto>(`/work-orders/${workOrderId}/tickets`, {

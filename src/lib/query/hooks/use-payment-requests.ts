@@ -12,11 +12,17 @@ import {
 } from "@/lib/api/payment-requests";
 import { queryKeys } from "@/lib/query/keys";
 
+const LIVE_POLL_MS = 5_000;
+
 export function usePaymentRequests(enabled = true, status?: string) {
   return useQuery({
     queryKey: queryKeys.paymentRequests.list(status),
     queryFn: () => listPaymentRequests(status ? { status } : undefined),
     enabled,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: enabled ? LIVE_POLL_MS : false,
   });
 }
 
@@ -25,13 +31,18 @@ export function useSettlements(enabled = true) {
     queryKey: queryKeys.paymentRequests.settlements(),
     queryFn: () => listSettlements(),
     enabled,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: enabled ? LIVE_POLL_MS : false,
   });
 }
 
 function useInvalidateCommercial() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: queryKeys.paymentRequests.all });
+  return async () => {
+    await qc.invalidateQueries({ queryKey: queryKeys.paymentRequests.all });
+    void qc.invalidateQueries({ queryKey: queryKeys.notifications.all });
   };
 }
 

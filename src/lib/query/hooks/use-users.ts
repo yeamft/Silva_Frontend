@@ -7,6 +7,7 @@ import {
   deleteUser,
   getUserAuditTrail,
   getUsers,
+  getUsersDirectory,
   getUsersMeta,
   revokeUserSessions,
   suspendUser,
@@ -19,6 +20,15 @@ export function useUsers(enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.list(),
     queryFn: getUsers,
+    enabled,
+  });
+}
+
+/** Active users on the current programme — for Vendor lead / Site owner pickers. */
+export function useUsersDirectory(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.users.directory(),
+    queryFn: getUsersDirectory,
     enabled,
   });
 }

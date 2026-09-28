@@ -139,7 +139,7 @@ export const EXEC_CREW = {
 };
 
 export function execPartyForRole(role: string): ExecParty {
-  if (role === "bagro_office") return "vendor";
+  if (role === "bagro_office" || role.startsWith("vendor_")) return "vendor";
   if (role === "field_supervisor") return "site_owner";
   if (role === "farm_owner") return "asset_owner";
   return "spx";

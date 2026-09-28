@@ -25,6 +25,15 @@ export async function getUsers(): Promise<AdminUser[]> {
   }
 }
 
+/** Programme user directory for assignee pickers (any signed-in programme member). */
+export async function getUsersDirectory(): Promise<AdminUser[]> {
+  try {
+    return await apiFetch<AdminUser[]>("/users/directory");
+  } catch (err) {
+    throw asError(err);
+  }
+}
+
 export async function getUsersMeta(): Promise<UsersMeta> {
   try {
     return await apiFetch<UsersMeta>("/users/meta");
