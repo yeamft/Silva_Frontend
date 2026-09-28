@@ -18,6 +18,9 @@ import {
   PROCESS_MAP_PHASES,
   PROCESS_MAP_STEPS,
 } from "@/lib/process-map";
+import {
+  useSaveAgreementConfig,
+} from "@/lib/query/hooks/use-agreement-config";
 import { useAgreementConfigStore } from "@/store/agreementConfigStore";
 
 type Tab = "process_map" | "establishment" | "six_month" | "schedules";
@@ -25,6 +28,18 @@ type Tab = "process_map" | "establishment" | "six_month" | "schedules";
 export default function AgreementLifecycleView() {
   const { activeProgram } = useCropfortAuth();
   const [tab, setTab] = useState<Tab>("process_map");
+  const saveConfig = useSaveAgreementConfig();
+  const toRemotePayload = useAgreementConfigStore((s) => s.toRemotePayload);
+  const dirty = useAgreementConfigStore((s) => s.dirty);
+
+  const persist = async (label = "Agreement config saved") => {
+    try {
+      await saveConfig.mutateAsync(toRemotePayload());
+      toast.success(label);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save agreement config");
+    }
+  };
 
   const establishment = useAgreementConfigStore((s) => s.establishment);
   const startEstablishment = useAgreementConfigStore((s) => s.startEstablishment);
@@ -72,6 +87,15 @@ export default function AgreementLifecycleView() {
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Agreement lifecycle" },
         ]}
+        actions={
+          <Button
+            size="sm"
+            disabled={saveConfig.isPending || !dirty}
+            onClick={() => void persist()}
+          >
+            {saveConfig.isPending ? "Saving…" : dirty ? "Save now" : "Saved"}
+          </Button>
+        }
       />
 
       <div className="mb-4 flex flex-wrap gap-2">

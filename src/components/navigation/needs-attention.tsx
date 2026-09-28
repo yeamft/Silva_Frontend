@@ -11,64 +11,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/cropfort/status-badge";
-import { useCropfortAuth } from "@/components/navigation/auth-context";
-import {
-  buildWorkspaceInbox,
-  inboxTotal,
-} from "@/lib/cropfort/workspace-inbox";
-import { useCropfortOpsStore } from "@/store/cropfortOpsStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useMonthlyWorkOrderStore } from "@/store/monthlyWorkOrderStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
+import { useWorkspaceInboxLive } from "@/lib/query/hooks/use-workspace-inbox-live";
 
 type NeedsAttentionDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-function useAttentionItems() {
-  const { user } = useCropfortAuth();
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const afes = useCropfortOpsStore((s) => s.afes);
-  const projects = useCropfortOpsStore((s) => s.projects);
-  const interventions = useCropfortOpsStore((s) => s.interventions);
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const monthly = useMonthlyWorkOrderStore((s) => s.orders);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
-
-  return useMemo(
-    () =>
-      buildWorkspaceInbox({
-        role: user.role,
-        userName: user.name,
-        workOrders,
-        tickets,
-        afes,
-        projects,
-        interventions,
-        dfrs,
-        monthly,
-        weekly,
-      }),
-    [
-      user.role,
-      user.name,
-      workOrders,
-      tickets,
-      afes,
-      projects,
-      interventions,
-      dfrs,
-      monthly,
-      weekly,
-    ],
-  );
-}
-
 export function NeedsAttentionDrawer({ open, onOpenChange }: NeedsAttentionDrawerProps) {
-  const items = useAttentionItems();
-  const total = inboxTotal(items);
+  const { items, total } = useWorkspaceInboxLive();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -108,6 +59,6 @@ export function NeedsAttentionDrawer({ open, onOpenChange }: NeedsAttentionDrawe
 }
 
 export function useAttentionCount() {
-  const items = useAttentionItems();
-  return useMemo(() => inboxTotal(items), [items]);
+  const { total } = useWorkspaceInboxLive();
+  return useMemo(() => total, [total]);
 }

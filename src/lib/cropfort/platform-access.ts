@@ -9,7 +9,7 @@ export function isSpxDesk(role: CropfortRole | string): boolean {
   return role === "spx_validator" || role === "spx_platform_admin";
 }
 
-/** Silva — read all; approve plans / out-of-plan only. */
+/** Silva / asset owner — read all; approve plans / AFEs / out-of-plan; never create plans. */
 export function isSilvaDesk(role: CropfortRole | string): boolean {
   return role === "farm_owner";
 }
@@ -19,24 +19,29 @@ export function isBagroDesk(role: CropfortRole | string): boolean {
   return role === "bagro_office" || role === "field_supervisor";
 }
 
-/** Chaka Buna — read WOs/weekly/own-block records; no Platform field entry. */
-export function isChakaDesk(role: CropfortRole | string): boolean {
-  return role === "farm_owner"; // farm_owner is Chaka Buna reviewer in CropFort labels
-}
-
-/** Create / edit monthly WO scope and weekly plan composition (SPX only). */
+/** Create / edit programme, monthly WO scope, and weekly plan composition (SPX only). */
 export function canEditPlanScope(role: CropfortRole | string): boolean {
   return isSpxDesk(role);
 }
 
-/** Silva (and SPX admin) approve out-of-plan / submitted monthly & weekly. */
-export function canApproveOutOfPlan(role: CropfortRole | string): boolean {
-  return isSilvaDesk(role) || role === "spx_platform_admin";
+/** Alias — programme Core Ops invent / edit / submit. */
+export function canCreateProgrammePlan(role: CropfortRole | string): boolean {
+  return canEditPlanScope(role);
 }
 
-/** SPX may also review weekly operationally; Silva for out-of-plan MWO. */
+/** Silva / asset owner decide submitted AFP, AFE, monthly, weekly. */
+export function canApproveOutOfPlan(role: CropfortRole | string): boolean {
+  return isSilvaDesk(role);
+}
+
+/** Approve operational queues (AFP / AFE / monthly / weekly). */
+export function canApproveOperations(role: CropfortRole | string): boolean {
+  return isSilvaDesk(role);
+}
+
+/** Weekly plan approve/return — Silva / asset owner only (SPX creates & submits). */
 export function canReviewWeeklyPlan(role: CropfortRole | string): boolean {
-  return isSpxDesk(role) || isSilvaDesk(role);
+  return isSilvaDesk(role);
 }
 
 /** Issue Direct Instructions (SPX). */
@@ -68,6 +73,6 @@ export function deskLabel(role: CropfortRole | string): string {
   if (isSpxDesk(role)) return "SPX";
   if (role === "bagro_office") return "B-Agro";
   if (role === "field_supervisor") return "B-Agro (field)";
-  if (isSilvaDesk(role)) return "Silva / Chaka Buna reviewer";
+  if (isSilvaDesk(role)) return "Silva / asset owner";
   return String(role);
 }

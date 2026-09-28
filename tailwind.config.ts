@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["var(--font-dm-sans)", "ui-sans-serif", "sans-serif"],
+        sans: ["var(--font-sans)", "var(--font-dm-sans)", "ui-sans-serif", "sans-serif"],
         display: ["var(--font-fraunces)", "Georgia", "serif"],
       },
       colors: {

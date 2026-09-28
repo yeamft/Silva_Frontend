@@ -33,6 +33,9 @@ export interface AuthProgram {
   createdByOrgId?: string;
   roleInProgram?: string | null;
   createdAt?: string;
+  cropfortAfeBandAMaxEtb?: number;
+  cropfortAfeBandBMaxEtb?: number;
+  cropfortAfeBandCMaxEtb?: number;
 }
 
 export interface AuthTenant {
@@ -53,6 +56,9 @@ export interface MeResponse {
     name: string;
     slug: string;
     branding: unknown;
+    cropfortAfeBandAMaxEtb?: number;
+    cropfortAfeBandBMaxEtb?: number;
+    cropfortAfeBandCMaxEtb?: number;
   } | null;
   programs: AuthProgram[];
   permissions: string[];

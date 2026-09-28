@@ -46,6 +46,13 @@ import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { cn } from "@/lib/utils";
 import {
+  mapTicketDto,
+  mapWorkOrderDto,
+  useCreateWorkOrder,
+  useTransitionWorkOrder,
+  useWorkOrders,
+} from "@/lib/query/hooks/use-work-orders";
+import {
   fmtEtb,
   ticketWaitingOn,
   WO_NEXT,
@@ -53,8 +60,17 @@ import {
   type FieldTicket,
   type WoStatus,
   type WorkOrder,
-  useCropfortOpsStore,
 } from "@/store/cropfortOpsStore";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useFarmAreas } from "@/lib/query/hooks/use-org-map";
 
 type ViewMode = "board" | "list";
 type QuickFilter = "all" | "attention" | "week" | "crew";
@@ -180,19 +196,27 @@ function WorkOrderCard({
 export default function WorkOrdersView() {
   const area = getCropfortArea("work_orders");
   const { user, activeProgram } = useCropfortAuth();
-  const orders = useCropfortOpsStore((s) => s.workOrders);
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const afes = useCropfortOpsStore((s) => s.afes);
-  const blockName = useCropfortOpsStore((s) => s.blockName);
-  const moveWorkOrder = useCropfortOpsStore((s) => s.moveWorkOrder);
-  const issueWorkOrder = useCropfortOpsStore((s) => s.issueWorkOrder);
-  const readyAfes = afes.filter((a) => a.status === "approved");
+  const woQuery = useWorkOrders(Boolean(activeProgram?.id));
+  const createWo = useCreateWorkOrder();
+  const transitionWo = useTransitionWorkOrder();
+  const farmsQuery = useFarmAreas(Boolean(activeProgram?.id));
+
+  const orders = useMemo(
+    () => (woQuery.data || []).map(mapWorkOrderDto),
+    [woQuery.data],
+  );
+  const tickets = useMemo(
+    () => (woQuery.data || []).flatMap((wo) => (wo.tickets || []).map(mapTicketDto)),
+    [woQuery.data],
+  );
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<QuickFilter>("all");
   const [view, setView] = useState<ViewMode>("board");
   const [openId, setOpenId] = useState<string | null>(null);
   const [issueOpen, setIssueOpen] = useState(false);
-  const [issueAfe, setIssueAfe] = useState(readyAfes[0]?.id ?? "");
+  const [issueTitle, setIssueTitle] = useState("");
+  const [issueFarmId, setIssueFarmId] = useState("");
 
   const selected = orders.find((o) => o.id === openId) ?? null;
 
@@ -229,11 +253,15 @@ export default function WorkOrdersView() {
     return map;
   }, [filtered]);
 
-  const move = (id: string, status: WoStatus) => {
+  const move = async (id: string, status: WoStatus) => {
     const wo = orders.find((o) => o.id === id);
     if (!wo || wo.status === status) return;
-    moveWorkOrder(id, status);
-    toast.success(`${wo.code} → ${COLUMNS.find((c) => c.id === status)?.label ?? status}`);
+    try {
+      await transitionWo.mutateAsync({ id, status });
+      toast.success(`${wo.code} → ${COLUMNS.find((c) => c.id === status)?.label ?? status}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update work order");
+    }
   };
 
   const advance = (id: string) => {
@@ -241,14 +269,30 @@ export default function WorkOrdersView() {
     if (!wo) return;
     const next = WO_NEXT[wo.status];
     if (!next) return;
-    move(id, next.status);
+    void move(id, next.status);
   };
 
-  const issueFromAfe = () => {
+  const issueFromForm = async () => {
+    const title = issueTitle.trim();
+    if (!title) {
+      toast.error("Enter an activity title");
+      return;
+    }
     try {
-      const wo = issueWorkOrder(issueAfe);
+      const created = await createWo.mutateAsync({
+        title,
+        activity: title,
+        farmEstateId: issueFarmId || null,
+        weekStart: (() => {
+          const now = new Date();
+          const start = new Date(Date.UTC(now.getFullYear(), 0, 1));
+          return Math.min(53, Math.max(1, Math.ceil((((now.getTime() - start.getTime()) / 86400000) + start.getUTCDay() + 1) / 7)));
+        })(),
+      });
+      await transitionWo.mutateAsync({ id: created.id, status: "issued" });
       setIssueOpen(false);
-      toast.success(`${wo.code} issued`);
+      setIssueTitle("");
+      toast.success(`${created.code} issued`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not issue");
     }
@@ -263,10 +307,17 @@ export default function WorkOrdersView() {
 
   return (
     <OpsDeskPage className="max-w-none">
+      {woQuery.isError ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {woQuery.error instanceof Error ? woQuery.error.message : "Failed to load work orders"}
+        </p>
+      ) : null}
+      {woQuery.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading work orders…</p>
+      ) : null}
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Execution"}
         title="Work orders"
-        description="Issued work from plans — track queue to done."
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
@@ -496,34 +547,46 @@ export default function WorkOrdersView() {
           <DialogHeader>
             <DialogTitle>Issue a work order</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Pick an approved AFE. Insurance is checked before issue.</p>
-          {readyAfes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No approved AFEs. Approve one first.</p>
-          ) : (
-            <ul className="space-y-2">
-              {readyAfes.map((afe) => (
-                <li key={afe.id}>
-                  <button
-                    type="button"
-                    onClick={() => setIssueAfe(afe.id)}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left text-sm",
-                      issueAfe === afe.id ? "border-primary/40 bg-primary/[0.06]" : "border-border hover:bg-muted/40",
-                    )}
-                  >
-                    <span>
-                      <span className="block font-medium">{afe.title}</span>
-                      <span className="text-xs text-muted-foreground">{blockName(afe.blockId)}</span>
-                    </span>
-                    <span className="cf-numeric text-xs font-medium">{fmtEtb(afe.amountEtb)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="text-sm text-muted-foreground">
+            Creates a draft work order in the active programme, then issues it to the field.
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="wo-title">Activity / title</Label>
+              <Input
+                id="wo-title"
+                value={issueTitle}
+                onChange={(e) => setIssueTitle(e.target.value)}
+                placeholder="e.g. Selective pruning — SH-01"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Farm area</Label>
+              <Select value={issueFarmId || "__none__"} onValueChange={(v) => setIssueFarmId(v === "__none__" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Optional farm" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">All / unspecified</SelectItem>
+                  {(farmsQuery.data || []).map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIssueOpen(false)}>Cancel</Button>
-            <Button onClick={issueFromAfe} disabled={!issueAfe}>Issue</Button>
+            <Button variant="outline" onClick={() => setIssueOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void issueFromForm()}
+              disabled={!issueTitle.trim() || createWo.isPending || transitionWo.isPending}
+            >
+              Issue
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  Building2,
   Eye,
   EyeOff,
   Loader2,
@@ -24,7 +23,6 @@ import {
 } from "@/lib/workspace-gate";
 import { FormField } from "@/components/cropfort/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -100,7 +98,7 @@ const LoginPage = () => {
   if (!isHydrated || isAuthenticated) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" aria-label="Loading" />
       </div>
     );
   }
@@ -192,320 +190,238 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="relative flex min-h-[100dvh] bg-background text-foreground">
-      {/* Brand panel */}
-      <aside className="relative hidden w-[46%] overflow-hidden lg:flex lg:flex-col">
-        <div className="cf-mesh absolute inset-0" aria-hidden />
-        <div className="cf-grid-lines absolute inset-0 opacity-50" aria-hidden />
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-primary/25 via-transparent to-accent/15"
-          aria-hidden
-        />
-
-        <div className="relative z-10 flex h-full flex-col p-10 xl:p-12">
+    <div className="relative flex min-h-[100dvh] items-center justify-center bg-background px-4 py-8 text-foreground">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease }}
+        className="w-full max-w-[400px] space-y-5"
+      >
+        <div className="text-center">
           <button
             type="button"
             onClick={() => router.push("/")}
-            className="cf-focus inline-flex w-fit items-center gap-2.5 rounded-lg"
+            className="cf-focus mx-auto mb-4 inline-flex items-center gap-2 rounded-lg"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.14)]">
-                <Sprout className="h-5 w-5" aria-hidden />
-              </span>
-            <span className="text-left">
-              <span className="block font-display text-lg font-semibold tracking-tight">Cropfort</span>
-              <span className="block text-xs text-muted-foreground">SPX Farm OS</span>
-            </span>
-          </button>
-
-          <div className="flex flex-1 items-center">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, ease }}
-              className="max-w-md space-y-5"
-            >
-             
-              <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight xl:text-5xl">
-                One workspace.
-                <span className="mt-1 block text-primary">Clear roles.</span>
-              </h1>
-              <p className="text-[15px] leading-relaxed text-muted-foreground">
-                Sign in to your organization&apos;s programme govern, validate, or execute without
-                crossing the wrong desk.
-              </p>
-            </motion.div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Form panel */}
-      <div className="relative flex min-h-[100dvh] flex-1 flex-col">
-        <div
-          className="pointer-events-none absolute inset-0 lg:hidden"
-          aria-hidden
-        >
-          <div className="cf-mesh absolute inset-0 opacity-80" />
-        </div>
-
-        <header className="relative z-10 flex items-center justify-between gap-3 px-4 py-4 sm:px-8">
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="cf-focus flex items-center gap-2.5 rounded-lg lg:invisible lg:pointer-events-none"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(15,23,20,0.08),0_6px_16px_-4px_rgba(15,23,20,0.14)]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
               <Sprout className="h-4 w-4" aria-hidden />
             </span>
             <span className="font-display text-base font-semibold tracking-tight">Cropfort</span>
           </button>
-        </header>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">
+            {mfaStep ? "Verify authenticator" : "Sign in"}
+          </h1>
+          {mfaStep ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Open your authenticator app and enter the 6-digit code.
+            </p>
+          ) : null}
+        </div>
 
-        <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease }}
-            className="w-full max-w-[420px] space-y-6"
-          >
-            <div className="space-y-2">
-              
-              <h2 className="font-display text-2xl font-semibold tracking-tight sm:text-[1.75rem]">
-                {mfaStep ? "Verify authenticator" : "Sign in"}
-              </h2>
-              {mfaStep ? (
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Open your authenticator app and enter the 6-digit code.
+        <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
+          <form onSubmit={handleSubmit} noValidate autoComplete="on" className="space-y-4">
+            {mfaStep?.kind === "enroll" && mfaStep.qrDataUrl ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Scan this QR code, then enter the first code from your app.
                 </p>
-              ) : null}
-            </div>
-
-            <div className="rounded-2xl border border-border/70 bg-card/95 p-5 shadow-[0_1px_2px_rgba(15,23,20,0.08),0_8px_24px_-6px_rgba(15,23,20,0.14),0_20px_40px_-16px_rgba(15,23,20,0.12)] backdrop-blur-sm sm:p-6">
-              <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-4">
-                {mfaStep?.kind === "enroll" && mfaStep.qrDataUrl ? (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      Scan this QR code, then enter the first code from your app.
-                    </p>
-                    <div className="flex justify-center rounded-xl border border-border/70 bg-background p-4 shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_12px_-4px_rgba(15,23,20,0.1)]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={mfaStep.qrDataUrl}
-                        alt="TOTP enrollment QR code"
-                        className="h-44 w-44"
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
-                {!mfaStep ? (
-                  <>
-                    <FormField
-                      label="Work email"
-                      required
-                      error={fieldErrors.email}
-                      render={(props) => (
-                        <div className="relative">
-                          <Mail
-                            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                            aria-hidden
-                          />
-                          <Input
-                            {...props}
-                            name="email"
-                            type="email"
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="none"
-                            spellCheck={false}
-                            placeholder="email"
-                            value={email}
-                            onChange={(e) => {
-                              setEmail(e.target.value);
-                              setSelectedDemo(null);
-                              clearErrors();
-                            }}
-                            className="h-11 pl-10"
-                          />
-                        </div>
-                      )}
-                    />
-
-                    <FormField
-                      label={t(locale, "login_passwordLabel")}
-                      required
-                      error={fieldErrors.password}
-                      render={(props) => (
-                        <div className="relative">
-                          <Lock
-                            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                            aria-hidden
-                          />
-                          <Input
-                            {...props}
-                            name="password"
-                            type={showPassword ? "text" : "password"}
-                            autoComplete="new-password"
-                            placeholder="password"
-                            value={password}
-                            onChange={(e) => {
-                              setPassword(e.target.value);
-                              setSelectedDemo(null);
-                              clearErrors();
-                            }}
-                            className="h-11 pl-10 pr-11"
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
-                            onClick={() => setShowPassword((v) => !v)}
-                            aria-label={t(
-                              locale,
-                              showPassword ? "login_hidePassword" : "login_showPassword",
-                            )}
-                          >
-                            {showPassword ? (
-                              <EyeOff className="h-4 w-4" aria-hidden />
-                            ) : (
-                              <Eye className="h-4 w-4" aria-hidden />
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    />
-                  </>
-                ) : (
-                  <FormField
-                    label="Authenticator code"
-                    required
-                    error={fieldErrors.code}
-                    render={(props) => (
-                      <div className="relative">
-                        <ShieldCheck
-                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                          aria-hidden
-                        />
-                        <Input
-                          {...props}
-                          name="otp"
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                          placeholder="123456"
-                          value={otpCode}
-                          onChange={(e) => {
-                            setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
-                            clearErrors();
-                          }}
-                          className="h-11 pl-10 tracking-[0.35em]"
-                          maxLength={6}
-                        />
-                      </div>
-                    )}
+                <div className="flex justify-center rounded-xl border border-border/70 bg-background p-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={mfaStep.qrDataUrl}
+                    alt="TOTP enrollment QR code"
+                    className="h-44 w-44"
                   />
-                )}
-
-                {formError ? (
-                  <Alert variant="destructive" aria-live="assertive">
-                    <AlertDescription>{formError}</AlertDescription>
-                  </Alert>
-                ) : null}
-
-                <Button
-                  type="submit"
-                  className="h-11 w-full gap-2 text-[15px] font-medium shadow-sm"
-                  disabled={isLoading}
-                >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-                  {isLoading
-                    ? t(locale, "login_signingIn")
-                    : mfaStep
-                      ? "Verify and continue"
-                      : "Sign in"}
-                </Button>
-
-                {mfaStep ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-10 w-full gap-2"
-                    onClick={() => {
-                      setMfaStep(null);
-                      setOtpCode("");
-                      clearErrors();
-                    }}
-                  >
-                    <ArrowLeft className="h-4 w-4" aria-hidden />
-                    Back to sign in
-                  </Button>
-                ) : null}
-              </form>
-            </div>
-
-            {!mfaStep ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-muted-foreground">Try a demo desk</p>
-                  <p className="text-[11px] text-muted-foreground/80">Password filled for you</p>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {DEMO_ACCOUNTS.map((account) => {
-                    const active = selectedDemo === account.email;
-                    return (
-                      <button
-                        key={account.email}
-                        type="button"
-                        onClick={() => pickDemo(account.email)}
-                        className={cn(
-                          "cf-focus group rounded-xl border px-3.5 py-3 text-left transition-[border-color,background-color,box-shadow,transform] duration-200",
-                          "shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_12px_-4px_rgba(15,23,20,0.1)]",
-                          "hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.04] hover:shadow-[0_2px_8px_rgba(15,23,20,0.1),0_12px_24px_-8px_rgba(15,23,20,0.16)]",
-                          active
-                            ? "border-primary/40 bg-primary/[0.06] shadow-[0_2px_8px_rgba(15,23,20,0.1),0_12px_24px_-8px_rgba(15,23,20,0.16)]"
-                            : "border-border/70 bg-card/80",
-                        )}
-                      >
-                        <span className="flex items-start gap-2.5">
-                          <span
-                            className={cn(
-                              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-                              active
-                                ? "bg-primary/15 text-primary"
-                                : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
-                            )}
-                          >
-                            <Building2 className="h-3.5 w-3.5" aria-hidden />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold tracking-tight">
-                              {account.label}
-                            </span>
-                            <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                              {account.org} · {account.hint}
-                            </span>
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             ) : null}
 
-            <div className="flex justify-center">
+            {!mfaStep ? (
+              <>
+                <FormField
+                  label="Work email"
+                  required
+                  error={fieldErrors.email}
+                  render={(props) => (
+                    <div className="relative">
+                      <Mail
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <Input
+                        {...props}
+                        name="email"
+                        type="email"
+                        autoComplete="username"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        placeholder="you@company.com"
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          setSelectedDemo(null);
+                          clearErrors();
+                        }}
+                        className="h-11 pl-10"
+                      />
+                    </div>
+                  )}
+                />
+
+                <FormField
+                  label={t(locale, "login_passwordLabel")}
+                  required
+                  error={fieldErrors.password}
+                  render={(props) => (
+                    <div className="relative">
+                      <Lock
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <Input
+                        {...props}
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        placeholder="Password"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setSelectedDemo(null);
+                          clearErrors();
+                        }}
+                        className="h-11 pl-10 pr-11"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={t(
+                          locale,
+                          showPassword ? "login_hidePassword" : "login_showPassword",
+                        )}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" aria-hidden />
+                        ) : (
+                          <Eye className="h-4 w-4" aria-hidden />
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                />
+              </>
+            ) : (
+              <FormField
+                label="Authenticator code"
+                required
+                error={fieldErrors.code}
+                render={(props) => (
+                  <div className="relative">
+                    <ShieldCheck
+                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden
+                    />
+                    <Input
+                      {...props}
+                      name="otp"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="123456"
+                      value={otpCode}
+                      onChange={(e) => {
+                        setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                        clearErrors();
+                      }}
+                      className="h-11 pl-10 tracking-[0.35em]"
+                      maxLength={6}
+                    />
+                  </div>
+                )}
+              />
+            )}
+
+            {formError ? (
+              <Alert variant="destructive" aria-live="assertive">
+                <AlertDescription>{formError}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            <Button
+              type="submit"
+              className="h-11 w-full gap-2 text-[15px] font-medium"
+              disabled={isLoading}
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              {isLoading
+                ? t(locale, "login_signingIn")
+                : mfaStep
+                  ? "Verify and continue"
+                  : "Sign in"}
+            </Button>
+
+            {mfaStep ? (
               <Button
-                variant="link"
-                size="sm"
-                className="gap-1.5 text-muted-foreground"
-                onClick={() => router.push("/")}
+                type="button"
+                variant="ghost"
+                className="h-10 w-full gap-2"
+                onClick={() => {
+                  setMfaStep(null);
+                  setOtpCode("");
+                  clearErrors();
+                }}
               >
-                <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-                Back to home
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Back to sign in
               </Button>
+            ) : null}
+          </form>
+        </div>
+
+        {!mfaStep ? (
+          <div className="space-y-2">
+            <p className="text-center text-xs text-muted-foreground">Demo accounts</p>
+            <div className="grid grid-cols-2 gap-2">
+              {DEMO_ACCOUNTS.map((account) => {
+                const active = selectedDemo === account.email;
+                return (
+                  <button
+                    key={account.email}
+                    type="button"
+                    onClick={() => pickDemo(account.email)}
+                    className={cn(
+                      "cf-focus rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                      active
+                        ? "border-primary/40 bg-primary/[0.06]"
+                        : "border-border/70 bg-card hover:bg-muted/40",
+                    )}
+                  >
+                    <span className="block truncate font-medium">{account.label}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {account.org}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          </motion.div>
-        </main>
-      </div>
+          </div>
+        ) : null}
+
+        <div className="flex justify-center">
+          <Button
+            variant="link"
+            size="sm"
+            className="gap-1.5 text-muted-foreground"
+            onClick={() => router.push("/")}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+            Back to home
+          </Button>
+        </div>
+      </motion.div>
     </div>
   );
 };

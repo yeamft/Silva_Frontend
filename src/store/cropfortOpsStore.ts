@@ -652,12 +652,12 @@ function patchList<T extends { id: string }>(list: T[], id: string, patch: Parti
 export const useCropfortOpsStore = create<Store>()(
   persist(
     (set, get) => ({
-      nodes: NODES,
-      projects: PROJECTS,
-      interventions: INTERVENTIONS,
-      afes: AFES,
-      workOrders: WORK_ORDERS,
-      tickets: TICKETS,
+      nodes: [],
+      projects: [],
+      interventions: [],
+      afes: [],
+      workOrders: [],
+      tickets: [],
       projectsSearch: "",
       projectsPage: 1,
       projectsCreateOpen: false,
@@ -1083,14 +1083,10 @@ export const useCropfortOpsStore = create<Store>()(
       },
     }),
     {
-      name: "cropfort.ops.v2",
+      name: "cropfort.ops.v3",
       partialize: (s) => ({
+        // Live desks use APIs; only keep optional local farm-tree overrides.
         nodes: s.nodes,
-        projects: s.projects,
-        interventions: s.interventions,
-        afes: s.afes,
-        workOrders: s.workOrders,
-        tickets: s.tickets,
       }),
     },
   ),

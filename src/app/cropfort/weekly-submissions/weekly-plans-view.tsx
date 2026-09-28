@@ -29,28 +29,41 @@ import {
   canEditPlanScope,
   canReviewWeeklyPlan,
 } from "@/lib/cropfort/platform-access";
-import { fmtEtb } from "@/store/cropfortOpsStore";
-import { useDirectInstructionStore } from "@/store/directInstructionStore";
-import { useMonthlyWorkOrderStore } from "@/store/monthlyWorkOrderStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
+import { resolveManualRef } from "@/lib/cropfort/activity-manuals";
+import {
+  useActivateWeeklyPlan,
+  useCreateWeeklyPlan,
+  useDecideWeeklyPlan,
+  useSetWeeklyPlanLoop,
+  useSubmitWeeklyPlan,
+  useWeeklyPlans,
+} from "@/lib/query/hooks/use-weekly-plans";
+import { useMonthlyWorkOrders } from "@/lib/query/hooks/use-monthly-work-orders";
+import {
+  useDirectInstructions,
+  usePendingDirectInstructions,
+} from "@/lib/query/hooks/use-direct-instructions";
+import { EXEC_CREW, fmtEtb } from "@/store/cropfortOpsStore";
 
 export default function WeeklyPlansView() {
   const { activeProgram, user } = useCropfortAuth();
-  const monthlyOrders = useMonthlyWorkOrderStore((s) => s.orders);
-  const plans = useWeeklyPlanStore((s) => s.plans);
-  const createFromMonthly = useWeeklyPlanStore((s) => s.createFromMonthly);
-  const submit = useWeeklyPlanStore((s) => s.submit);
-  const decide = useWeeklyPlanStore((s) => s.decide);
-  const activateAndBridge = useWeeklyPlanStore((s) => s.activateAndBridge);
-  const setLoop = useWeeklyPlanStore((s) => s.setLoop);
+  const monthlyQuery = useMonthlyWorkOrders(Boolean(activeProgram?.id));
+  const monthlyOrders = monthlyQuery.data || [];
+  const plansQuery = useWeeklyPlans(Boolean(activeProgram?.id));
+  const createPlan = useCreateWeeklyPlan();
+  const submitPlan = useSubmitWeeklyPlan();
+  const decidePlan = useDecideWeeklyPlan();
+  const activatePlan = useActivateWeeklyPlan();
+  const setLoopMut = useSetWeeklyPlanLoop();
 
+  const plans = plansQuery.data || [];
   const activeMonthly = useMemo(
     () => monthlyOrders.filter((o) => o.status === "active" || o.status === "approved"),
     [monthlyOrders],
   );
   const [monthlyId, setMonthlyId] = useState(activeMonthly[0]?.id ?? "");
   const [weekLabel, setWeekLabel] = useState("W39");
-  const [selectedId, setSelectedId] = useState<string | null>(plans[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeMonthly.length) {
@@ -67,7 +80,7 @@ export default function WeeklyPlansView() {
       if (selectedId) setSelectedId(null);
       return;
     }
-    if (selectedId && !plans.some((p) => p.id === selectedId)) {
+    if (!selectedId || !plans.some((p) => p.id === selectedId)) {
       setSelectedId(plans[0].id);
     }
   }, [plans, selectedId]);
@@ -77,17 +90,57 @@ export default function WeeklyPlansView() {
     [plans, selectedId],
   );
 
-  const instructions = useDirectInstructionStore((s) => s.instructions);
+  const diQuery = useDirectInstructions(Boolean(activeProgram?.id));
+  const instructions = diQuery.data || [];
+  const pendingDiQuery = usePendingDirectInstructions(
+    monthlyId || null,
+    Boolean(activeProgram?.id && monthlyId),
+  );
   const canEdit = canEditPlanScope(user.role);
   const canReview = canReviewWeeklyPlan(user.role);
 
-  const onCreate = () => {
+  const onCreate = async () => {
     if (!canEdit) {
       toast.error("Only SPX can create weekly plans");
       return;
     }
+    const mwo = monthlyOrders.find((o) => o.id === monthlyId);
+    if (!mwo) {
+      toast.error("Select an active monthly WO");
+      return;
+    }
     try {
-      const row = createFromMonthly({ monthlyWoId: monthlyId, weekLabel });
+      const pendingDi = (pendingDiQuery.data || []).map((d) => d.id);
+      const lines = mwo.lines.map((l) => ({
+        monthlyLineId: l.id,
+        activityId: l.activityId,
+        activityCode: l.activityCode,
+        activityName: l.activityName,
+        blockId: l.blockId,
+        blockCode: l.blockCode,
+        qty: Math.round((l.plannedQty / 4) * 100) / 100,
+        unit: l.unit,
+        crew: EXEC_CREW.vendors[0]?.name || "",
+        materials: "",
+        manualsRef:
+          l.manualsRef ||
+          resolveManualRef({
+            id: l.activityId,
+            code: l.activityCode,
+            name: l.activityName,
+          }),
+        etb: Math.round(l.etb / 4),
+      }));
+      const row = await createPlan.mutateAsync({
+        weekLabel: weekLabel.trim() || "W1",
+        monthlyWoId: mwo.id,
+        monthlyWoCode: mwo.code,
+        directInstructionIds: pendingDi,
+        note: pendingDi.length ? `Includes ${pendingDi.length} Direct Instruction(s)` : "",
+        lines,
+      });
+      void diQuery.refetch();
+      void pendingDiQuery.refetch();
       setSelectedId(row.id);
       toast.success(`Created ${row.code}`);
     } catch (e) {
@@ -95,16 +148,18 @@ export default function WeeklyPlansView() {
     }
   };
 
-  const onActivate = () => {
+  const onActivate = async () => {
     if (!canEdit) {
       toast.error("Only SPX can activate and bridge weekly plans");
       return;
     }
     if (!selected) return;
     try {
-      const row = activateAndBridge(selected.id);
+      const row = await activatePlan.mutateAsync(selected.id);
       toast.success(
-        `Activated — bridged ${row.bridgedWorkOrderIds.length} AFE work order(s) under ${row.monthlyWoCode}`,
+        `Activated — bridged ${row.bridgedWorkOrderIds.length} work order(s)${
+          row.monthlyWoCode ? ` under ${row.monthlyWoCode}` : ""
+        }`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Activate failed");
@@ -116,7 +171,6 @@ export default function WeeklyPlansView() {
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Execution"}
         title="Weekly Implementation Plans"
-        description="Break the monthly WO into week plans, then activate and bridge to work orders."
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
@@ -134,7 +188,11 @@ export default function WeeklyPlansView() {
 
       <OpsDeskControlPanel
         trailing={
-          <Button size="sm" onClick={onCreate} disabled={!monthlyId || !canEdit}>
+          <Button
+            size="sm"
+            onClick={() => void onCreate()}
+            disabled={!monthlyId || !canEdit || createPlan.isPending}
+          >
             Create weekly plan
           </Button>
         }
@@ -169,7 +227,9 @@ export default function WeeklyPlansView() {
       <OpsDeskSplit
         registerTitle="Plans"
         register={
-          plans.length === 0 ? (
+          plansQuery.isLoading ? (
+            <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">Loading…</p>
+          ) : plans.length === 0 ? (
             <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">
               No weekly plans yet.
             </p>
@@ -198,7 +258,7 @@ export default function WeeklyPlansView() {
           ) : (
             <OpsDeskDetail
               title={selected.code}
-              description={`Week ${selected.weekLabel} · ${selected.monthlyWoCode || selected.monthlyWoId} · ${selected.lines.length} lines`}
+              description={`Week ${selected.weekLabel} · ${selected.monthlyWoCode || selected.monthlyWoId || "—"} · ${selected.lines.length} lines`}
               badge={<StatusBadge status={selected.status} />}
               actions={
                 <>
@@ -208,9 +268,14 @@ export default function WeeklyPlansView() {
                   {(selected.status === "draft" || selected.status === "returned") && canEdit && (
                     <Button
                       size="sm"
-                      onClick={() => {
-                        submit(selected.id);
-                        toast.success("Submitted for review");
+                      disabled={submitPlan.isPending}
+                      onClick={async () => {
+                        try {
+                          await submitPlan.mutateAsync(selected.id);
+                          toast.success("Submitted for review");
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Submit failed");
+                        }
                       }}
                     >
                       Submit
@@ -220,9 +285,17 @@ export default function WeeklyPlansView() {
                     <>
                       <Button
                         size="sm"
-                        onClick={() => {
-                          decide(selected.id, "approved");
-                          toast.success("Approved");
+                        disabled={decidePlan.isPending}
+                        onClick={async () => {
+                          try {
+                            await decidePlan.mutateAsync({
+                              id: selected.id,
+                              decision: "approve",
+                            });
+                            toast.success("Approved");
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Approve failed");
+                          }
                         }}
                       >
                         Approve
@@ -230,9 +303,18 @@ export default function WeeklyPlansView() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          decide(selected.id, "returned", "Revise crew / qty");
-                          toast.message("Returned");
+                        disabled={decidePlan.isPending}
+                        onClick={async () => {
+                          try {
+                            await decidePlan.mutateAsync({
+                              id: selected.id,
+                              decision: "return",
+                              comment: "Revise crew / qty",
+                            });
+                            toast.message("Returned");
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Return failed");
+                          }
                         }}
                       >
                         Return
@@ -240,7 +322,12 @@ export default function WeeklyPlansView() {
                     </>
                   )}
                   {(selected.status === "approved" || selected.status === "submitted") && canEdit && (
-                    <Button size="sm" variant="secondary" onClick={onActivate}>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={activatePlan.isPending}
+                      onClick={() => void onActivate()}
+                    >
                       Activate & bridge
                     </Button>
                   )}
@@ -248,9 +335,17 @@ export default function WeeklyPlansView() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        setLoop(selected.id, "C_budget_overrun");
-                        toast.message("Spend overrun flagged for review");
+                      disabled={setLoopMut.isPending}
+                      onClick={async () => {
+                        try {
+                          await setLoopMut.mutateAsync({
+                            id: selected.id,
+                            loop: "C_budget_overrun",
+                          });
+                          toast.message("Spend overrun flagged for review");
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Flag failed");
+                        }
                       }}
                     >
                       Flag overrun

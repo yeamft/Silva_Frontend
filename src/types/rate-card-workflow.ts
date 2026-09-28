@@ -1,4 +1,4 @@
-/** Client-side Rate Card workflow model (B–F). Backend swap later. */
+/** Client-side Rate Card workflow model (B–F). Live API via USE_RATE_CARD_MOCK=false. */
 
 export type WorkflowStatus = "draft" | "submitted" | "approved" | "returned" | "archived";
 
@@ -197,4 +197,5 @@ export interface WorkflowContextFilters {
   farmAreaId: string | "all";
 }
 
-export const USE_RATE_CARD_MOCK = true;
+/** Prefer live `/api/v1` farms + benchmark/proposal APIs. Set true only for offline UI demos. */
+export const USE_RATE_CARD_MOCK = false;

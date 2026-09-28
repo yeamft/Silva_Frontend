@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -9,18 +10,62 @@ import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
-import { fmtEtb, useCropfortOpsStore } from "@/store/cropfortOpsStore";
+import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
+import { useCreateAfe } from "@/lib/query/hooks/use-afes";
+import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
+import { fmtEtb } from "@/store/cropfortOpsStore";
+import type { AfpPromotion } from "@/types/core-ops";
+
+type RegisterRow = {
+  plan: ProgrammePlanDto;
+  promo: AfpPromotion;
+};
 
 export default function AfpRegisterView() {
   const { activeProgram } = useCropfortAuth();
   const area = getCropfortArea("afp");
-  const plan = useCoreOpsPlanStore((s) => s.plan);
-  const promotions = plan?.promotions ?? [];
-  const raiseAfe = useCropfortOpsStore((s) => s.raiseAfe);
-  const nodes = useCropfortOpsStore((s) => s.nodes);
-  const fallbackBlock = nodes.find((n) => n.kind === "block")?.id ?? "";
-  const planBlock = plan?.applicableBlockIds.find(Boolean) || fallbackBlock;
+  const plansQuery = useProgrammePlans(Boolean(activeProgram?.id));
+  const createAfe = useCreateAfe();
+  const [raisingId, setRaisingId] = useState<string | null>(null);
+
+  const rows = useMemo<RegisterRow[]>(() => {
+    const plans = plansQuery.data || [];
+    return plans
+      .flatMap((plan) =>
+        (plan.promotions || []).map((promo) => ({
+          plan,
+          promo,
+        })),
+      )
+      .sort((a, b) => (b.promo.createdAt || "").localeCompare(a.promo.createdAt || ""));
+  }, [plansQuery.data]);
+
+  const raiseFromPromotion = async (row: RegisterRow) => {
+    const { plan, promo } = row;
+    setRaisingId(promo.id);
+    try {
+      const afe = await createAfe.mutateAsync({
+        title: `${plan.name || plan.farmName || "Estate"} AFP · ${plan.budgetYearLabel ?? ""}`.trim(),
+        amountEtb: promo.totalEtb,
+        band: promo.band,
+        sourceType: "afp",
+        sourceId: plan.id,
+      });
+      toast.success(`AFE drafted`, {
+        description: `${afe.title} · Band ${afe.band}`,
+        action: {
+          label: "Open AFE",
+          onClick: () => {
+            window.location.href = CROPFORT_ROUTES.afe;
+          },
+        },
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not raise AFE");
+    } finally {
+      setRaisingId(null);
+    }
+  };
 
   return (
     <PageContainer>
@@ -33,65 +78,72 @@ export default function AfpRegisterView() {
         ]}
         actions={
           <Button size="sm" asChild>
-            <Link href={CROPFORT_ROUTES.coreOperations}>Open Core Operations</Link>
+            <Link href={CROPFORT_ROUTES.programmePlans}>Programme Plans</Link>
           </Button>
         }
       />
 
-      <SectionCard title="AFP register" flush>
-        {promotions.length === 0 ? (
+      <SectionCard
+        title="AFP register"
+        description="Submitted and approved programme plans awaiting or ready for AFE"
+        flush
+      >
+        {plansQuery.isLoading ? (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-            No AFPs yet. Submit a Core Operations plan to promote here.
+            Loading AFP register…
+          </div>
+        ) : plansQuery.isError ? (
+          <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+            Could not load programme plans.
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+            No AFPs yet. Submit a programme plan to promote here.
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {promotions.map((p) => {
-              const approved = p.status === "auto_approved" || p.status === "approved";
+            {rows.map(({ plan, promo }) => {
+              const approved =
+                promo.status === "auto_approved" || promo.status === "approved";
               return (
-                <li key={p.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                <li
+                  key={`${plan.id}:${promo.id}`}
+                  className="flex flex-wrap items-center gap-3 px-5 py-4"
+                >
                   <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
-                      {plan?.farmName} · {plan?.budgetYearLabel}
+                      {plan.name || plan.farmName} · {plan.budgetYearLabel}
                     </p>
-                    <p className="text-xs text-muted-foreground">{p.note}</p>
+                    <p className="text-xs text-muted-foreground">{promo.note}</p>
                   </div>
-                  <span className="text-sm font-medium tabular-nums">{fmtEtb(p.totalEtb)}</span>
+                  <span className="text-sm font-medium tabular-nums">
+                    {fmtEtb(promo.totalEtb)}
+                  </span>
                   <StatusBadge
                     status={
                       approved
                         ? "approved"
-                        : p.status === "returned"
+                        : promo.status === "returned"
                           ? "returned"
                           : "submitted"
                     }
                   />
-                  <StatusBadge status="draft" label={`Band ${p.band}`} />
+                  <StatusBadge status="draft" label={`Band ${promo.band}`} />
                   {approved ? (
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={!planBlock}
-                      onClick={() => {
-                        const afe = raiseAfe({
-                          title:
-                            `${plan?.farmName ?? "Estate"} AFP · ${plan?.budgetYearLabel ?? ""}`.trim(),
-                          sourceType: "afp",
-                          sourceId: p.id,
-                          blockId: planBlock,
-                          amountEtb: p.totalEtb,
-                        });
-                        toast.success(`${afe.code} drafted`, {
-                          action: {
-                            label: "Open AFE",
-                            onClick: () => {
-                              window.location.href = CROPFORT_ROUTES.afe;
-                            },
-                          },
-                        });
-                      }}
+                      disabled={createAfe.isPending && raisingId === promo.id}
+                      onClick={() => void raiseFromPromotion({ plan, promo })}
                     >
-                      Raise AFE
+                      {raisingId === promo.id ? "Raising…" : "Raise AFE"}
+                    </Button>
+                  ) : promo.status === "returned" ? (
+                    <Button size="sm" variant="ghost" asChild>
+                      <Link href={`${CROPFORT_ROUTES.programmePlans}/${plan.id}`}>
+                        Revise plan
+                      </Link>
                     </Button>
                   ) : (
                     <Button size="sm" variant="ghost" asChild>

@@ -12,50 +12,33 @@ import {
   computePerformanceSnapshot,
   fmtEtb,
 } from "@/lib/cropfort/performance-metrics";
-import { useCropfortOpsStore } from "@/store/cropfortOpsStore";
+import { usePerformanceLiveData } from "@/lib/query/hooks/use-performance-live";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useMonthlyWorkOrderStore } from "@/store/monthlyWorkOrderStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
 
 export default function ProgrammePerformanceView() {
   const { activeProgram } = useCropfortAuth();
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const afes = useCropfortOpsStore((s) => s.afes);
-  const projects = useCropfortOpsStore((s) => s.projects);
-  const interventions = useCropfortOpsStore((s) => s.interventions);
+  const { workOrders, tickets, afes, committedEtb, weekly, monthly, dfrs } =
+    usePerformanceLiveData(Boolean(activeProgram?.id));
   const plan = useCoreOpsPlanStore((s) => s.plan);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
   const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
-  const monthly = useMonthlyWorkOrderStore((s) => s.orders);
 
   useEffect(() => {
     void loadContext();
   }, [loadContext]);
-
-  const committed = useMemo(
-    () =>
-      afes
-        .filter((a) => a.status === "approved" || a.status === "issued")
-        .reduce((s, a) => s + (a.amountEtb || 0), 0),
-    [afes],
-  );
 
   const snap = useMemo(
     () =>
       computePerformanceSnapshot({
         plan,
         planBudgetEtb: planCompletion().budgetEtb,
-        committedEtb: committed,
+        committedEtb,
         workOrders,
         tickets,
         dfrs,
         weekly,
       }),
-    [plan, planCompletion, committed, workOrders, tickets, dfrs, weekly],
+    [plan, planCompletion, committedEtb, workOrders, tickets, dfrs, weekly],
   );
 
   const health =
@@ -76,7 +59,7 @@ export default function ProgrammePerformanceView() {
     },
     {
       title: "Commitments",
-      detail: `${afes.filter((a) => a.status === "approved" || a.status === "issued").length} AFEs live`,
+      detail: `${afes.filter((a) => a.status === "approved").length} AFEs live`,
       value: fmtEtb(snap.committedEtb),
       href: CROPFORT_ROUTES.approvals,
     },
@@ -167,16 +150,21 @@ export default function ProgrammePerformanceView() {
       <SectionCard title="Instrument mix" flush>
         <ul className="divide-y divide-border text-sm">
           <li className="flex justify-between px-5 py-3">
-            <span>Projects</span>
+            <span>AFEs</span>
             <span className="tabular-nums text-muted-foreground">
-              {projects.length} · {projects.filter((p) => p.status === "submitted").length} awaiting
+              {afes.length} · {afes.filter((a) => a.status === "submitted").length} awaiting
             </span>
           </li>
           <li className="flex justify-between px-5 py-3">
-            <span>Interventions</span>
+            <span>Work orders</span>
             <span className="tabular-nums text-muted-foreground">
-              {interventions.length} ·{" "}
-              {interventions.filter((i) => i.status === "active").length} active
+              {workOrders.length} · {snap.woOpen} open
+            </span>
+          </li>
+          <li className="flex justify-between px-5 py-3">
+            <span>Field tickets</span>
+            <span className="tabular-nums text-muted-foreground">
+              {tickets.length} · {snap.ticketsOpen} open
             </span>
           </li>
           <li className="flex justify-between px-5 py-3">

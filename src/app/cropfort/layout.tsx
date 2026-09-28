@@ -5,6 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { MainNav, MobileNavTrigger } from "@/components/navigation/main-nav";
 import { CropfortMobileNav } from "@/components/navigation/mobile-nav";
 import { CropfortAuthProvider, useCropfortAuth } from "@/components/navigation/auth-context";
+import { ActivePlanSync } from "@/components/navigation/active-plan-sync";
+import { ActiveSpendBandSync } from "@/components/navigation/active-spend-band-sync";
+import { ActiveAgreementConfigSync } from "@/components/navigation/active-agreement-config-sync";
 import { GlobalContextBar } from "@/components/navigation/global-context-bar";
 import { WorkspaceNav } from "@/components/navigation/workspace-nav";
 import { CommandPalette } from "@/components/navigation/command-palette";
@@ -124,6 +127,9 @@ function CropfortShell({ children }: { children: ReactNode }) {
         </main>
       </div>
 
+      <ActivePlanSync />
+      <ActiveSpendBandSync />
+      <ActiveAgreementConfigSync />
       <CropfortMobileNav />
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <NeedsAttentionDrawer open={attentionOpen} onOpenChange={setAttentionOpen} />

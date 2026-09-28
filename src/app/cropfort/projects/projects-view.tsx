@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FolderKanban, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -52,68 +53,148 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { cn } from "@/lib/utils";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import type { ProjectDto } from "@/lib/api/projects";
+import { useBlocks, useVendors } from "@/lib/query";
+import { useCreateAfe } from "@/lib/query/hooks/use-afes";
 import {
-  fmtEtb,
-  projectVendorOptions,
-  useCropfortOpsStore,
-} from "@/store/cropfortOpsStore";
+  useCreateProject,
+  useLinkProjectAfe,
+  useProjects,
+  useStartProject,
+  useSubmitProject,
+  useToggleProjectMilestone,
+} from "@/lib/query/hooks/use-projects";
+import { cn } from "@/lib/utils";
+import { fmtEtb } from "@/store/cropfortOpsStore";
 
 const PAGE_SIZE = 12;
+const FALLBACK_VENDORS = ["RFSP", "GreenLine", "Estate crew"];
 
 export default function ProjectsView() {
   const { activeProgram } = useCropfortAuth();
   const area = getCropfortArea("projects");
 
-  const projects = useCropfortOpsStore((s) => s.projects);
-  const search = useCropfortOpsStore((s) => s.projectsSearch);
-  const page = useCropfortOpsStore((s) => s.projectsPage);
-  const createOpen = useCropfortOpsStore((s) => s.projectsCreateOpen);
-  const manageId = useCropfortOpsStore((s) => s.projectsManageId);
-  const form = useCropfortOpsStore((s) => s.projectsForm);
-  const blockName = useCropfortOpsStore((s) => s.blockName);
-  const activeBlocks = useCropfortOpsStore((s) => s.activeBlocks);
-  const createProject = useCropfortOpsStore((s) => s.createProject);
-  const submitProject = useCropfortOpsStore((s) => s.submitProject);
-  const startProject = useCropfortOpsStore((s) => s.startProject);
-  const toggleMilestone = useCropfortOpsStore((s) => s.toggleMilestone);
-  const raiseAfe = useCropfortOpsStore((s) => s.raiseAfe);
-  const afeForSource = useCropfortOpsStore((s) => s.afeForSource);
-  const setProjectsSearch = useCropfortOpsStore((s) => s.setProjectsSearch);
-  const setProjectsPage = useCropfortOpsStore((s) => s.setProjectsPage);
-  const setProjectsCreateOpen = useCropfortOpsStore((s) => s.setProjectsCreateOpen);
-  const setProjectsManageId = useCropfortOpsStore((s) => s.setProjectsManageId);
-  const patchProjectsForm = useCropfortOpsStore((s) => s.patchProjectsForm);
+  const projectsQuery = useProjects();
+  const projects = projectsQuery.data ?? [];
+  const createProject = useCreateProject();
+  const submitProject = useSubmitProject();
+  const startProject = useStartProject();
+  const toggleMilestone = useToggleProjectMilestone();
+  const linkProjectAfe = useLinkProjectAfe();
+  const createAfe = useCreateAfe();
 
-  const blocks = activeBlocks();
-  const vendors = projectVendorOptions();
+  const blocksQuery = useBlocks();
+  const vendorsQuery = useVendors();
 
-  const q = search.trim().toLowerCase();
-  const visible = !q
-    ? projects
-    : projects.filter(
-        (p) =>
-          p.title.toLowerCase().includes(q) ||
-          p.code.toLowerCase().includes(q) ||
-          p.vendor.toLowerCase().includes(q) ||
-          blockName(p.blockId).toLowerCase().includes(q) ||
-          p.status.toLowerCase().includes(q),
-      );
+  const adminBlocks = useMemo(
+    () => (blocksQuery.data ?? []).filter((b) => b.status !== "inactive"),
+    [blocksQuery.data],
+  );
+  const blocks = adminBlocks.map((b) => ({ id: b.id, name: `${b.code} · ${b.name}` }));
+
+  const vendors = useMemo(() => {
+    const fromApi = (vendorsQuery.data ?? [])
+      .filter((v) => v.status === "active" || v.status === "pending")
+      .map((v) => v.name);
+    return fromApi.length ? fromApi : FALLBACK_VENDORS;
+  }, [vendorsQuery.data]);
+
+  const resolveBlock = (blockId: string) => {
+    const admin = adminBlocks.find((b) => b.id === blockId);
+    if (admin) return `${admin.code} · ${admin.name}`;
+    return blockId;
+  };
+
+  const [search, setSearch] = useState("");
+  const debounced = useDebouncedValue(search, 300);
+  const [page, setPage] = useState(1);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [manage, setManage] = useState<ProjectDto | null>(null);
+  const [form, setForm] = useState({
+    title: "",
+    blockId: "",
+    vendor: "",
+    budget: "120000",
+    notes: "",
+  });
+
+  useEffect(() => {
+    if (!form.blockId && blocks[0]) {
+      setForm((f) => ({
+        ...f,
+        blockId: blocks[0].id,
+        vendor: f.vendor || vendors[0] || "",
+      }));
+    }
+  }, [blocks, vendors, form.blockId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debounced]);
+
+  useEffect(() => {
+    if (manage) {
+      const fresh = projects.find((p) => p.id === manage.id) ?? null;
+      setManage(fresh);
+    }
+  }, [projects, manage?.id]);
+
+  const visible = useMemo(() => {
+    const q = debounced.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter(
+      (p) =>
+        p.title.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q) ||
+        p.vendor.toLowerCase().includes(q) ||
+        resolveBlock(p.blockId).toLowerCase().includes(q) ||
+        p.status.toLowerCase().includes(q),
+    );
+  }, [projects, debounced, adminBlocks]);
 
   const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const stats = {
-    total: projects.length,
-    open: projects.filter((p) => p.status !== "complete").length,
-    waiting: projects.filter((p) => p.status === "submitted").length,
-  };
 
-  const managed = manageId ? projects.find((p) => p.id === manageId) ?? null : null;
-  const linkedAfe = managed ? afeForSource("project", managed.id) : undefined;
+  const stats = useMemo(
+    () => ({
+      total: projects.length,
+      open: projects.filter((p) => p.status !== "complete").length,
+      waiting: projects.filter((p) => p.status === "submitted").length,
+    }),
+    [projects],
+  );
+
+  const managed = manage ? projects.find((p) => p.id === manage.id) ?? manage : null;
+  const linkedAfeId = managed?.cropfortAfeId ?? null;
   const canEditMilestones =
     managed && (managed.status === "approved" || managed.status === "in_progress");
 
-  const create = () => {
+  const raiseAfeForProject = async (p: ProjectDto) => {
+    try {
+      const row = await createAfe.mutateAsync({
+        title: p.title,
+        amountEtb: p.budgetEtb,
+        band: p.band,
+        sourceType: "project",
+        sourceId: p.id,
+      });
+      await linkProjectAfe.mutateAsync({ id: p.id, cropfortAfeId: row.id });
+      toast.success(`AFE drafted`, {
+        description: `${row.title} · Band ${row.band}`,
+        action: {
+          label: "Open AFE",
+          onClick: () => {
+            window.location.href = CROPFORT_ROUTES.afe;
+          },
+        },
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not raise AFE");
+    }
+  };
+
+  const create = async () => {
     if (!form.title.trim()) {
       toast.error("Title is required");
       return;
@@ -127,14 +208,29 @@ export default function ProjectsView() {
       toast.error("Enter a valid budget");
       return;
     }
-    const row = createProject({
-      title: form.title.trim(),
-      blockId: form.blockId,
-      vendor: form.vendor || vendors[0] || "Vendor",
-      budgetEtb: budget,
-      notes: form.notes.trim(),
-    });
-    toast.success(`${row.code} created as draft`);
+    const admin = adminBlocks.find((b) => b.id === form.blockId);
+    try {
+      const row = await createProject.mutateAsync({
+        title: form.title.trim(),
+        blockId: form.blockId,
+        blockCode: admin?.code,
+        vendor: form.vendor || vendors[0] || "Vendor",
+        budgetEtb: budget,
+        notes: form.notes.trim(),
+      });
+      setCreateOpen(false);
+      setForm({
+        title: "",
+        blockId: blocks[0]?.id ?? "",
+        vendor: vendors[0] ?? "",
+        budget: "120000",
+        notes: "",
+      });
+      setManage(row);
+      toast.success(`${row.code} created as draft`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create project");
+    }
   };
 
   return (
@@ -160,11 +256,7 @@ export default function ProjectsView() {
             <Button size="sm" variant="outline" asChild>
               <Link href={CROPFORT_ROUTES.approvals}>Approvals</Link>
             </Button>
-            <Button
-              size="sm"
-              onClick={() => setProjectsCreateOpen(true)}
-              disabled={!blocks.length}
-            >
+            <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!blocks.length}>
               <Plus className="h-3.5 w-3.5" />
               New project
             </Button>
@@ -186,7 +278,7 @@ export default function ProjectsView() {
         <div className="border-b px-4 py-3">
           <TableToolbar
             search={search}
-            onSearchChange={setProjectsSearch}
+            onSearchChange={setSearch}
             searchPlaceholder="Search title, code, block, vendor, status"
           />
         </div>
@@ -210,16 +302,25 @@ export default function ProjectsView() {
           </TableHeader>
           <TableBody>
             {paged.length === 0 ? (
-              <TableMessageRow colSpan={9} icon={FolderKanban} title="No projects yet" />
+              <TableMessageRow
+                colSpan={9}
+                icon={FolderKanban}
+                title={
+                  projectsQuery.isLoading
+                    ? "Loading projects…"
+                    : projectsQuery.isError
+                      ? "Could not load projects"
+                      : "No projects yet"
+                }
+              />
             ) : (
               paged.map((p) => {
-                const afe = afeForSource("project", p.id);
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-mono text-xs">{p.code}</TableCell>
                     <TableCell className="font-medium">{p.title}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {blockName(p.blockId)}
+                      {resolveBlock(p.blockId) || p.blockCode || p.blockId}
                     </TableCell>
                     <TableCell>{p.vendor}</TableCell>
                     <TableCell className="cf-numeric text-right">{fmtEtb(p.budgetEtb)}</TableCell>
@@ -228,7 +329,7 @@ export default function ProjectsView() {
                       <StatusBadge status={p.status} />
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {afe ? afe.code : "—"}
+                      {p.cropfortAfeId ? "Linked" : "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -242,14 +343,20 @@ export default function ProjectsView() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setProjectsManageId(p.id)}>
+                          <DropdownMenuItem onClick={() => setManage(p)}>
                             Manage
                           </DropdownMenuItem>
                           {(p.status === "draft" || p.status === "returned") && (
                             <DropdownMenuItem
                               onClick={() => {
-                                submitProject(p.id);
-                                toast.success("Submitted to Approvals");
+                                void submitProject
+                                  .mutateAsync(p.id)
+                                  .then(() => toast.success("Submitted to Approvals"))
+                                  .catch((e) =>
+                                    toast.error(
+                                      e instanceof Error ? e.message : "Submit failed",
+                                    ),
+                                  );
                               }}
                             >
                               Submit for approval
@@ -264,22 +371,21 @@ export default function ProjectsView() {
                             <>
                               <DropdownMenuItem
                                 onClick={() => {
-                                  const row = raiseAfe({
-                                    title: p.title,
-                                    sourceType: "project",
-                                    sourceId: p.id,
-                                    blockId: p.blockId,
-                                    amountEtb: p.budgetEtb,
-                                  });
-                                  toast.success(`${row.code} ready — open AFE`);
+                                  void raiseAfeForProject(p);
                                 }}
                               >
                                 Raise AFE
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => {
-                                  startProject(p.id);
-                                  toast.success("Project in progress");
+                                  void startProject
+                                    .mutateAsync(p.id)
+                                    .then(() => toast.success("Project in progress"))
+                                    .catch((e) =>
+                                      toast.error(
+                                        e instanceof Error ? e.message : "Start failed",
+                                      ),
+                                    );
                                 }}
                               >
                                 Start work
@@ -308,11 +414,11 @@ export default function ProjectsView() {
           pageCount={pageCount}
           total={visible.length}
           pageSize={PAGE_SIZE}
-          onPageChange={setProjectsPage}
+          onPageChange={setPage}
         />
       </SectionCard>
 
-      <Dialog open={createOpen} onOpenChange={setProjectsCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
@@ -324,7 +430,7 @@ export default function ProjectsView() {
               <Input
                 {...props}
                 value={form.title}
-                onChange={(e) => patchProjectsForm({ title: e.target.value })}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               />
             )}
           />
@@ -334,7 +440,7 @@ export default function ProjectsView() {
             render={() => (
               <Select
                 value={form.blockId}
-                onValueChange={(blockId) => patchProjectsForm({ blockId })}
+                onValueChange={(blockId) => setForm((f) => ({ ...f, blockId }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select block" />
@@ -342,7 +448,7 @@ export default function ProjectsView() {
                 <SelectContent>
                   {blocks.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
-                      {b.code} · {b.name}
+                      {b.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -354,7 +460,7 @@ export default function ProjectsView() {
             render={() => (
               <Select
                 value={form.vendor || vendors[0]}
-                onValueChange={(vendor) => patchProjectsForm({ vendor })}
+                onValueChange={(vendor) => setForm((f) => ({ ...f, vendor }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -378,7 +484,7 @@ export default function ProjectsView() {
                 type="number"
                 min={1}
                 value={form.budget}
-                onChange={(e) => patchProjectsForm({ budget: e.target.value })}
+                onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))}
               />
             )}
           />
@@ -390,25 +496,25 @@ export default function ProjectsView() {
                 {...props}
                 rows={2}
                 value={form.notes}
-                onChange={(e) => patchProjectsForm({ notes: e.target.value })}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               />
             )}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setProjectsCreateOpen(false)}>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={create} disabled={!form.title.trim() || !form.blockId}>
+            <Button
+              onClick={() => void create()}
+              disabled={!form.title.trim() || !form.blockId || createProject.isPending}
+            >
               Create draft
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={Boolean(managed)}
-        onOpenChange={(o) => !o && setProjectsManageId(null)}
-      >
+      <Dialog open={Boolean(managed)} onOpenChange={(o) => !o && setManage(null)}>
         <DialogContent className="sm:max-w-lg">
           {managed ? (
             <>
@@ -421,15 +527,20 @@ export default function ProjectsView() {
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={managed.status} />
                   <span className="text-muted-foreground">
-                    {blockName(managed.blockId)} · {managed.vendor} ·{" "}
+                    {resolveBlock(managed.blockId)} · {managed.vendor} ·{" "}
                     {fmtEtb(managed.budgetEtb)}
                   </span>
                 </div>
-                {linkedAfe ? (
+                {managed.returnedComment ? (
+                  <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                    Return note: {managed.returnedComment}
+                  </p>
+                ) : null}
+                {linkedAfeId ? (
                   <p className="text-xs text-muted-foreground">
                     Linked AFE{" "}
                     <Link className="underline" href={CROPFORT_ROUTES.afe}>
-                      {linkedAfe.code}
+                      {linkedAfeId.slice(0, 12)}…
                     </Link>
                   </p>
                 ) : null}
@@ -441,8 +552,16 @@ export default function ProjectsView() {
                     >
                       <Checkbox
                         checked={m.done}
-                        disabled={!canEditMilestones}
-                        onCheckedChange={() => toggleMilestone(managed.id, m.id)}
+                        disabled={!canEditMilestones || toggleMilestone.isPending}
+                        onCheckedChange={() => {
+                          void toggleMilestone
+                            .mutateAsync({ id: managed.id, milestoneId: m.id })
+                            .catch((e) =>
+                              toast.error(
+                                e instanceof Error ? e.message : "Could not update milestone",
+                              ),
+                            );
+                        }}
                       />
                       <span
                         className={cn("text-sm", m.done && "text-muted-foreground line-through")}
@@ -456,9 +575,14 @@ export default function ProjectsView() {
                   {(managed.status === "draft" || managed.status === "returned") && (
                     <Button
                       size="sm"
+                      disabled={submitProject.isPending}
                       onClick={() => {
-                        submitProject(managed.id);
-                        toast.success("Submitted to Approvals");
+                        void submitProject
+                          .mutateAsync(managed.id)
+                          .then(() => toast.success("Submitted to Approvals"))
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : "Submit failed"),
+                          );
                       }}
                     >
                       Submit for approval
@@ -473,15 +597,9 @@ export default function ProjectsView() {
                     <>
                       <Button
                         size="sm"
+                        disabled={createAfe.isPending || linkProjectAfe.isPending}
                         onClick={() => {
-                          const afe = raiseAfe({
-                            title: managed.title,
-                            sourceType: "project",
-                            sourceId: managed.id,
-                            blockId: managed.blockId,
-                            amountEtb: managed.budgetEtb,
-                          });
-                          toast.success(`${afe.code} drafted`);
+                          void raiseAfeForProject(managed);
                         }}
                       >
                         Raise AFE
@@ -489,28 +607,27 @@ export default function ProjectsView() {
                       <Button
                         size="sm"
                         variant="secondary"
+                        disabled={startProject.isPending}
                         onClick={() => {
-                          startProject(managed.id);
-                          toast.success("Project in progress");
+                          void startProject
+                            .mutateAsync(managed.id)
+                            .then(() => toast.success("Project in progress"))
+                            .catch((e) =>
+                              toast.error(e instanceof Error ? e.message : "Start failed"),
+                            );
                         }}
                       >
                         Start work
                       </Button>
                     </>
                   )}
-                  {managed.status === "in_progress" && !linkedAfe && (
+                  {managed.status === "in_progress" && !linkedAfeId && (
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={createAfe.isPending || linkProjectAfe.isPending}
                       onClick={() => {
-                        const afe = raiseAfe({
-                          title: managed.title,
-                          sourceType: "project",
-                          sourceId: managed.id,
-                          blockId: managed.blockId,
-                          amountEtb: managed.budgetEtb,
-                        });
-                        toast.success(`${afe.code} drafted`);
+                        void raiseAfeForProject(managed);
                       }}
                     >
                       Raise AFE
@@ -519,7 +636,7 @@ export default function ProjectsView() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setProjectsManageId(null)}>
+                <Button variant="outline" onClick={() => setManage(null)}>
                   Close
                 </Button>
               </DialogFooter>

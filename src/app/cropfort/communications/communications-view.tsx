@@ -46,11 +46,17 @@ import { CROPFORT_ROUTES } from "@/config/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { cn } from "@/lib/utils";
 import {
+  useCloseMessageThread,
+  useCreateMessageThread,
+  useMessageThreads,
+  usePostThreadMessage,
+  useReopenMessageThread,
+} from "@/lib/query/hooks/use-message-threads";
+import {
   allowedCounterparties,
   canAccessThread,
   COMM_PARTY_LABEL,
   partyFromRole,
-  useCommunicationsStore,
   type CommParty,
   type CommThread,
 } from "@/store/communicationsStore";
@@ -69,12 +75,12 @@ const RELATED_TYPES: CommThread["relatedType"][] = [
 export default function CommunicationsView() {
   const { user, activeProgram } = useCropfortAuth();
   const party = partyFromRole(user.role);
-  const threads = useCommunicationsStore((s) => s.threads);
-  const messages = useCommunicationsStore((s) => s.messages);
-  const createThread = useCommunicationsStore((s) => s.createThread);
-  const postMessage = useCommunicationsStore((s) => s.postMessage);
-  const closeThread = useCommunicationsStore((s) => s.closeThread);
-  const reopenThread = useCommunicationsStore((s) => s.reopenThread);
+  const threadsQuery = useMessageThreads(Boolean(activeProgram?.id));
+  const threads = threadsQuery.data || [];
+  const createThreadMut = useCreateMessageThread();
+  const postMessageMut = usePostThreadMessage();
+  const closeThreadMut = useCloseMessageThread();
+  const reopenThreadMut = useReopenMessageThread();
 
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 300);
@@ -127,15 +133,11 @@ export default function CommunicationsView() {
     if (selected && selectedId !== selected.id) setSelectedId(selected.id);
   }, [selected, selectedId]);
 
-  const threadMessages = useMemo(
-    () =>
-      selected
-        ? messages
-            .filter((m) => m.threadId === selected.id)
-            .sort((a, b) => a.at.localeCompare(b.at))
-        : [],
-    [messages, selected],
-  );
+  const threadMessages = useMemo(() => {
+    const msgs = (selected as { messages?: { id: string; threadId: string; at: string; authorId: string; authorName: string; authorParty: CommParty; body: string }[] } | null)
+      ?.messages;
+    return (msgs || []).slice().sort((a, b) => a.at.localeCompare(b.at));
+  }, [selected]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -145,18 +147,12 @@ export default function CommunicationsView() {
 
   const sendReply = () => {
     if (!selected) return;
-    const msg = postMessage({
-      threadId: selected.id,
-      authorId: user.id,
-      authorName: user.name,
-      authorParty: party,
-      body: reply,
-    });
-    if (!msg) {
-      toast.error(selected.closed ? "Thread is closed" : "Could not send");
-      return;
-    }
-    setReply("");
+    void postMessageMut
+      .mutateAsync({ threadId: selected.id, body: reply })
+      .then(() => setReply(""))
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : "Could not send"),
+      );
   };
 
   const create = () => {
@@ -164,30 +160,29 @@ export default function CommunicationsView() {
       toast.error("Subject, channel, and message are required");
       return;
     }
-    try {
-      const row = createThread({
+    void createThreadMut
+      .mutateAsync({
         subject: form.subject,
         counterparty: form.counterparty,
         relatedType: form.relatedType,
         relatedCode: form.relatedCode || null,
-        authorId: user.id,
-        authorName: user.name,
-        authorParty: party,
         body: form.body,
-      });
-      setComposeOpen(false);
-      setForm({
-        subject: "",
-        counterparty: counterparts[0] ?? "vendor",
-        relatedType: "general",
-        relatedCode: "",
-        body: "",
-      });
-      setSelectedId(row.id);
-      toast.success("Thread opened");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create thread");
-    }
+      })
+      .then((row) => {
+        setComposeOpen(false);
+        setForm({
+          subject: "",
+          counterparty: counterparts[0] ?? "vendor",
+          relatedType: "general",
+          relatedCode: "",
+          body: "",
+        });
+        setSelectedId(row.id);
+        toast.success("Thread opened");
+      })
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : "Could not create thread"),
+      );
   };
 
   return (
@@ -345,8 +340,12 @@ export default function CommunicationsView() {
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          closeThread(selected.id, party);
-                          toast.message("Thread closed");
+                          void closeThreadMut
+                            .mutateAsync(selected.id)
+                            .then(() => toast.message("Thread closed"))
+                            .catch((e) =>
+                              toast.error(e instanceof Error ? e.message : "Close failed"),
+                            );
                         }}
                       >
                         Close thread
@@ -361,8 +360,12 @@ export default function CommunicationsView() {
                         size="sm"
                         variant="secondary"
                         onClick={() => {
-                          reopenThread(selected.id, party);
-                          toast.success("Thread reopened");
+                          void reopenThreadMut
+                            .mutateAsync(selected.id)
+                            .then(() => toast.success("Thread reopened"))
+                            .catch((e) =>
+                              toast.error(e instanceof Error ? e.message : "Reopen failed"),
+                            );
                         }}
                       >
                         Reopen

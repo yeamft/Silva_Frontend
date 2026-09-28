@@ -25,7 +25,6 @@ import { Textarea } from "@/components/ui/textarea";
 
 const HERO_IMAGES = [
   {
-    // Smaller assets load faster on Unsplash; auto=format serves WebP when supported
     src: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=65",
     alt: "Tractor working cultivated farmland",
   },
@@ -50,7 +49,6 @@ function HeroBackground() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [ready, setReady] = useState<boolean[]>(() => HERO_IMAGES.map(() => false));
 
-  // Preload first image immediately, then the rest so the hero isn't blank for long
   useEffect(() => {
     let cancelled = false;
     const markReady = (index: number) => {
@@ -78,7 +76,6 @@ function HeroBackground() {
         img.src = HERO_IMAGES[index].src;
       });
 
-    // Preload hint for the browser (first slide only)
     const preload = document.createElement("link");
     preload.rel = "preload";
     preload.as = "image";
@@ -87,7 +84,6 @@ function HeroBackground() {
 
     void (async () => {
       await load(0);
-      // Remaining slides after first paint — avoids competing with LCP
       for (let i = 1; i < HERO_IMAGES.length; i += 1) {
         if (cancelled) return;
         await load(i);
@@ -100,7 +96,6 @@ function HeroBackground() {
     };
   }, []);
 
-  // Rotate only after the first image is ready; skip slides that haven't loaded yet
   useEffect(() => {
     if (!ready[0]) return;
 
@@ -119,7 +114,7 @@ function HeroBackground() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-      <div className="absolute inset-0 bg-[#1a2a22]" />
+      <div className="absolute inset-0 bg-[#0B3D08]" />
 
       {HERO_IMAGES.map((image, index) => {
         const visible = ready[index] && index === activeIndex;
@@ -340,7 +335,6 @@ function ContactForm() {
         )}
       />
 
-      {/* Honeypot — hidden from users */}
       <div className="absolute -left-[9999px] top-auto h-0 w-0 overflow-hidden" aria-hidden>
         <label htmlFor="contact-website">Website</label>
         <input
@@ -358,9 +352,7 @@ function ContactForm() {
         <p
           role="status"
           className={
-            status === "success"
-              ? "text-sm text-primary"
-              : "text-sm text-destructive"
+            status === "success" ? "text-sm text-primary" : "text-sm text-destructive"
           }
         >
           {statusMessage}
@@ -387,16 +379,14 @@ function ContactForm() {
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
-      {/* HERO */}
-      <section className="relative isolate min-h-[92vh] overflow-hidden bg-[#1a2a22]">
+      <section className="relative isolate min-h-[92vh] overflow-hidden bg-[#0B3D08]">
         <HeroBackground />
 
         {/* Layered overlay — keep lighter so photos remain visible */}
-        <div className="absolute inset-0 z-[1] bg-black/35" />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-r from-black/70 via-black/35 to-transparent" />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-black/65 via-transparent to-black/25" />
+        <div className="absolute inset-0 z-[1] bg-primary/25" />
+        <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#062806]/80 via-[#0B3D08]/40 to-transparent" />
+        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#062806]/70 via-transparent to-[#0B3D08]/30" />
 
-        {/* NAVIGATION */}
         <header className="relative z-30 border-b border-white/10">
           <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10">
             <Link
@@ -409,9 +399,7 @@ export default function LandingPage() {
               </span>
 
               <div className="leading-none">
-                <p className="font-display text-lg font-semibold tracking-tight">
-                  Cropfort
-                </p>
+                <p className="font-display text-lg font-semibold tracking-tight">Cropfort</p>
                 <p className="mt-1 text-[10px] uppercase tracking-[0.19em] text-white/50">
                   Farm Operations
                 </p>
@@ -427,7 +415,7 @@ export default function LandingPage() {
               </a>
               <Button
                 asChild
-                className="h-10 rounded-full bg-white px-5 font-medium text-[#17241C] hover:bg-white/90"
+                className="h-10 rounded-full bg-white px-5 font-medium text-primary hover:bg-white/90"
               >
                 <Link href="/login">
                   Sign in
@@ -438,7 +426,6 @@ export default function LandingPage() {
           </div>
         </header>
 
-        {/* HERO CONTENT */}
         <div className="relative z-20 mx-auto flex min-h-[calc(92vh-72px)] max-w-7xl items-center px-5 py-20 sm:px-8 lg:px-10">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
@@ -452,17 +439,16 @@ export default function LandingPage() {
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-7 text-white/70 sm:text-lg sm:leading-8">
-              Cropfort gives estate owners, SPX managers, and delivery
-              partners one controlled operating environment for planning,
-              work execution, verification, commercial governance, and
-              settlement.
+              Cropfort gives estate owners, SPX managers, and delivery partners one controlled
+              operating environment for planning, work execution, verification, commercial
+              governance, and settlement.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Button
                 asChild
                 size="lg"
-                className="h-12 rounded-full bg-primary px-7 font-medium text-primary-foreground hover:bg-[#108A00]"
+                className="h-12 rounded-full bg-primary px-7 font-medium text-primary-foreground hover:bg-[hsl(var(--primary-hover))]"
               >
                 <Link href="/login">
                   Open Cropfort
@@ -481,7 +467,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* INTRO */}
       <section id="platform" className="border-b border-border bg-background py-20 sm:py-28">
         <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.8fr_1.2fr] lg:px-10">
           <motion.div
@@ -503,16 +488,14 @@ export default function LandingPage() {
             className="max-w-2xl lg:pt-8"
           >
             <p className="text-base leading-8 text-muted-foreground sm:text-lg">
-              Cropfort connects operational planning with what actually happens
-              on the farm. Approved activities become controlled work orders,
-              field delivery becomes measurable execution, and verified work
-              creates the basis for accountable financial settlement.
+              Cropfort connects operational planning with what actually happens on the farm.
+              Approved activities become controlled work orders, field delivery becomes measurable
+              execution, and verified work creates the basis for accountable financial settlement.
             </p>
           </motion.div>
         </div>
       </section>
 
-      {/* ROLES */}
       <section className="bg-muted/25 py-20 sm:py-28">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <div className="max-w-2xl">
@@ -521,8 +504,8 @@ export default function LandingPage() {
             </h2>
 
             <p className="mt-4 leading-7 text-muted-foreground">
-              Each organization works within its responsibilities while sharing
-              the same controlled operating record.
+              Each organization works within its responsibilities while sharing the same controlled
+              operating record.
             </p>
           </div>
 
@@ -575,7 +558,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* WORKFLOW */}
       <section className="border-y border-border bg-background py-20 sm:py-28">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <div className="grid gap-10 lg:grid-cols-[0.75fr_1.25fr]">
@@ -585,8 +567,8 @@ export default function LandingPage() {
               </h2>
 
               <p className="mt-5 max-w-md leading-7 text-muted-foreground">
-                A controlled workflow keeps operational and financial
-                accountability connected throughout the season.
+                A controlled workflow keeps operational and financial accountability connected
+                throughout the season.
               </p>
             </div>
 
@@ -607,18 +589,14 @@ export default function LandingPage() {
                     className="bg-card p-6 sm:p-7"
                   >
                     <div className="flex items-start justify-between">
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {step.number}
-                      </span>
+                      <span className="font-mono text-xs text-muted-foreground">{step.number}</span>
 
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
                         <Icon className="h-4 w-4" />
                       </div>
                     </div>
 
-                    <h3 className="mt-8 font-display text-xl font-semibold">
-                      {step.title}
-                    </h3>
+                    <h3 className="mt-8 font-display text-xl font-semibold">{step.title}</h3>
 
                     <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
                       {step.description}
@@ -631,18 +609,16 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* GOVERNANCE */}
-      <section className="bg-[#17231B] py-20 text-white sm:py-28">
+      <section className="bg-primary py-20 text-primary-foreground sm:py-28">
         <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-10">
           <div>
             <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
               Field execution you can verify before you pay.
             </h2>
 
-            <p className="mt-5 max-w-xl leading-7 text-white/60">
-              Cropfort separates work assignment, execution, verification, and
-              approval so operational evidence is reviewed before it becomes a
-              commercial obligation.
+            <p className="mt-5 max-w-xl leading-7 text-primary-foreground/75">
+              Cropfort separates work assignment, execution, verification, and approval so
+              operational evidence is reviewed before it becomes a commercial obligation.
             </p>
           </div>
 
@@ -657,17 +633,16 @@ export default function LandingPage() {
             ].map((item) => (
               <div
                 key={item}
-                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-4"
+                className="flex items-center gap-3 rounded-xl border border-primary-foreground/15 bg-primary-foreground/[0.08] p-4"
               >
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                <span className="text-sm text-white/75">{item}</span>
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary-foreground" />
+                <span className="text-sm text-primary-foreground/85">{item}</span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CONTACT */}
       <section id="contact" className="border-t border-border bg-background py-20 sm:py-28">
         <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start lg:px-10">
           <motion.div
@@ -680,12 +655,15 @@ export default function LandingPage() {
               Talk to us about Cropfort.
             </h2>
             <p className="mt-5 max-w-md leading-7 text-muted-foreground">
-              For partnerships, demos, or onboarding questions, send a message
-              and the SPX team will follow up.
+              For partnerships, demos, or onboarding questions, send a message and the SPX team will
+              follow up.
             </p>
             <p className="mt-8 text-sm text-muted-foreground">
               Already have access?{" "}
-              <Link href="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
+              <Link
+                href="/login"
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
                 Sign in
               </Link>
             </p>
@@ -703,7 +681,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* FOOTER */}
       <footer className="border-t border-border bg-background">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-7 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
           <div className="flex items-center gap-2">

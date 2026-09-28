@@ -53,13 +53,20 @@ import {
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import type { InterventionDto } from "@/lib/api/interventions";
 import { useBlocks, useVendors } from "@/lib/query";
-import { cn } from "@/lib/utils";
+import { useCreateAfe } from "@/lib/query/hooks/use-afes";
 import {
-  fmtEtb,
-  useCropfortOpsStore,
-  type Intervention,
-} from "@/store/cropfortOpsStore";
+  useCompleteIntervention,
+  useCreateIntervention,
+  useInterventions,
+  useLinkInterventionAfe,
+  useStartIntervention,
+  useSubmitIntervention,
+  useToggleInterventionStep,
+} from "@/lib/query/hooks/use-interventions";
+import { cn } from "@/lib/utils";
+import { fmtEtb } from "@/store/cropfortOpsStore";
 
 const PAGE_SIZE = 12;
 const FALLBACK_VENDORS = ["RFSP", "GreenLine", "Estate crew"];
@@ -67,15 +74,16 @@ const FALLBACK_VENDORS = ["RFSP", "GreenLine", "Estate crew"];
 export default function InterventionsView() {
   const { activeProgram } = useCropfortAuth();
   const area = getCropfortArea("interventions");
-  const items = useCropfortOpsStore((s) => s.interventions);
-  const nodes = useCropfortOpsStore((s) => s.nodes);
-  const createIntervention = useCropfortOpsStore((s) => s.createIntervention);
-  const startIntervention = useCropfortOpsStore((s) => s.startIntervention);
-  const submitIntervention = useCropfortOpsStore((s) => s.submitIntervention);
-  const completeIntervention = useCropfortOpsStore((s) => s.completeIntervention);
-  const toggleStep = useCropfortOpsStore((s) => s.toggleStep);
-  const raiseAfe = useCropfortOpsStore((s) => s.raiseAfe);
-  const afeForSource = useCropfortOpsStore((s) => s.afeForSource);
+
+  const interventionsQuery = useInterventions();
+  const items = interventionsQuery.data ?? [];
+  const createIntervention = useCreateIntervention();
+  const startIntervention = useStartIntervention();
+  const submitIntervention = useSubmitIntervention();
+  const completeIntervention = useCompleteIntervention();
+  const toggleStep = useToggleInterventionStep();
+  const linkInterventionAfe = useLinkInterventionAfe();
+  const createAfe = useCreateAfe();
 
   const blocksQuery = useBlocks();
   const vendorsQuery = useVendors();
@@ -84,13 +92,7 @@ export default function InterventionsView() {
     () => (blocksQuery.data ?? []).filter((b) => b.status !== "inactive"),
     [blocksQuery.data],
   );
-  const storeBlocks = useMemo(
-    () => nodes.filter((n) => n.kind === "block" && n.status === "active"),
-    [nodes],
-  );
-  const blocks = adminBlocks.length
-    ? adminBlocks.map((b) => ({ id: b.id, name: `${b.code} · ${b.name}` }))
-    : storeBlocks.map((b) => ({ id: b.id, name: b.name }));
+  const blocks = adminBlocks.map((b) => ({ id: b.id, name: `${b.code} · ${b.name}` }));
 
   const vendors = useMemo(() => {
     const fromApi = (vendorsQuery.data ?? [])
@@ -102,14 +104,14 @@ export default function InterventionsView() {
   const resolveBlock = (blockId: string) => {
     const admin = adminBlocks.find((b) => b.id === blockId);
     if (admin) return `${admin.code} · ${admin.name}`;
-    return storeBlocks.find((b) => b.id === blockId)?.name ?? blockId;
+    return blockId;
   };
 
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const [manage, setManage] = useState<Intervention | null>(null);
+  const [manage, setManage] = useState<InterventionDto | null>(null);
   const [form, setForm] = useState({ title: "", blockId: "", vendor: "", cost: "15000" });
 
   useEffect(() => {
@@ -144,7 +146,7 @@ export default function InterventionsView() {
         resolveBlock(i.blockId).toLowerCase().includes(q) ||
         i.status.toLowerCase().includes(q),
     );
-  }, [items, debounced, adminBlocks, storeBlocks]);
+  }, [items, debounced, adminBlocks]);
 
   const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
@@ -159,7 +161,7 @@ export default function InterventionsView() {
   );
 
   const managed = manage ? items.find((i) => i.id === manage.id) ?? manage : null;
-  const linkedAfe = managed ? afeForSource("intervention", managed.id) : undefined;
+  const linkedAfeId = managed?.cropfortAfeId ?? null;
   const canEditSteps =
     managed &&
     (managed.status === "draft" ||
@@ -168,7 +170,31 @@ export default function InterventionsView() {
       managed.status === "approved");
   const stepsDone = managed ? managed.steps.every((s) => s.done) : false;
 
-  const create = () => {
+  const raiseAfeForIntervention = async (row: InterventionDto) => {
+    try {
+      const afe = await createAfe.mutateAsync({
+        title: row.title,
+        amountEtb: row.costEtb,
+        band: row.band,
+        sourceType: "intervention",
+        sourceId: row.id,
+      });
+      await linkInterventionAfe.mutateAsync({ id: row.id, cropfortAfeId: afe.id });
+      toast.success(`AFE drafted`, {
+        description: `${afe.title} · Band ${afe.band}`,
+        action: {
+          label: "Open AFE",
+          onClick: () => {
+            window.location.href = CROPFORT_ROUTES.afe;
+          },
+        },
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not raise AFE");
+    }
+  };
+
+  const create = async () => {
     if (!form.title.trim()) {
       toast.error("Title is required");
       return;
@@ -182,21 +208,27 @@ export default function InterventionsView() {
       toast.error("Enter a valid cost");
       return;
     }
-    const row = createIntervention({
-      title: form.title.trim(),
-      blockId: form.blockId,
-      vendor: form.vendor || vendors[0] || "Vendor",
-      costEtb: cost,
-    });
-    setCreateOpen(false);
-    setForm({
-      title: "",
-      blockId: blocks[0]?.id ?? "",
-      vendor: vendors[0] ?? "",
-      cost: "15000",
-    });
-    setManage(row);
-    toast.success(`${row.code} drafted`);
+    const admin = adminBlocks.find((b) => b.id === form.blockId);
+    try {
+      const row = await createIntervention.mutateAsync({
+        title: form.title.trim(),
+        blockId: form.blockId,
+        blockCode: admin?.code,
+        vendor: form.vendor || vendors[0] || "Vendor",
+        costEtb: cost,
+      });
+      setCreateOpen(false);
+      setForm({
+        title: "",
+        blockId: blocks[0]?.id ?? "",
+        vendor: vendors[0] ?? "",
+        cost: "15000",
+      });
+      setManage(row);
+      toast.success(`${row.code} drafted`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create intervention");
+    }
   };
 
   return (
@@ -268,17 +300,26 @@ export default function InterventionsView() {
           </TableHeader>
           <TableBody>
             {paged.length === 0 ? (
-              <TableMessageRow colSpan={9} icon={Zap} title="No interventions yet" />
+              <TableMessageRow
+                colSpan={9}
+                icon={Zap}
+                title={
+                  interventionsQuery.isLoading
+                    ? "Loading interventions…"
+                    : interventionsQuery.isError
+                      ? "Could not load interventions"
+                      : "No interventions yet"
+                }
+              />
             ) : (
               paged.map((row) => {
-                const afe = afeForSource("intervention", row.id);
                 const done = row.steps.filter((s) => s.done).length;
                 return (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono text-xs">{row.code}</TableCell>
                     <TableCell className="font-medium">{row.title}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {resolveBlock(row.blockId)}
+                      {resolveBlock(row.blockId) || row.blockCode || row.blockId}
                     </TableCell>
                     <TableCell>{row.vendor}</TableCell>
                     <TableCell className="cf-numeric text-right">
@@ -291,7 +332,7 @@ export default function InterventionsView() {
                       <StatusBadge status={row.status} />
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {afe ? afe.code : "—"}
+                      {row.cropfortAfeId ? "Linked" : "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -311,10 +352,18 @@ export default function InterventionsView() {
                           {(row.status === "draft" || row.status === "returned") && (
                             <DropdownMenuItem
                               onClick={() => {
-                                startIntervention(row.id);
-                                toast.success(
-                                  row.status === "returned" ? "Resumed" : "Started",
-                                );
+                                void startIntervention
+                                  .mutateAsync(row.id)
+                                  .then(() =>
+                                    toast.success(
+                                      row.status === "returned" ? "Resumed" : "Started",
+                                    ),
+                                  )
+                                  .catch((e) =>
+                                    toast.error(
+                                      e instanceof Error ? e.message : "Start failed",
+                                    ),
+                                  );
                               }}
                             >
                               {row.status === "returned" ? "Resume" : "Start"}
@@ -323,8 +372,14 @@ export default function InterventionsView() {
                           {row.status === "active" && (
                             <DropdownMenuItem
                               onClick={() => {
-                                submitIntervention(row.id);
-                                toast.success("Sent to Approvals");
+                                void submitIntervention
+                                  .mutateAsync(row.id)
+                                  .then(() => toast.success("Sent to Approvals"))
+                                  .catch((e) =>
+                                    toast.error(
+                                      e instanceof Error ? e.message : "Submit failed",
+                                    ),
+                                  );
                               }}
                             >
                               Submit for sign-off
@@ -333,8 +388,14 @@ export default function InterventionsView() {
                           {row.status === "returned" && (
                             <DropdownMenuItem
                               onClick={() => {
-                                submitIntervention(row.id);
-                                toast.success("Resubmitted to Approvals");
+                                void submitIntervention
+                                  .mutateAsync(row.id)
+                                  .then(() => toast.success("Resubmitted to Approvals"))
+                                  .catch((e) =>
+                                    toast.error(
+                                      e instanceof Error ? e.message : "Resubmit failed",
+                                    ),
+                                  );
                               }}
                             >
                               Resubmit
@@ -349,14 +410,7 @@ export default function InterventionsView() {
                             <>
                               <DropdownMenuItem
                                 onClick={() => {
-                                  const afeRow = raiseAfe({
-                                    title: row.title,
-                                    sourceType: "intervention",
-                                    sourceId: row.id,
-                                    blockId: row.blockId,
-                                    amountEtb: row.costEtb,
-                                  });
-                                  toast.success(`${afeRow.code} ready`);
+                                  void raiseAfeForIntervention(row);
                                 }}
                               >
                                 Raise AFE
@@ -364,8 +418,14 @@ export default function InterventionsView() {
                               <DropdownMenuItem
                                 disabled={!row.steps.every((s) => s.done)}
                                 onClick={() => {
-                                  completeIntervention(row.id);
-                                  toast.success("Intervention complete");
+                                  void completeIntervention
+                                    .mutateAsync(row.id)
+                                    .then(() => toast.success("Intervention complete"))
+                                    .catch((e) =>
+                                      toast.error(
+                                        e instanceof Error ? e.message : "Complete failed",
+                                      ),
+                                    );
                                 }}
                               >
                                 Mark complete
@@ -468,7 +528,10 @@ export default function InterventionsView() {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={create} disabled={!form.title.trim() || !form.blockId}>
+            <Button
+              onClick={() => void create()}
+              disabled={!form.title.trim() || !form.blockId || createIntervention.isPending}
+            >
               Create
             </Button>
           </DialogFooter>
@@ -492,11 +555,16 @@ export default function InterventionsView() {
                     {fmtEtb(managed.costEtb)}
                   </span>
                 </div>
-                {linkedAfe ? (
+                {managed.returnedComment ? (
+                  <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                    Return note: {managed.returnedComment}
+                  </p>
+                ) : null}
+                {linkedAfeId ? (
                   <p className="text-xs text-muted-foreground">
                     Linked AFE{" "}
                     <Link className="underline" href={CROPFORT_ROUTES.afe}>
-                      {linkedAfe.code}
+                      {linkedAfeId.slice(0, 12)}…
                     </Link>
                   </p>
                 ) : null}
@@ -508,8 +576,20 @@ export default function InterventionsView() {
                     >
                       <Checkbox
                         checked={step.done}
-                        disabled={!canEditSteps || managed.status === "submitted"}
-                        onCheckedChange={() => toggleStep(managed.id, step.id)}
+                        disabled={
+                          !canEditSteps ||
+                          managed.status === "submitted" ||
+                          toggleStep.isPending
+                        }
+                        onCheckedChange={() => {
+                          void toggleStep
+                            .mutateAsync({ id: managed.id, stepId: step.id })
+                            .catch((e) =>
+                              toast.error(
+                                e instanceof Error ? e.message : "Could not update step",
+                              ),
+                            );
+                        }}
                       />
                       <span
                         className={cn(
@@ -526,11 +606,18 @@ export default function InterventionsView() {
                   {(managed.status === "draft" || managed.status === "returned") && (
                     <Button
                       size="sm"
+                      disabled={startIntervention.isPending}
                       onClick={() => {
-                        startIntervention(managed.id);
-                        toast.success(
-                          managed.status === "returned" ? "Resumed" : "Started",
-                        );
+                        void startIntervention
+                          .mutateAsync(managed.id)
+                          .then(() =>
+                            toast.success(
+                              managed.status === "returned" ? "Resumed" : "Started",
+                            ),
+                          )
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : "Start failed"),
+                          );
                       }}
                     >
                       <Zap className="h-4 w-4" />
@@ -540,9 +627,14 @@ export default function InterventionsView() {
                   {managed.status === "active" && (
                     <Button
                       size="sm"
+                      disabled={submitIntervention.isPending}
                       onClick={() => {
-                        submitIntervention(managed.id);
-                        toast.success("Sent to Approvals");
+                        void submitIntervention
+                          .mutateAsync(managed.id)
+                          .then(() => toast.success("Sent to Approvals"))
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : "Submit failed"),
+                          );
                       }}
                     >
                       Submit for sign-off
@@ -552,9 +644,14 @@ export default function InterventionsView() {
                     <Button
                       size="sm"
                       variant="secondary"
+                      disabled={submitIntervention.isPending}
                       onClick={() => {
-                        submitIntervention(managed.id);
-                        toast.success("Resubmitted");
+                        void submitIntervention
+                          .mutateAsync(managed.id)
+                          .then(() => toast.success("Resubmitted"))
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : "Resubmit failed"),
+                          );
                       }}
                     >
                       Resubmit
@@ -569,15 +666,9 @@ export default function InterventionsView() {
                     <>
                       <Button
                         size="sm"
+                        disabled={createAfe.isPending || linkInterventionAfe.isPending}
                         onClick={() => {
-                          const afe = raiseAfe({
-                            title: managed.title,
-                            sourceType: "intervention",
-                            sourceId: managed.id,
-                            blockId: managed.blockId,
-                            amountEtb: managed.costEtb,
-                          });
-                          toast.success(`${afe.code} drafted`);
+                          void raiseAfeForIntervention(managed);
                         }}
                       >
                         Raise AFE
@@ -585,10 +676,16 @@ export default function InterventionsView() {
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={!stepsDone}
+                        disabled={!stepsDone || completeIntervention.isPending}
                         onClick={() => {
-                          completeIntervention(managed.id);
-                          toast.success("Intervention complete");
+                          void completeIntervention
+                            .mutateAsync(managed.id)
+                            .then(() => toast.success("Intervention complete"))
+                            .catch((e) =>
+                              toast.error(
+                                e instanceof Error ? e.message : "Complete failed",
+                              ),
+                            );
                         }}
                       >
                         Mark complete

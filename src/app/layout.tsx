@@ -1,5 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Fraunces } from "next/font/google";
+import {
+  DM_Sans,
+  Fraunces,
+  IBM_Plex_Sans,
+  Libre_Franklin,
+  Manrope,
+  Nunito_Sans,
+  Source_Sans_3,
+  Space_Grotesk,
+} from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -10,12 +19,65 @@ const dmSans = DM_Sans({
   weight: ["400", "500", "600", "700"],
 });
 
+const sourceSans = Source_Sans_3({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-source-sans",
+  weight: ["400", "500", "600", "700"],
+});
+
+const ibmPlex = IBM_Plex_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-ibm-plex",
+  weight: ["400", "500", "600", "700"],
+});
+
+const nunitoSans = Nunito_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-nunito-sans",
+  weight: ["400", "500", "600", "700"],
+});
+
+const libreFranklin = Libre_Franklin({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-libre-franklin",
+  weight: ["400", "500", "600", "700"],
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-manrope",
+  weight: ["400", "500", "600", "700"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-space-grotesk",
+  weight: ["400", "500", "600", "700"],
+});
+
 const fraunces = Fraunces({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-fraunces",
   weight: ["400", "500", "600", "700"],
 });
+
+const fontVariables = [
+  dmSans.variable,
+  sourceSans.variable,
+  ibmPlex.variable,
+  nunitoSans.variable,
+  libreFranklin.variable,
+  manrope.variable,
+  spaceGrotesk.variable,
+  fraunces.variable,
+].join(" ");
 
 export const metadata: Metadata = {
   title: "SPX Farm OS",
@@ -58,7 +120,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${fraunces.variable}`} suppressHydrationWarning>
+    <html lang="en" className={fontVariables} suppressHydrationWarning>
       <body className="min-h-[100dvh] font-sans antialiased">
         <Providers>{children}</Providers>
       </body>

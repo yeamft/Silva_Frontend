@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -26,15 +26,18 @@ import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { fmtEtb } from "@/lib/cropfort/performance-metrics";
 import { generateReportPayload } from "@/lib/cropfort/report-builder";
-import { useCropfortOpsStore } from "@/store/cropfortOpsStore";
-import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
+import { usePerformanceLiveData } from "@/lib/query/hooks/use-performance-live";
 import {
-  type OpsReport,
-  type ReportCadence,
-  useReportsStore,
-} from "@/store/reportsStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
+  useCreateOpsReport,
+  useDeleteOpsReport,
+  useOpsReports,
+  useReleaseOpsReport,
+  useReturnOpsReport,
+  useSubmitOpsReport,
+  useUpdateOpsReport,
+} from "@/lib/query/hooks/use-ops-reports";
+import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
+import type { OpsReport, ReportCadence } from "@/store/reportsStore";
 
 const CADENCE_LABEL: Record<ReportCadence, string> = {
   monthly: "Monthly",
@@ -76,25 +79,23 @@ function MetricGrid({ report }: { report: OpsReport }) {
 export default function ReportsView() {
   const { activeProgram, user } = useCropfortAuth();
   const area = getCropfortArea("reports");
-  const reports = useReportsStore((s) => s.reports);
-  const create = useReportsStore((s) => s.create);
-  const refreshFromLive = useReportsStore((s) => s.refreshFromLive);
-  const updateDraft = useReportsStore((s) => s.updateDraft);
-  const submit = useReportsStore((s) => s.submit);
-  const release = useReportsStore((s) => s.release);
-  const returnReport = useReportsStore((s) => s.returnReport);
-  const remove = useReportsStore((s) => s.remove);
+  const reportsQuery = useOpsReports(Boolean(activeProgram?.id));
+  const reports = reportsQuery.data || [];
+  const createMut = useCreateOpsReport();
+  const updateMut = useUpdateOpsReport();
+  const submitMut = useSubmitOpsReport();
+  const releaseMut = useReleaseOpsReport();
+  const returnMut = useReturnOpsReport();
+  const removeMut = useDeleteOpsReport();
 
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const afes = useCropfortOpsStore((s) => s.afes);
+  const { workOrders, tickets, committedEtb, weekly, dfrs } = usePerformanceLiveData(
+    Boolean(activeProgram?.id),
+  );
   const plan = useCoreOpsPlanStore((s) => s.plan);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
   const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
 
-  const [selectedId, setSelectedId] = useState<string | null>(reports[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [cadence, setCadence] = useState<ReportCadence>("monthly");
   const [periodLabel, setPeriodLabel] = useState("Tikimt 2019");
 
@@ -107,18 +108,10 @@ export default function ReportsView() {
       if (selectedId) setSelectedId(null);
       return;
     }
-    if (selectedId && !reports.some((r) => r.id === selectedId)) {
+    if (!selectedId || !reports.some((r) => r.id === selectedId)) {
       setSelectedId(reports[0].id);
     }
   }, [reports, selectedId]);
-
-  const committed = useMemo(
-    () =>
-      afes
-        .filter((a) => a.status === "approved" || a.status === "issued")
-        .reduce((s, a) => s + (a.amountEtb || 0), 0),
-    [afes],
-  );
 
   const buildPayload = useCallback(() => {
     const completion = planCompletion();
@@ -128,7 +121,7 @@ export default function ReportsView() {
       authorName: user.name || "SPX",
       plan,
       planBudgetEtb: completion.budgetEtb,
-      committedEtb: committed,
+      committedEtb,
       workOrders,
       tickets,
       dfrs,
@@ -139,7 +132,7 @@ export default function ReportsView() {
     plan,
     activeProgram,
     user.name,
-    committed,
+    committedEtb,
     workOrders,
     tickets,
     dfrs,
@@ -163,21 +156,65 @@ export default function ReportsView() {
     user.role === "spx_platform_admin" ||
     user.role === "farm_owner";
 
-  const onCreate = () => {
+  const onCreate = async () => {
     const payload = buildPayload();
-    const row = create({
-      cadence,
-      periodLabel: periodLabel.trim() || "Current period",
-      payload,
-    });
-    setSelectedId(row.id);
-    toast.success(`Drafted ${row.code} from live snapshot`);
+    try {
+      const row = await createMut.mutateAsync({
+        cadence,
+        periodLabel: periodLabel.trim() || "Current period",
+        title: `${CADENCE_LABEL[cadence]} operations report â€” ${periodLabel.trim() || "Current period"}`,
+        farmName: payload.farmName,
+        programName: payload.programName,
+        authorName: payload.authorName,
+        summary: payload.summary,
+        highlights: payload.highlights,
+        risks: payload.risks,
+        recommendations: payload.recommendations,
+        outlook: payload.outlook,
+        planEtb: payload.metrics.planEtb,
+        actualEtb: payload.metrics.actualEtb,
+        variancePct: payload.metrics.variancePct,
+        metrics: payload.metrics,
+        activityLines: payload.activityLines,
+        blockLines: payload.blockLines,
+        attentionItems: payload.attentionItems,
+        missAttributions: payload.missAttributions,
+      });
+      setSelectedId(row.id);
+      toast.success(`Drafted ${row.code} from live snapshot`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create report");
+    }
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     if (!selected) return;
-    refreshFromLive(selected.id, buildPayload());
-    toast.success("Narrative and tables refreshed from live ops");
+    const payload = buildPayload();
+    try {
+      await updateMut.mutateAsync({
+        id: selected.id,
+        patch: {
+          summary: payload.summary,
+          highlights: payload.highlights,
+          risks: payload.risks,
+          recommendations: payload.recommendations,
+          outlook: payload.outlook,
+          planEtb: payload.metrics.planEtb,
+          actualEtb: payload.metrics.actualEtb,
+          variancePct: payload.metrics.variancePct,
+          metrics: payload.metrics,
+          activityLines: payload.activityLines,
+          blockLines: payload.blockLines,
+          attentionItems: payload.attentionItems,
+          missAttributions: payload.missAttributions,
+          farmName: payload.farmName,
+          programName: payload.programName,
+        },
+      });
+      toast.success("Narrative and tables refreshed from live ops");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Refresh failed");
+    }
   };
 
   const editable =
@@ -257,7 +294,7 @@ export default function ReportsView() {
                   >
                     <span className="font-medium">{r.code}</span>
                     <span className="text-xs text-muted-foreground">
-                      {CADENCE_LABEL[r.cadence]} · {r.periodLabel}
+                      {CADENCE_LABEL[r.cadence]} Â· {r.periodLabel}
                     </span>
                     <StatusBadge status={r.status} />
                   </button>
@@ -278,17 +315,17 @@ export default function ReportsView() {
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={selected.status} />
                 <span className="text-xs text-muted-foreground">
-                  {CADENCE_LABEL[selected.cadence]} · {selected.periodLabel}
+                  {CADENCE_LABEL[selected.cadence]} Â· {selected.periodLabel}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {selected.farmName} · {selected.programName}
+                  {selected.farmName} Â· {selected.programName}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Author {selected.authorName}
                 </span>
                 {selected.releasedAt ? (
                   <span className="text-xs text-muted-foreground">
-                    Released {new Date(selected.releasedAt).toLocaleDateString()} →{" "}
+                    Released {new Date(selected.releasedAt).toLocaleDateString()} â†’{" "}
                     {selected.releasedTo}
                   </span>
                 ) : null}
@@ -304,7 +341,7 @@ export default function ReportsView() {
                 <Input
                   value={selected.title}
                   disabled={!editable}
-                  onChange={(e) => updateDraft(selected.id, { title: e.target.value })}
+                  onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { title: e.target.value } })}
                 />
               </div>
               <div className="space-y-1">
@@ -313,7 +350,7 @@ export default function ReportsView() {
                   value={selected.periodLabel}
                   disabled={!editable}
                   onChange={(e) =>
-                    updateDraft(selected.id, { periodLabel: e.target.value })
+                    void updateMut.mutateAsync({ id: selected.id, patch: { periodLabel: e.target.value } })
                   }
                 />
               </div>
@@ -323,7 +360,7 @@ export default function ReportsView() {
                   rows={4}
                   value={selected.summary}
                   disabled={!editable}
-                  onChange={(e) => updateDraft(selected.id, { summary: e.target.value })}
+                  onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { summary: e.target.value } })}
                 />
               </div>
               <div className="space-y-1">
@@ -333,7 +370,7 @@ export default function ReportsView() {
                   value={selected.highlights}
                   disabled={!editable}
                   onChange={(e) =>
-                    updateDraft(selected.id, { highlights: e.target.value })
+                    void updateMut.mutateAsync({ id: selected.id, patch: { highlights: e.target.value } })
                   }
                 />
               </div>
@@ -343,7 +380,7 @@ export default function ReportsView() {
                   rows={2}
                   value={selected.risks}
                   disabled={!editable}
-                  onChange={(e) => updateDraft(selected.id, { risks: e.target.value })}
+                  onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { risks: e.target.value } })}
                 />
               </div>
               <div className="space-y-1">
@@ -353,7 +390,7 @@ export default function ReportsView() {
                   value={selected.recommendations}
                   disabled={!editable}
                   onChange={(e) =>
-                    updateDraft(selected.id, { recommendations: e.target.value })
+                    void updateMut.mutateAsync({ id: selected.id, patch: { recommendations: e.target.value } })
                   }
                 />
               </div>
@@ -363,7 +400,7 @@ export default function ReportsView() {
                   rows={2}
                   value={selected.outlook}
                   disabled={!editable}
-                  onChange={(e) => updateDraft(selected.id, { outlook: e.target.value })}
+                  onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { outlook: e.target.value } })}
                 />
               </div>
 
@@ -488,7 +525,7 @@ export default function ReportsView() {
                           {new Date(ev.at).toLocaleString()}
                         </span>
                         <span className="text-foreground">{ev.action}</span>
-                        <span>· {ev.actor}</span>
+                        <span>Â· {ev.actor}</span>
                       </li>
                     ))}
                   </ul>
@@ -508,8 +545,12 @@ export default function ReportsView() {
                           toast.error("Add a summary before submit");
                           return;
                         }
-                        submit(selected.id, user.name || "SPX");
-                        toast.success("Submitted for release");
+                        void submitMut
+                          .mutateAsync(selected.id)
+                          .then(() => toast.success("Submitted for release"))
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : "Submit failed"),
+                          );
                       }}
                     >
                       Submit
@@ -518,8 +559,12 @@ export default function ReportsView() {
                       size="sm"
                       variant="ghost"
                       onClick={() => {
-                        remove(selected.id);
-                        toast.message("Draft removed");
+                        void removeMut
+                          .mutateAsync(selected.id)
+                          .then(() => toast.message("Draft removed"))
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : "Delete failed"),
+                          );
                       }}
                     >
                       Delete draft
@@ -531,19 +576,20 @@ export default function ReportsView() {
                     <Button
                       size="sm"
                       onClick={() => {
-                        release(selected.id, undefined, user.name || "SPX");
-                        if (selected.cadence === "monthly") {
-                          toast.success("Released to Silva — create next monthly WO with Loop G", {
-                            action: {
-                              label: "Create next MWO",
-                              onClick: () => {
-                                window.location.href = `${CROPFORT_ROUTES.monthlyWorkOrders}?fromReport=${selected.id}`;
+                        void releaseMut.mutateAsync({ id: selected.id }).then(() => {
+                          if (selected.cadence === "monthly") {
+                            toast.success("Released to Silva — create next monthly WO with Loop G", {
+                              action: {
+                                label: "Create next MWO",
+                                onClick: () => {
+                                  window.location.href = `${CROPFORT_ROUTES.monthlyWorkOrders}?fromReport=${selected.id}`;
+                                },
                               },
-                            },
-                          });
-                        } else {
-                          toast.success("Released to Silva");
-                        }
+                            });
+                          } else {
+                            toast.success("Released to Silva");
+                          }
+                        });
                       }}
                     >
                       Release to Silva
@@ -552,8 +598,12 @@ export default function ReportsView() {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        returnReport(selected.id, user.name || "Silva");
-                        toast.message("Returned for revision");
+                        void returnMut
+                          .mutateAsync({ id: selected.id })
+                          .then(() => toast.message("Returned for revision"))
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : "Return failed"),
+                          );
                       }}
                     >
                       Return
@@ -569,19 +619,20 @@ export default function ReportsView() {
                         toast.error("Add a summary before release");
                         return;
                       }
-                      release(selected.id, undefined, user.name || "SPX");
-                      if (selected.cadence === "monthly") {
-                        toast.success("Released — create next monthly WO with Loop G", {
-                          action: {
-                            label: "Create next MWO",
-                            onClick: () => {
-                              window.location.href = `${CROPFORT_ROUTES.monthlyWorkOrders}?fromReport=${selected.id}`;
+                      void releaseMut.mutateAsync({ id: selected.id }).then(() => {
+                        if (selected.cadence === "monthly") {
+                          toast.success("Released — create next monthly WO with Loop G", {
+                            action: {
+                              label: "Create next MWO",
+                              onClick: () => {
+                                window.location.href = `${CROPFORT_ROUTES.monthlyWorkOrders}?fromReport=${selected.id}`;
+                              },
                             },
-                          },
-                        });
-                      } else {
-                        toast.success("Released to Silva");
-                      }
+                          });
+                        } else {
+                          toast.success("Released to Silva");
+                        }
+                      });
                     }}
                   >
                     Release draft
@@ -601,3 +652,4 @@ export default function ReportsView() {
     </PageContainer>
   );
 }
+

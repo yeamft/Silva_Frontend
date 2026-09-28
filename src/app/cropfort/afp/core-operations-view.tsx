@@ -46,7 +46,8 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { canEditRateCard, canViewRateCard } from "@/lib/cropfortAccess";
+import { canViewRateCard } from "@/lib/cropfortAccess";
+import { canCreateProgrammePlan, canApproveOperations } from "@/lib/cropfort/platform-access";
 import {
   PLAN_MONTHS,
   PLAN_MONTH_LABELS,
@@ -59,7 +60,6 @@ import {
   scheduleStatusOf,
   useCoreOpsPlanStore,
 } from "@/store/coreOpsPlanStore";
-import { useCropfortOpsStore } from "@/store/cropfortOpsStore";
 import { useSpendBandStore } from "@/store/spendBandStore";
 import type { CoreOpsActivity, CoreOpsStep, MonthIntensity } from "@/types/core-ops";
 
@@ -124,7 +124,7 @@ function prevStep(step: CoreOpsStep): CoreOpsStep | null {
   return STEPS[i - 1]?.id ?? null;
 }
 
-export default function CoreOperationsView() {
+export default function CoreOperationsView({ planId }: { planId?: string } = {}) {
   const { user, activeProgram, programs: authPrograms, switchProgram } = useCropfortAuth();
   const canView = canViewRateCard(user.role);
 
@@ -137,6 +137,7 @@ export default function CoreOperationsView() {
   const step = useCoreOpsPlanStore((s) => s.step);
   const focusActivityId = useCoreOpsPlanStore((s) => s.focusActivityId);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
+  const loadPlanById = useCoreOpsPlanStore((s) => s.loadPlanById);
   const ensurePlan = useCoreOpsPlanStore((s) => s.ensurePlan);
   const setStep = useCoreOpsPlanStore((s) => s.setStep);
   const setFocusActivityId = useCoreOpsPlanStore((s) => s.setFocusActivityId);
@@ -158,8 +159,9 @@ export default function CoreOperationsView() {
   const blocksForPlan = useCoreOpsPlanStore((s) => s.blocksForPlan);
 
   const canEdit =
-    (canEditRateCard(user.role) || user.role === "farm_owner") &&
-    plan?.status !== "submitted";
+    canCreateProgrammePlan(user.role) && plan?.status !== "submitted";
+  const canApprovePlan =
+    canApproveOperations(user.role) && plan?.status === "submitted";
 
   const [moreSetup, setMoreSetup] = useState(false);
   const [splitId, setSplitId] = useState<string | null>(null);
@@ -189,8 +191,13 @@ export default function CoreOperationsView() {
 
   useEffect(() => {
     if (!canView) return;
-    void loadContext();
-  }, [canView, activeProgram?.id, loadContext]);
+    void (async () => {
+      await loadContext();
+      if (planId) {
+        await loadPlanById(planId);
+      }
+    })();
+  }, [canView, activeProgram?.id, planId, loadContext, loadPlanById]);
 
   const bandForEtb = useSpendBandStore((s) => s.bandForEtb);
   const bandAutoApproves = useSpendBandStore((s) => s.bandAutoApproves);
@@ -198,23 +205,16 @@ export default function CoreOperationsView() {
   const getActiveBandSet = useSpendBandStore((s) => s.getActiveSet);
   const setActiveBandProgram = useSpendBandStore((s) => s.setActiveProgram);
   const bandSets = useSpendBandStore((s) => s.sets);
-  const opsNodes = useCropfortOpsStore((s) => s.nodes);
-  const opsPrograms = useMemo(
-    () => opsNodes.filter((n) => n.kind === "program"),
-    [opsNodes],
-  );
 
   const programOptions = useMemo(() => {
     if (authPrograms.length > 0) {
       return authPrograms.map((p) => ({ id: p.id, name: p.name }));
     }
-    if (opsPrograms.length > 0) {
-      return opsPrograms.map((p) => ({ id: p.id, name: p.name }));
+    if (activeProgram) {
+      return [{ id: activeProgram.id, name: activeProgram.name }];
     }
-    return activeProgram
-      ? [{ id: activeProgram.id, name: activeProgram.name }]
-      : [{ id: "prog-1", name: "Sheka Turnaround 2026" }];
-  }, [authPrograms, opsPrograms, activeProgram]);
+    return [];
+  }, [authPrograms, activeProgram]);
 
   const programBandOptions = useMemo(() => {
     const pid = activeProgram?.id;
@@ -482,8 +482,8 @@ export default function CoreOperationsView() {
   if (!canView) return <NotAuthorized title="Programme" />;
 
   const goNext = () => {
-    if (step === "setup" && !plan && farms[0]) {
-      ensurePlan(farms[0].id);
+    if (step === "setup" && !plan && !planId && farms[0]) {
+      void ensurePlan(farms[0].id);
     }
     const n = nextStep(step);
     if (n) setStep(n);
@@ -496,21 +496,26 @@ export default function CoreOperationsView() {
   return (
     <PageContainer>
       <PageHeader
-        eyebrow={activeProgram?.name || "Planning"}
-        title="Programme"
+        eyebrow={activeProgram?.name || "Workspace"}
+        title={plan?.name || "Programme plan"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Planning" },
-          { label: "Programme" },
+          { label: "Programme Plans", href: CROPFORT_ROUTES.programmePlans },
+          { label: plan?.name || "Editor" },
         ]}
         meta={
           plan ? (
             <>
-              <StatusBadge status={plan.status} />
-              <span className="text-xs text-muted-foreground">{plan.farmName}</span>
-              <span className="text-xs text-muted-foreground">{plan.budgetYearLabel}</span>
+              <StatusBadge status={plan.status} label={(plan.statusRaw || plan.status).replace(/_/g, " ")} />
+              <span className="text-xs text-muted-foreground">
+                Farm area: {plan.farmName}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {plan.planningCycleLabel || plan.budgetYearLabel}
+              </span>
               <span className="text-xs font-medium tabular-nums">
-                {fmtEtb(completion.budgetEtb)}
+                Budget: {fmtEtb(completion.budgetEtb)}
               </span>
             </>
           ) : null
@@ -595,19 +600,19 @@ export default function CoreOperationsView() {
 
       {/* ——— SETUP ——— */}
       {step === "setup" ? (
-        <SectionCard title="Scope" description="Farm, budget year, and applicable blocks">
+        <SectionCard title="Scope">
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField
-              label="Program"
+              label="Workspace"
               required
               render={() => (
                 <Select
                   value={activeProgram?.id || programOptions[0]?.id || ""}
                   onValueChange={(id) => void onProgramChange(id)}
-                  disabled={!canEdit}
+                  disabled={!canEdit || Boolean(planId)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select program" />
+                    <SelectValue placeholder="Select workspace" />
                   </SelectTrigger>
                   <SelectContent>
                     {programOptions.map((p) => (
@@ -617,6 +622,31 @@ export default function CoreOperationsView() {
                     ))}
                   </SelectContent>
                 </Select>
+              )}
+            />
+            <FormField
+              label="Programme plan name"
+              required
+              render={(props) => (
+                <Input
+                  {...props}
+                  value={plan?.name || ""}
+                  onChange={(e) => updatePlanMeta({ name: e.target.value })}
+                  disabled={!canEdit}
+                  placeholder="e.g. Annual Coffee Operations"
+                />
+              )}
+            />
+            <FormField
+              label="Planning cycle"
+              render={(props) => (
+                <Input
+                  {...props}
+                  value={plan?.planningCycleLabel || ""}
+                  onChange={(e) => updatePlanMeta({ planningCycleLabel: e.target.value })}
+                  disabled={!canEdit}
+                  placeholder="e.g. 2027 Programme"
+                />
               )}
             />
             <FormField
@@ -631,6 +661,7 @@ export default function CoreOperationsView() {
                       updatePlanMeta({
                         budgetYearGc: y,
                         budgetYearLabel: budgetYearLabel(y).label,
+                        planningCycleLabel: plan.planningCycleLabel || `${y} Programme`,
                       });
                     }
                   }}
@@ -650,12 +681,24 @@ export default function CoreOperationsView() {
               )}
             />
             <FormField
-              label="Farm / estate"
+              label="Farm area / estate"
               required
               render={() => (
                 <Select
                   value={plan?.farmEstateId || ""}
-                  onValueChange={(id) => ensurePlan(id, plan?.budgetYearGc)}
+                  onValueChange={(id) => {
+                    if (planId) {
+                      const farm = farms.find((f) => f.id === id);
+                      if (farm) {
+                        updatePlanMeta({
+                          farmEstateId: farm.id,
+                          farmName: farm.name,
+                        });
+                      }
+                      return;
+                    }
+                    void ensurePlan(id, plan?.budgetYearGc);
+                  }}
                   disabled={!canEdit}
                 >
                   <SelectTrigger>
@@ -1546,10 +1589,7 @@ export default function CoreOperationsView() {
       {/* ——— REVIEW ——— */}
       {step === "review" && plan ? (
         <div className="space-y-4">
-          <SectionCard
-            title="Review & submit"
-            description="Check readiness, then finalize and promote to AFPs"
-          >
+          <SectionCard title="Review & submit">
             <div className="mb-4 grid gap-2 sm:grid-cols-2">
               <div className="rounded-md bg-muted/40 px-3 py-2 text-sm">
                 <p className="text-xs text-muted-foreground">Total budget</p>
@@ -1567,6 +1607,16 @@ export default function CoreOperationsView() {
                 </p>
               </div>
             </div>
+
+            {canApprovePlan ? (
+              <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                This programme plan is awaiting your decision. Open{" "}
+                <Link href={CROPFORT_ROUTES.approvals} className="font-medium underline-offset-4 hover:underline">
+                  Approvals
+                </Link>{" "}
+                to approve or return it. Silva / asset owners cannot edit plan lines.
+              </div>
+            ) : null}
 
             {issues.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1617,8 +1667,14 @@ export default function CoreOperationsView() {
           variant="outline"
           disabled={!plan}
           onClick={() => {
-            saveDraft();
-            toast.success("Draft saved");
+            void (async () => {
+              try {
+                await saveDraft();
+                toast.success("Draft saved");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Save failed");
+              }
+            })();
           }}
         >
           Save draft
@@ -1640,12 +1696,14 @@ export default function CoreOperationsView() {
               variant="outline"
               disabled={!plan || !canEdit || blockingIssues.length > 0}
               onClick={() => {
-                try {
-                  finalize();
-                  toast.success("Plan finalized");
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Finalize failed");
-                }
+                void (async () => {
+                  try {
+                    await finalize();
+                    toast.success("Plan finalized");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Finalize failed");
+                  }
+                })();
               }}
             >
               Finalize
@@ -1830,20 +1888,22 @@ export default function CoreOperationsView() {
             </Button>
             <Button
               onClick={() => {
-                try {
-                  const promo = submitToAfps();
-                  toast.success(`Promoted · Band ${promo.band}`, {
-                    action: {
-                      label: "Open AFP",
-                      onClick: () => {
-                        window.location.href = CROPFORT_ROUTES.afpRegister;
+                void (async () => {
+                  try {
+                    const promo = await submitToAfps();
+                    toast.success(`Promoted · Band ${promo.band}`, {
+                      action: {
+                        label: "Open AFP",
+                        onClick: () => {
+                          window.location.href = CROPFORT_ROUTES.afpRegister;
+                        },
                       },
-                    },
-                  });
-                  setSubmitOpen(false);
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Submit failed");
-                }
+                    });
+                    setSubmitOpen(false);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Submit failed");
+                  }
+                })();
               }}
             >
               Submit → AFPs

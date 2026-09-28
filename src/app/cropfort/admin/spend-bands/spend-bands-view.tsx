@@ -45,7 +45,7 @@ import { CROPFORT_ROUTES } from "@/config/navigation";
 import type { AfeBand } from "@/lib/cropfort/ethiopian-year";
 import { canManagePrograms, canViewOrgMap } from "@/lib/cropfortAccess";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { usePrograms } from "@/lib/query";
+import { usePrograms, useUpdateProgram } from "@/lib/query";
 import { useSpendBandStore } from "@/store/spendBandStore";
 import {
   DEFAULT_SPEND_BANDS,
@@ -91,6 +91,7 @@ export default function SpendBandsView() {
 
   const programsQuery = usePrograms(canEdit);
   const apiPrograms = programsQuery.data ?? [];
+  const updateProgram = useUpdateProgram();
 
   const sets = useSpendBandStore((s) => s.sets);
   const activeProgramId = useSpendBandStore((s) => s.activeProgramId);
@@ -173,7 +174,7 @@ export default function SpendBandsView() {
     setOpen(true);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!canEdit) return;
     if (!form.programId) {
       toast.error("Select a program");
@@ -185,10 +186,34 @@ export default function SpendBandsView() {
       return;
     }
     try {
+      const aMax = form.bands.find((b) => b.band === "A")?.maxEtb;
+      const bMax = form.bands.find((b) => b.band === "B")?.maxEtb;
+      const cMax = form.bands.find((b) => b.band === "C")?.maxEtb;
+      if (
+        aMax == null ||
+        bMax == null ||
+        cMax == null ||
+        !Number.isFinite(aMax) ||
+        !Number.isFinite(bMax) ||
+        !Number.isFinite(cMax)
+      ) {
+        toast.error("Bands A–C need finite ETB upper limits");
+        return;
+      }
+
+      await updateProgram.mutateAsync({
+        id: form.programId,
+        input: {
+          cropfortAfeBandAMaxEtb: aMax,
+          cropfortAfeBandBMaxEtb: bMax,
+          cropfortAfeBandCMaxEtb: cMax,
+        },
+      });
+
       if (editing) {
         replaceBands(editing.programId, form.bands);
         setEffectiveYear(editing.programId, form.effectiveYear);
-        toast.success("Spend band updated");
+        toast.success("Spend band updated (synced to program)");
       } else {
         const name =
           programOptions.find((p) => p.id === form.programId)?.name ||
@@ -200,7 +225,7 @@ export default function SpendBandsView() {
           effectiveYear: form.effectiveYear,
           bands: form.bands,
         });
-        toast.success("Spend band created");
+        toast.success("Spend band created (synced to program)");
       }
       setOpen(false);
     } catch (e) {
@@ -524,8 +549,8 @@ export default function SpendBandsView() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={save}>
-              {editing ? "Save changes" : "Create"}
+            <Button onClick={() => void save()} disabled={updateProgram.isPending}>
+              {updateProgram.isPending ? "Saving…" : editing ? "Save changes" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

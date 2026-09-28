@@ -193,7 +193,7 @@ export function TableMessageRow({
   action,
 }: {
   colSpan: number;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   title: string;
   description?: string;
   action?: ReactNode;
@@ -202,9 +202,11 @@ export function TableMessageRow({
     <TableRow className="hover:bg-transparent">
       <TableCell colSpan={colSpan} className="py-12">
         <div className="flex flex-col items-center justify-center gap-2.5 text-center">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <Icon className="h-5 w-5" aria-hidden />
-          </span>
+          {Icon ? (
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <Icon className="h-5 w-5" aria-hidden />
+            </span>
+          ) : null}
           <div className="space-y-0.5">
             <p className="text-sm font-medium">{title}</p>
             {description ? (

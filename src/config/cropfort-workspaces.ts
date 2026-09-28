@@ -99,8 +99,8 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
       {
         id: "programme",
         label: "Programme",
-        href: CROPFORT_ROUTES.coreOperations,
-        description: "Annual and six-month programme planning",
+        href: CROPFORT_ROUTES.programmePlans,
+        description: "Programme plans register — multiple plans per workspace",
       },
       {
         id: "projects",
@@ -124,7 +124,7 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         id: "resources",
         label: "Resources & Capacity",
         href: CROPFORT_ROUTES.laborWorkforce,
-        description: "Labour, equipment, inputs, capacity",
+        description: "Labour / materials / services demand from the active programme plan",
       },
       {
         id: "budget",
@@ -471,6 +471,7 @@ export function resolveWorkspaceFromPath(
 
   // Fallback aliases for legacy routes still in use
   const aliases: { prefix: string; workspaceId: WorkspaceId; moduleId?: string }[] = [
+    { prefix: "/cropfort/planning/programmes", workspaceId: "planning", moduleId: "programme" },
     { prefix: "/cropfort/afp", workspaceId: "planning", moduleId: "programme" },
     { prefix: "/cropfort/afp-register", workspaceId: "control", moduleId: "approvals" },
     { prefix: "/cropfort/afe", workspaceId: "control", moduleId: "afe" },

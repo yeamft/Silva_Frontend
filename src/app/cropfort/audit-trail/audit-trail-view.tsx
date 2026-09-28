@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Search } from "lucide-react";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -25,75 +24,52 @@ import {
 } from "@/components/ui/table";
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import {
-  auditSourceLabel,
-  buildAuditFeed,
-  type AuditFeedItem,
-  type AuditSource,
-} from "@/lib/cropfort/audit-feed";
-import { useAllWorkflowAudit } from "@/lib/query/hooks/use-rate-card-workflow";
-import { useCropfortOpsStore } from "@/store/cropfortOpsStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useMonthlyWorkOrderStore } from "@/store/monthlyWorkOrderStore";
-import { useReportsStore } from "@/store/reportsStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
+import { useAuditLog } from "@/lib/query/hooks/use-audit-log";
 import { cn } from "@/lib/utils";
 
-const FILTERS: { id: "all" | AuditSource; label: string }[] = [
+type SourceFilter = "all" | string;
+
+function sourceFromEntity(entityType: string): string {
+  const t = entityType.toLowerCase();
+  if (t.includes("afe") || t.includes("approval") || t.includes("programme")) return "approvals";
+  if (t.includes("rate") || t.includes("benchmark")) return "rates";
+  if (t.includes("report")) return "reports";
+  if (t.includes("plan") || t.includes("mwo") || t.includes("weekly")) return "planning";
+  if (t.includes("user") || t.includes("program") || t.includes("org")) return "admin";
+  return "execution";
+}
+
+const FILTERS: { id: SourceFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "execution", label: "Execution" },
   { id: "approvals", label: "Approvals" },
   { id: "planning", label: "Planning" },
   { id: "rates", label: "Rates" },
   { id: "reports", label: "Reports" },
+  { id: "admin", label: "Admin" },
 ];
 
 export default function AuditTrailView() {
   const { activeProgram, user } = useCropfortAuth();
   const area = getCropfortArea("audit");
+  const auditQuery = useAuditLog(Boolean(activeProgram?.id), { limit: 200 });
 
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const afes = useCropfortOpsStore((s) => s.afes);
-  const projects = useCropfortOpsStore((s) => s.projects);
-  const interventions = useCropfortOpsStore((s) => s.interventions);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
-  const monthly = useMonthlyWorkOrderStore((s) => s.orders);
-  const reports = useReportsStore((s) => s.reports);
-  const rateAudit = useAllWorkflowAudit(true);
-
-  const [filter, setFilter] = useState<"all" | AuditSource>("all");
+  const [filter, setFilter] = useState<SourceFilter>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const feed = useMemo(
-    () =>
-      buildAuditFeed({
-        tickets,
-        workOrders,
-        afes,
-        projects,
-        interventions,
-        dfrs,
-        weekly,
-        monthly,
-        reports,
-        rateAudit: rateAudit.data ?? [],
-      }),
-    [
-      tickets,
-      workOrders,
-      afes,
-      projects,
-      interventions,
-      dfrs,
-      weekly,
-      monthly,
-      reports,
-      rateAudit.data,
-    ],
-  );
+  const feed = useMemo(() => {
+    return (auditQuery.data || []).map((row) => ({
+      id: row.id,
+      at: row.at,
+      actor: row.actorName || row.actorUserId || "System",
+      action: row.action,
+      entityLabel: row.entityType,
+      entityCode: row.entityId,
+      source: sourceFromEntity(row.entityType),
+      detail: row.detail,
+    }));
+  }, [auditQuery.data]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -108,8 +84,7 @@ export default function AuditTrailView() {
     });
   }, [feed, filter, query]);
 
-  const selected: AuditFeedItem | null =
-    visible.find((r) => r.id === selectedId) ?? feed.find((r) => r.id === selectedId) ?? null;
+  const selected = visible.find((r) => r.id === selectedId) ?? feed.find((r) => r.id === selectedId) ?? null;
 
   const counts = useMemo(() => {
     const map: Record<string, number> = { all: feed.length };
@@ -131,7 +106,9 @@ export default function AuditTrailView() {
         ]}
         meta={
           <span className="text-xs text-muted-foreground">
-            {visible.length} event{visible.length === 1 ? "" : "s"}
+            {auditQuery.isLoading
+              ? "Loading…"
+              : `${visible.length} event${visible.length === 1 ? "" : "s"}`}
             {user.name ? ` · viewed as ${user.name}` : ""}
           </span>
         }
@@ -167,7 +144,17 @@ export default function AuditTrailView() {
       </div>
 
       <SectionCard title="Timeline" flush>
-        {visible.length === 0 ? (
+        {auditQuery.isError ? (
+          <p className="px-5 py-10 text-center text-sm text-destructive">
+            {auditQuery.error instanceof Error
+              ? auditQuery.error.message
+              : "Could not load audit log"}
+          </p>
+        ) : auditQuery.isLoading ? (
+          <p className="px-5 py-10 text-center text-sm text-muted-foreground">
+            Loading audit events…
+          </p>
+        ) : visible.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-muted-foreground">
             No audit events match this filter.
           </p>
@@ -205,8 +192,8 @@ export default function AuditTrailView() {
                       <p className="text-xs text-muted-foreground">{row.entityCode}</p>
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {auditSourceLabel(row.source)}
+                  <TableCell className="text-xs text-muted-foreground capitalize">
+                    {row.source}
                   </TableCell>
                 </TableRow>
               ))}
@@ -223,7 +210,7 @@ export default function AuditTrailView() {
                 <SheetTitle>{selected.entityLabel}</SheetTitle>
                 <SheetDescription>
                   {selected.entityCode ? `${selected.entityCode} · ` : ""}
-                  {auditSourceLabel(selected.source)}
+                  {selected.source}
                 </SheetDescription>
               </SheetHeader>
               <dl className="mt-6 space-y-3 text-sm">
@@ -250,13 +237,6 @@ export default function AuditTrailView() {
                   </div>
                 ) : null}
               </dl>
-              {selected.href ? (
-                <Button className="mt-6 w-full" asChild>
-                  <Link href={selected.href} onClick={() => setSelectedId(null)}>
-                    Open related record
-                  </Link>
-                </Button>
-              ) : null}
             </>
           ) : null}
         </SheetContent>

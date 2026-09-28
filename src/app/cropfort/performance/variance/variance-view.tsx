@@ -21,46 +21,34 @@ import {
   computePerformanceSnapshot,
   fmtEtb,
 } from "@/lib/cropfort/performance-metrics";
-import { useCropfortOpsStore } from "@/store/cropfortOpsStore";
+import { usePerformanceLiveData } from "@/lib/query/hooks/use-performance-live";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
 
 export default function VarianceAnalysisView() {
   const { activeProgram } = useCropfortAuth();
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const afes = useCropfortOpsStore((s) => s.afes);
+  const { workOrders, tickets, committedEtb, weekly, dfrs } = usePerformanceLiveData(
+    Boolean(activeProgram?.id),
+  );
   const plan = useCoreOpsPlanStore((s) => s.plan);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
   const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
 
   useEffect(() => {
     void loadContext();
   }, [loadContext]);
-
-  const committed = useMemo(
-    () =>
-      afes
-        .filter((a) => a.status === "approved" || a.status === "issued")
-        .reduce((s, a) => s + (a.amountEtb || 0), 0),
-    [afes],
-  );
 
   const snap = useMemo(
     () =>
       computePerformanceSnapshot({
         plan,
         planBudgetEtb: planCompletion().budgetEtb,
-        committedEtb: committed,
+        committedEtb,
         workOrders,
         tickets,
         dfrs,
         weekly,
       }),
-    [plan, planCompletion, committed, workOrders, tickets, dfrs, weekly],
+    [plan, planCompletion, committedEtb, workOrders, tickets, dfrs, weekly],
   );
 
   const acts = useMemo(() => includedActivities(plan), [plan]);

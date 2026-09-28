@@ -116,7 +116,6 @@ export default function BenchmarkSurveysListView() {
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Rates"}
         title="Benchmark surveys"
-        description="Neighbor rates from Activity Taxonomy — lock, then create a rate card."
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Rates", href: CROPFORT_ROUTES.rateCardProposals },

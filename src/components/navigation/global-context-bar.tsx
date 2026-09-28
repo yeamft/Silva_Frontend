@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Bell, Check, ChevronDown, HelpCircle, Search } from "lucide-react";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { CROPFORT_ROUTES } from "@/config/navigation";
+import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
+import { usePlanningContextStore } from "@/store/planningContextStore";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -31,9 +35,6 @@ const ThemeToggle = dynamic(() => import("@/components/ThemeToggle"), {
   loading: () => <div className="h-9 w-9" aria-hidden />,
 });
 
-const PROGRAMME_YEARS = ["2026 Programme", "2027 Programme", "2028 Programme"];
-const FARM_AREAS = ["All Farm Areas", "Sheka", "Gore", "Bonga"];
-
 type GlobalContextBarProps = {
   onOpenSearch?: () => void;
   onOpenAttention?: () => void;
@@ -42,9 +43,7 @@ type GlobalContextBarProps = {
 };
 
 /**
- * Global context — estate / programme / area / search / attention.
- * Mobile: single estate control + icon utilities (no wrap).
- * Desktop: separate programme / farm area selectors.
+ * Global context — estate / programme plan / search / attention.
  */
 export function GlobalContextBar({
   onOpenSearch,
@@ -53,21 +52,59 @@ export function GlobalContextBar({
   className,
 }: GlobalContextBarProps) {
   const { activeProgram, programs, switchProgram, tenant } = useCropfortAuth();
-  const [programmeYear, setProgrammeYear] = useState("2027 Programme");
-  const [farmArea, setFarmArea] = useState("All Farm Areas");
   const [switching, setSwitching] = useState(false);
+
+  const programId = activeProgram?.id;
+  const activePlanId = usePlanningContextStore((s) =>
+    programId ? s.activePlanIdByProgram[programId] ?? null : null,
+  );
+  const setActivePlanId = usePlanningContextStore((s) => s.setActivePlanId);
+
+  const plansQuery = useProgrammePlans(Boolean(programId));
+  const plans = useMemo(
+    () => (plansQuery.data || []).filter((p) => p.statusRaw !== "archived"),
+    [plansQuery.data],
+  );
+
+  const activePlan = useMemo(
+    () => plans.find((p) => p.id === activePlanId) ?? null,
+    [plans, activePlanId],
+  );
 
   const estateLabel = useMemo(
     () => activeProgram?.name || tenant?.displayName || tenant?.name || "Estate",
     [activeProgram?.name, tenant?.displayName, tenant?.name],
   );
 
-  const onSelectProgram = async (programId: string) => {
-    if (programId === activeProgram?.id || switching) return;
+  const planLabel = useMemo(() => {
+    if (activePlan) {
+      const year = activePlan.budgetYearLabel || activePlan.planningCycleLabel || "";
+      return year ? `${activePlan.name} · ${year}` : activePlan.name;
+    }
+    if (plansQuery.isLoading) return "Loading plans…";
+    return "Select programme plan";
+  }, [activePlan, plansQuery.isLoading]);
+
+  // Drop stale remembered plan ids. ActivePlanSync then picks a valid preferred
+  // plan — both share the same useProgrammePlans cache so they cannot oscillate.
+  useEffect(() => {
+    if (!programId || plansQuery.isLoading) return;
+    if (activePlanId && plans.length > 0 && !plans.some((p) => p.id === activePlanId)) {
+      setActivePlanId(programId, null);
+    }
+  }, [programId, activePlanId, plans, plansQuery.isLoading, setActivePlanId]);
+
+  const onSelectProgram = async (nextProgramId: string) => {
+    if (nextProgramId === activeProgram?.id || switching) return;
     setSwitching(true);
-    const result = await switchProgram(programId);
+    const result = await switchProgram(nextProgramId);
     setSwitching(false);
     if (!result.ok) toast.error(result.error || "Could not switch programme");
+  };
+
+  const onSelectPlan = (planId: string) => {
+    if (!programId) return;
+    setActivePlanId(programId, planId);
   };
 
   const triggerClass =
@@ -83,7 +120,7 @@ export function GlobalContextBar({
         className,
       )}
     >
-      {/* Mobile: one context menu covers estate + year + farm area */}
+      {/* Mobile: estate + plan in one menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -91,7 +128,7 @@ export function GlobalContextBar({
             size="sm"
             className={cn(triggerClass, "min-w-0 max-w-[min(42vw,11rem)] sm:hidden")}
             disabled={switching}
-            aria-label={`Workspace context: ${estateLabel}, ${programmeYear}`}
+            aria-label={`Workspace context: ${estateLabel}, ${planLabel}`}
           >
             <span className="min-w-0 truncate">{estateLabel}</span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
@@ -117,29 +154,32 @@ export function GlobalContextBar({
             ))
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Planning period</DropdownMenuLabel>
-          {PROGRAMME_YEARS.map((y) => (
-            <DropdownMenuItem key={y} onClick={() => setProgrammeYear(y)}>
-              <span className="flex-1">{y}</span>
-              {y === programmeYear ? (
-                <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-              ) : null}
+          <DropdownMenuLabel>Programme plan</DropdownMenuLabel>
+          {plans.length === 0 ? (
+            <DropdownMenuItem asChild>
+              <Link href={CROPFORT_ROUTES.programmePlans}>Create a plan…</Link>
             </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>Farm areas</DropdownMenuLabel>
-          {FARM_AREAS.map((area) => (
-            <DropdownMenuItem key={area} onClick={() => setFarmArea(area)}>
-              <span className="flex-1">{area}</span>
-              {area === farmArea ? (
-                <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-              ) : null}
-            </DropdownMenuItem>
-          ))}
+          ) : (
+            plans.slice(0, 12).map((p) => (
+              <DropdownMenuItem
+                key={p.id}
+                onClick={() => onSelectPlan(p.id)}
+                className={cn(p.id === activePlanId && "bg-accent")}
+              >
+                <span className="flex-1 truncate">
+                  {p.name}
+                  {p.budgetYearLabel ? ` · ${p.budgetYearLabel}` : ""}
+                </span>
+                {p.id === activePlanId ? (
+                  <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+                ) : null}
+              </DropdownMenuItem>
+            ))
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Desktop+ : separate selectors */}
+      {/* Desktop: separate selectors */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -175,39 +215,47 @@ export function GlobalContextBar({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className={cn(triggerClass, "hidden sm:inline-flex")}>
-            <span className="truncate">{programmeYear}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(triggerClass, "hidden max-w-[18rem] sm:inline-flex")}
+          >
+            <span className="truncate">{planLabel}</span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuLabel>Planning period</DropdownMenuLabel>
+        <DropdownMenuContent align="start" className="w-72">
+          <DropdownMenuLabel>Active programme plan</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {PROGRAMME_YEARS.map((y) => (
-            <DropdownMenuItem key={y} onClick={() => setProgrammeYear(y)}>
-              {y}
+          {plans.length === 0 ? (
+            <DropdownMenuItem asChild>
+              <Link href={CROPFORT_ROUTES.programmePlans}>Open Programme Plans…</Link>
             </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <span className="hidden h-4 w-px bg-border md:block" aria-hidden />
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className={cn(triggerClass, "hidden md:inline-flex")}>
-            <span className="truncate">{farmArea}</span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuLabel>Farm areas</DropdownMenuLabel>
+          ) : (
+            plans.map((p) => (
+              <DropdownMenuItem
+                key={p.id}
+                onClick={() => onSelectPlan(p.id)}
+                className={cn(p.id === activePlanId && "bg-accent")}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm">{p.name}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {[p.farmName, p.budgetYearLabel, p.statusRaw?.replace(/_/g, " ")]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
+                {p.id === activePlanId ? (
+                  <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+                ) : null}
+              </DropdownMenuItem>
+            ))
+          )}
           <DropdownMenuSeparator />
-          {FARM_AREAS.map((area) => (
-            <DropdownMenuItem key={area} onClick={() => setFarmArea(area)}>
-              {area}
-            </DropdownMenuItem>
-          ))}
+          <DropdownMenuItem asChild>
+            <Link href={CROPFORT_ROUTES.programmePlans}>Manage plans…</Link>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

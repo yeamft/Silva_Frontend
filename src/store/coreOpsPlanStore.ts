@@ -3,6 +3,13 @@ import { persist } from "zustand/middleware";
 import { listActivities } from "@/lib/api/activities";
 import { listFarms, type FarmSummary } from "@/lib/api/benchmark-surveys";
 import { getBlocks } from "@/lib/api/org-map";
+import {
+  decideProgrammePlan,
+  getOrCreateProgrammePlan,
+  getProgrammePlan,
+  submitProgrammePlan,
+  upsertProgrammePlan,
+} from "@/lib/api/programme-plans";
 import { listProgramRateCardProposals } from "@/lib/api/rate-card-proposals";
 import { enrichActivityAxes } from "@/lib/cropfort/activity-axes";
 import { resolveManualRef, resolveServiceType } from "@/lib/cropfort/activity-manuals";
@@ -27,124 +34,10 @@ import type {
   AfpPromotionStatus,
 } from "@/types/core-ops";
 
-const STORAGE_KEY = "cropfort.core-ops.plan.v2";
+/** UI cache only — server programme-plans is source of truth when online. */
+const STORAGE_KEY = "cropfort.core-ops.plan.v3";
 
-/** Offline / empty-API seed aligned with cropfortOpsStore Sheka estate. */
-const DEMO_FARM_ID = "farm-1";
-
-const DEMO_FARMS: FarmSummary[] = [
-  {
-    id: DEMO_FARM_ID,
-    name: "Sheka Estate",
-    approverUserId: null,
-    status: "active",
-    isApprover: true,
-  },
-];
-
-const DEMO_BLOCKS: PlanBlockOption[] = [
-  { id: "blk-sh01", code: "SH-01", name: "SH-01 Ridge", farmAreaId: DEMO_FARM_ID },
-  { id: "blk-sh04", code: "SH-04", name: "SH-04 Riverside", farmAreaId: DEMO_FARM_ID },
-  { id: "blk-sh07", code: "SH-07", name: "SH-07 Upper", farmAreaId: DEMO_FARM_ID },
-  { id: "blk-sh09", code: "SH-09", name: "SH-09 Nursery", farmAreaId: DEMO_FARM_ID },
-  { id: "blk-nur04", code: "NUR-04", name: "NUR-04", farmAreaId: DEMO_FARM_ID },
-  { id: "blk-sh12", code: "SH-12", name: "SH-12 Terrace", farmAreaId: DEMO_FARM_ID },
-  { id: "blk-t1032", code: "T1-032", name: "T1-032", farmAreaId: DEMO_FARM_ID },
-  { id: "blk-can12", code: "CAN-12", name: "CAN-12", farmAreaId: DEMO_FARM_ID },
-];
-
-function demoEligibleForFarm(
-  farmId: string,
-  farmName: string | null,
-): EligibleRateActivity[] {
-  const approvedAt = "2026-09-03T14:30:00.000Z";
-  return [
-    {
-      activityId: "act-prune",
-      activityCode: "LAB-PRN",
-      activityName: "Selective pruning",
-      category: "Canopy",
-      uom: "ha",
-      costKind: "labor",
-      rateCardId: "rc-demo-prune",
-      unitRateEtb: 1850,
-      normMdPerUnit: 12,
-      farmEstateId: farmId,
-      farmEstateName: farmName,
-      approvedAt,
-    },
-    {
-      activityId: "act-weed",
-      activityCode: "LAB-WED",
-      activityName: "Weeding cycle",
-      category: "Weeding",
-      uom: "ha",
-      costKind: "labor",
-      rateCardId: "rc-demo-weed",
-      unitRateEtb: 410,
-      normMdPerUnit: 8,
-      farmEstateId: farmId,
-      farmEstateName: farmName,
-      approvedAt,
-    },
-    {
-      activityId: "act-stump",
-      activityCode: "LAB-STP",
-      activityName: "Stumping",
-      category: "Rehabilitation",
-      uom: "ha",
-      costKind: "labor",
-      rateCardId: "rc-demo-stump",
-      unitRateEtb: 3200,
-      normMdPerUnit: 18,
-      farmEstateId: farmId,
-      farmEstateName: farmName,
-      approvedAt,
-    },
-    {
-      activityId: "act-fert",
-      activityCode: "MAT-FER",
-      activityName: "Fertilizer application",
-      category: "Nutrition",
-      uom: "ha",
-      costKind: "materials",
-      rateCardId: "rc-demo-fert",
-      unitRateEtb: 2450,
-      normMdPerUnit: null,
-      farmEstateId: farmId,
-      farmEstateName: farmName,
-      approvedAt,
-    },
-    {
-      activityId: "act-transplant",
-      activityCode: "LAB-TRN",
-      activityName: "Seedling transplant",
-      category: "Nursery",
-      uom: "md",
-      costKind: "labor",
-      rateCardId: "rc-demo-trn",
-      unitRateEtb: 280,
-      normMdPerUnit: 1,
-      farmEstateId: farmId,
-      farmEstateName: farmName,
-      approvedAt,
-    },
-    {
-      activityId: "act-road",
-      activityCode: "SVC-RD",
-      activityName: "Block road repair",
-      category: "Access",
-      uom: "km",
-      costKind: "services",
-      rateCardId: "rc-demo-road",
-      unitRateEtb: 12500,
-      normMdPerUnit: null,
-      farmEstateId: farmId,
-      farmEstateName: farmName,
-      approvedAt,
-    },
-  ];
-}
+/** Offline / empty-API seed removed — plans load from /api/v1/programme-plans. */
 
 function uuid(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -276,7 +169,9 @@ type CoreOpsPlanStore = {
   step: CoreOpsStep;
   focusActivityId: string | null;
   loadContext: () => Promise<void>;
-  ensurePlan: (farmEstateId: string, yearGc?: number) => void;
+  /** Load a specific programme plan by id (multi-plan editor). */
+  loadPlanById: (planId: string) => Promise<void>;
+  ensurePlan: (farmEstateId: string, yearGc?: number) => Promise<void>;
   /** Replace live plan (e.g. apply a saved scenario). */
   replacePlan: (plan: CoreOpsPlan) => void;
   setStep: (s: CoreOpsStep) => void;
@@ -285,6 +180,9 @@ type CoreOpsPlanStore = {
     patch: Partial<
       Pick<
         CoreOpsPlan,
+        | "name"
+        | "description"
+        | "planningCycleLabel"
         | "totalHa"
         | "vendorLabel"
         | "notes"
@@ -326,14 +224,14 @@ type CoreOpsPlanStore = {
   ) => number;
   planCompletion: () => PlanCompletion;
   reviewIssues: () => ReviewIssue[];
-  saveDraft: () => void;
-  finalize: () => void;
-  submitToAfps: () => AfpPromotion;
+  saveDraft: () => Promise<void>;
+  finalize: () => Promise<void>;
+  submitToAfps: () => Promise<AfpPromotion>;
   decidePromotion: (
     id: string,
     status: Extract<AfpPromotionStatus, "approved" | "returned">,
     note?: string,
-  ) => void;
+  ) => Promise<void>;
   blocksForPlan: () => PlanBlockOption[];
   categories: () => string[];
   activitiesByCategory: (category: string) => CoreOpsActivity[];
@@ -400,19 +298,13 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             getBlocks().catch(() => [] as Awaited<ReturnType<typeof getBlocks>>),
           ]);
 
-          let farms = farmsRes.length > 0 ? farmsRes : DEMO_FARMS;
-          let blocks: PlanBlockOption[] =
-            blocksRes.length > 0
-              ? blocksRes.map((b) => ({
-                  id: b.id,
-                  code: b.code,
-                  name: b.name,
-                  farmAreaId: b.farmAreaId ?? null,
-                }))
-              : DEMO_BLOCKS.map((b) => ({
-                  ...b,
-                  farmAreaId: farms[0]?.id ?? DEMO_FARM_ID,
-                }));
+          const farms = farmsRes;
+          const blocks: PlanBlockOption[] = blocksRes.map((b) => ({
+            id: b.id,
+            code: b.code,
+            name: b.name,
+            farmAreaId: b.farmAreaId ?? null,
+          }));
 
           const taxonomy = taxonomyRes;
           const coreOpsIds = new Set(
@@ -451,21 +343,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             });
           }
 
-          let eligible = [...eligibleMap.values()];
-          // Seed demo rates when API has none — cover every farm so setup works offline.
-          if (eligible.length === 0) {
-            eligible = farms.flatMap((f) => demoEligibleForFarm(f.id, f.name));
-          } else {
-            // Farms with zero approved rates still need a workable set.
-            for (const f of farms) {
-              const has = eligible.some((e) => e.farmEstateId === f.id);
-              if (!has) {
-                eligible = [...eligible, ...demoEligibleForFarm(f.id, f.name)];
-              }
-            }
-          }
-
-          eligible.sort(
+          const eligible = [...eligibleMap.values()].sort(
             (a, b) =>
               a.category.localeCompare(b.category) ||
               a.activityName.localeCompare(b.activityName),
@@ -476,67 +354,101 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             blocks,
             eligible,
             loading: false,
-            error: null,
+            error:
+              farms.length === 0
+                ? "No farm estates in active workspace — add farm areas before planning"
+                : null,
           });
-
-          const plan = get().plan;
-          if (!plan && farms[0]) {
-            get().ensurePlan(farms[0].id);
-          } else if (plan) {
-            const farm = farms.find((f) => f.id === plan.farmEstateId);
-            if (!farm) {
-              get().ensurePlan(farms[0].id, plan.budgetYearGc);
-            } else {
-              if (farm.name !== plan.farmName) {
-                get().updatePlanMeta({ farmName: farm.name });
-              }
-              get().syncActivitiesFromEligible();
-            }
-          }
+          // Do not auto-create a plan — register creates named programme plans.
         } catch (err) {
-          // Last-resort offline seed so the workspace stays usable.
-          const farms = DEMO_FARMS;
-          const blocks = DEMO_BLOCKS;
-          const eligible = demoEligibleForFarm(DEMO_FARM_ID, farms[0].name);
           set({
-            farms,
-            blocks,
-            eligible,
             loading: false,
-            error: err instanceof Error ? err.message : "Using offline Core Ops data",
+            error:
+              err instanceof Error
+                ? err.message
+                : "Failed to load programme planning context",
           });
-          const plan = get().plan;
-          if (!plan || !farms.some((f) => f.id === plan.farmEstateId)) {
-            get().ensurePlan(farms[0].id);
-          } else {
-            get().syncActivitiesFromEligible();
-          }
         }
       },
 
-      ensurePlan: (farmEstateId, yearGc) => {
+      loadPlanById: async (planId) => {
+        if (!planId) return;
+        set({ loading: true, error: null });
+        try {
+          if (!get().farms.length) {
+            await get().loadContext();
+          }
+          const remote = await getProgrammePlan(planId);
+          const farm = get().farms.find((f) => f.id === remote.farmEstateId);
+          const bandSet = useSpendBandStore.getState().getActiveSet();
+          const plan: CoreOpsPlan = {
+            ...remote,
+            name: remote.name || remote.farmName || "Programme plan",
+            farmName: remote.farmName || farm?.name || "",
+            programBandSetId: remote.programBandSetId ?? bandSet?.id ?? null,
+            promotions: remote.promotions ?? [],
+          };
+          set({ plan, loading: false, error: null, step: "setup" });
+          get().syncActivitiesFromEligible();
+        } catch (err) {
+          set({
+            loading: false,
+            error: err instanceof Error ? err.message : "Failed to load programme plan",
+          });
+        }
+      },
+
+      ensurePlan: async (farmEstateId, yearGc) => {
         const farm = get().farms.find((f) => f.id === farmEstateId);
         if (!farm) return;
         const year = yearGc ?? get().plan?.budgetYearGc ?? new Date().getFullYear();
-        const existing = get().plan;
-        if (
-          existing &&
-          existing.farmEstateId === farmEstateId &&
-          existing.budgetYearGc === year
-        ) {
+        set({ loading: true, error: null });
+        try {
+          const remote = await getOrCreateProgrammePlan(farmEstateId, year);
+          const bandSet = useSpendBandStore.getState().getActiveSet();
+          const plan: CoreOpsPlan = {
+            ...remote,
+            farmName: remote.farmName || farm.name,
+            programBandSetId: remote.programBandSetId ?? bandSet?.id ?? null,
+            promotions: remote.promotions ?? [],
+          };
+          set({ plan, step: get().step || "setup", loading: false });
           get().syncActivitiesFromEligible();
-          return;
+        } catch (err) {
+          const farmBlocks = get().blocks.filter(
+            (b) => !b.farmAreaId || b.farmAreaId === farmEstateId,
+          );
+          const blockIds = (farmBlocks.length > 0 ? farmBlocks : get().blocks).map(
+            (b) => b.id,
+          );
+          const bandSet = useSpendBandStore.getState().getActiveSet();
+          const existing = get().plan;
+          if (
+            existing &&
+            existing.farmEstateId === farmEstateId &&
+            existing.budgetYearGc === year
+          ) {
+            set({
+              loading: false,
+              error:
+                err instanceof Error
+                  ? `${err.message} — showing cached plan`
+                  : "Showing cached plan",
+            });
+            get().syncActivitiesFromEligible();
+            return;
+          }
+          set({
+            plan: newEmptyPlan(farm, year, blockIds, bandSet?.id ?? null),
+            step: "setup",
+            loading: false,
+            error:
+              err instanceof Error
+                ? `${err.message} — local draft only until API is available`
+                : "Local draft only until API is available",
+          });
+          get().syncActivitiesFromEligible();
         }
-        const farmBlocks = get().blocks.filter(
-          (b) => !b.farmAreaId || b.farmAreaId === farmEstateId,
-        );
-        const blockIds = (farmBlocks.length > 0 ? farmBlocks : get().blocks).map((b) => b.id);
-        const bandSet = useSpendBandStore.getState().getActiveSet();
-        set({
-          plan: newEmptyPlan(farm, year, blockIds, bandSet?.id ?? null),
-          step: "setup",
-        });
-        get().syncActivitiesFromEligible();
       },
 
       replacePlan: (next) => {
@@ -1000,15 +912,31 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
         return issues;
       },
 
-      saveDraft: () => {
+      saveDraft: async () => {
         const plan = get().plan;
         if (!plan) return;
-        set({
-          plan: { ...plan, status: "draft" as CoreOpsPlanStatus, updatedAt: nowIso() },
-        });
+        try {
+          const saved = await upsertProgrammePlan(plan.id, plan, "draft");
+          set({
+            plan: {
+              ...saved,
+              promotions: plan.promotions,
+              farmName: saved.farmName || plan.farmName,
+            },
+            error: null,
+          });
+        } catch (err) {
+          set({
+            plan: { ...plan, status: "draft", updatedAt: nowIso() },
+            error:
+              err instanceof Error
+                ? `${err.message} — draft kept locally`
+                : "Draft kept locally",
+          });
+        }
       },
 
-      finalize: () => {
+      finalize: async () => {
         const plan = get().plan;
         if (!plan) return;
         const blocking = get().reviewIssues().filter((i) => i.severity === "block");
@@ -1019,10 +947,23 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
         if (c.includedCount === 0) {
           throw new Error("Include at least one activity before finalizing");
         }
-        set({ plan: { ...plan, status: "finalized", updatedAt: nowIso() } });
+        try {
+          const saved = await upsertProgrammePlan(plan.id, plan, "finalized");
+          set({
+            plan: {
+              ...saved,
+              promotions: plan.promotions,
+              farmName: saved.farmName || plan.farmName,
+            },
+            error: null,
+          });
+        } catch (err) {
+          set({ plan: { ...plan, status: "finalized", updatedAt: nowIso() } });
+          throw err instanceof Error ? err : new Error("Finalize failed");
+        }
       },
 
-      submitToAfps: () => {
+      submitToAfps: async () => {
         const plan = get().plan;
         if (!plan) throw new Error("No plan");
         const blocking = get().reviewIssues().filter((i) => i.severity === "block");
@@ -1042,57 +983,87 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
               .join(", ")}`,
           );
         }
-        if (plan.status === "draft") {
-          set({ plan: { ...plan, status: "finalized", updatedAt: nowIso() } });
-        }
-        const p = get().plan!;
-        const band = useSpendBandStore.getState().bandForEtb(c.budgetEtb);
-        const auto = useSpendBandStore.getState().bandAutoApproves(band);
-        const promo: AfpPromotion = {
-          id: uuid("afpp"),
-          planId: p.id,
-          totalEtb: c.budgetEtb,
-          band,
-          status: auto ? "auto_approved" : "pending_silva",
-          createdAt: nowIso(),
-          note: auto
-            ? `Band ${band}: auto-approved into AFPs.`
-            : `Band ${band}: sent to Silva for approval.`,
-        };
+
+        // Persist latest lines before server readiness check.
+        await upsertProgrammePlan(plan.id, plan, plan.status === "draft" ? "finalized" : plan.status);
+        const result = await submitProgrammePlan(plan.id);
+        const promo: AfpPromotion =
+          result.promotion ||
+          result.plan.promotions?.[0] || {
+            id: `afpp-${plan.id}`,
+            planId: plan.id,
+            totalEtb: c.budgetEtb,
+            band: "B",
+            status: "pending_silva",
+            createdAt: nowIso(),
+            note: "",
+          };
         set({
           plan: {
-            ...p,
-            status: "submitted",
-            promotions: [promo, ...p.promotions],
-            updatedAt: nowIso(),
+            ...result.plan,
+            promotions: result.plan.promotions?.length
+              ? result.plan.promotions
+              : [promo, ...(plan.promotions || [])],
+            farmName: result.plan.farmName || plan.farmName,
           },
+          error: null,
         });
         return promo;
       },
 
-      decidePromotion: (id, status, note) => {
+      decidePromotion: async (_id, status, note) => {
         const plan = get().plan;
         if (!plan) return;
         const remark = note?.trim();
-        set({
-          plan: {
-            ...plan,
-            promotions: plan.promotions.map((p) =>
-              p.id === id
-                ? {
-                    ...p,
-                    status,
-                    note:
-                      remark ||
-                      (status === "approved"
-                        ? `Band ${p.band}: approved by Silva.`
-                        : `Band ${p.band}: returned for revision.`),
-                  }
-                : p,
-            ),
-            updatedAt: nowIso(),
-          },
-        });
+        try {
+          const updated = await decideProgrammePlan(
+            plan.id,
+            status === "approved" ? "approve" : "return",
+            remark,
+          );
+          set({
+            plan: {
+              ...updated,
+              promotions: updated.promotions?.length
+                ? updated.promotions
+                : plan.promotions.map((p) =>
+                    p.status === "pending_silva"
+                      ? {
+                          ...p,
+                          status,
+                          note:
+                            remark ||
+                            (status === "approved"
+                              ? `Band ${p.band}: approved by Silva.`
+                              : `Band ${p.band}: returned for revision.`),
+                        }
+                      : p,
+                  ),
+              farmName: updated.farmName || plan.farmName,
+            },
+          });
+        } catch (err) {
+          set({
+            plan: {
+              ...plan,
+              promotions: plan.promotions.map((p) =>
+                p.status === "pending_silva"
+                  ? {
+                      ...p,
+                      status,
+                      note:
+                        remark ||
+                        (status === "approved"
+                          ? `Band ${p.band}: approved by Silva.`
+                          : `Band ${p.band}: returned for revision.`),
+                    }
+                  : p,
+              ),
+              updatedAt: nowIso(),
+            },
+            error: err instanceof Error ? err.message : "Decision failed to sync",
+          });
+        }
       },
     }),
     {

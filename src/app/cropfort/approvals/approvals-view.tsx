@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -20,26 +20,128 @@ import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
 import { cn } from "@/lib/utils";
+import type { CropfortAfeDto } from "@/lib/api/afes";
+import type { InterventionDto } from "@/lib/api/interventions";
+import type { ProjectDto } from "@/lib/api/projects";
+import { useAfes, useDecideAfe } from "@/lib/query/hooks/use-afes";
 import {
-  fmtEtb,
-  type ApprovalKind,
-  type AfeDoc,
-  type Intervention,
-  type Project,
-  useCropfortOpsStore,
-} from "@/store/cropfortOpsStore";
+  useDecideIntervention,
+  useInterventions,
+} from "@/lib/query/hooks/use-interventions";
+import { useDecideMonthlyWorkOrder, useMonthlyWorkOrders } from "@/lib/query/hooks/use-monthly-work-orders";
 import {
-  scheduleLabel,
-  scheduleStatusOf,
-  useCoreOpsPlanStore,
-} from "@/store/coreOpsPlanStore";
-import { useMonthlyWorkOrderStore } from "@/store/monthlyWorkOrderStore";
+  useDecideProgrammePlan,
+  useProgrammePlans,
+} from "@/lib/query/hooks/use-programme-plans";
+import { useDecideProject, useProjects } from "@/lib/query/hooks/use-projects";
+import { useDecideWeeklyPlan, useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
+import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
+import { canApproveOperations } from "@/lib/cropfort/platform-access";
+import { fmtEtb } from "@/store/cropfortOpsStore";
+import { scheduleLabel, scheduleStatusOf } from "@/store/coreOpsPlanStore";
 import { useSpendBandStore } from "@/store/spendBandStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
 import type { AfpPromotion, CoreOpsActivity, CoreOpsPlan } from "@/types/core-ops";
 import type { MonthlyWorkOrder, WeeklyPlan } from "@/types/agronomic-cycle";
 
-type Tab = "project" | "intervention" | "afe" | "afp" | "monthly" | "weekly";
+function afpPromotionFromPlan(plan: ProgrammePlanDto): AfpPromotion {
+  return {
+    id: plan.id,
+    planId: plan.id,
+    totalEtb: plan.plannedCostEtb ?? 0,
+    band: (plan.resolvedBand || "B") as AfpPromotion["band"],
+    status: "pending_silva",
+    createdAt: plan.submittedAt || plan.updatedAt || new Date().toISOString(),
+    note: plan.approvalRequirement || "",
+  };
+}
+
+type Tab = "afe" | "afp" | "projects" | "interventions" | "monthly" | "weekly";
+
+function ProjectDetail({ project }: { project: ProjectDto }) {
+  const done = project.milestones.filter((m) => m.done).length;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <DetailKV label="Code">
+          <span className="font-mono text-xs">{project.code}</span>
+        </DetailKV>
+        <DetailKV label="Band">
+          <span className="font-medium">Band {project.band}</span>
+        </DetailKV>
+        <DetailKV label="Budget">
+          <span className="cf-numeric font-medium">{fmtEtb(project.budgetEtb)}</span>
+        </DetailKV>
+        <DetailKV label="Block">{project.blockCode || project.blockId || "—"}</DetailKV>
+        <DetailKV label="Vendor">{project.vendor || "—"}</DetailKV>
+        <DetailKV label="Milestones">
+          {done}/{project.milestones.length}
+        </DetailKV>
+        <DetailKV label="Submitted by">{project.createdByName || "—"}</DetailKV>
+        <DetailKV label="Submitted">
+          {project.submittedAt ? new Date(project.submittedAt).toLocaleString() : "—"}
+        </DetailKV>
+      </div>
+      {project.notes ? (
+        <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+          {project.notes}
+        </p>
+      ) : null}
+      <ReviewGate
+        items={[
+          { ok: project.budgetEtb > 0, label: "Budget is stated" },
+          { ok: Boolean(project.blockId), label: "Block is assigned" },
+          { ok: project.status === "submitted", label: "Awaiting Silva decision" },
+        ]}
+      />
+    </div>
+  );
+}
+
+function InterventionDetail({ intervention }: { intervention: InterventionDto }) {
+  const done = intervention.steps.filter((s) => s.done).length;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <DetailKV label="Code">
+          <span className="font-mono text-xs">{intervention.code}</span>
+        </DetailKV>
+        <DetailKV label="Band">
+          <span className="font-medium">Band {intervention.band}</span>
+        </DetailKV>
+        <DetailKV label="Cost">
+          <span className="cf-numeric font-medium">{fmtEtb(intervention.costEtb)}</span>
+        </DetailKV>
+        <DetailKV label="Block">
+          {intervention.blockCode || intervention.blockId || "—"}
+        </DetailKV>
+        <DetailKV label="Vendor">{intervention.vendor || "—"}</DetailKV>
+        <DetailKV label="Steps">
+          {done}/{intervention.steps.length}
+        </DetailKV>
+        <DetailKV label="Submitted by">{intervention.createdByName || "—"}</DetailKV>
+        <DetailKV label="Submitted">
+          {intervention.submittedAt
+            ? new Date(intervention.submittedAt).toLocaleString()
+            : "—"}
+        </DetailKV>
+      </div>
+      <ul className="space-y-1 text-sm">
+        {intervention.steps.map((s) => (
+          <li key={s.id} className={s.done ? "text-muted-foreground line-through" : ""}>
+            {s.title}
+          </li>
+        ))}
+      </ul>
+      <ReviewGate
+        items={[
+          { ok: intervention.costEtb > 0, label: "Cost is stated" },
+          { ok: Boolean(intervention.blockId), label: "Block is assigned" },
+          { ok: intervention.status === "submitted", label: "Awaiting Silva decision" },
+        ]}
+      />
+    </div>
+  );
+}
 
 type QueueRow = {
   id: string;
@@ -80,143 +182,31 @@ function ReviewGate({ items }: { items: { ok: boolean; label: string }[] }) {
   );
 }
 
-function ProjectDetail({
-  project,
-  blockName,
-}: {
-  project: Project;
-  blockName: string;
-}) {
-  const done = project.milestones.filter((m) => m.done).length;
+function AfeDetail({ afe }: { afe: CropfortAfeDto }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <DetailKV label="Code">{project.code}</DetailKV>
-        <DetailKV label="Band">
-          <span className="font-medium">Band {project.band}</span>
+        <DetailKV label="AFE id">
+          <span className="font-mono text-xs">{afe.id.slice(0, 12)}</span>
         </DetailKV>
-        <DetailKV label="Budget">
-          <span className="cf-numeric font-medium">{fmtEtb(project.budgetEtb)}</span>
-        </DetailKV>
-        <DetailKV label="Block / area">{blockName || "—"}</DetailKV>
-        <DetailKV label="Vendor">{project.vendor || "—"}</DetailKV>
-        <DetailKV label="Milestones">
-          {done}/{project.milestones.length} complete
-        </DetailKV>
-      </div>
-      {project.notes ? (
-        <DetailKV label="Submission notes">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{project.notes}</p>
-        </DetailKV>
-      ) : null}
-      {project.milestones.length > 0 ? (
-        <div>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Scope milestones
-          </p>
-          <ul className="divide-y divide-border rounded-md border border-border">
-            {project.milestones.map((m) => (
-              <li
-                key={m.id}
-                className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
-              >
-                <span>{m.title}</span>
-                <StatusBadge status={m.done ? "complete" : "planned"} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      <ReviewGate
-        items={[
-          { ok: project.budgetEtb > 0, label: "Budget amount is stated" },
-          { ok: Boolean(project.vendor), label: "Vendor assigned" },
-          { ok: Boolean(project.blockId), label: "Block / farm area linked" },
-          {
-            ok: project.milestones.length > 0,
-            label:
-              project.milestones.length > 0
-                ? "Scope milestones listed for delivery tracking"
-                : "No milestones listed — confirm scope is clear",
-          },
-        ]}
-      />
-    </div>
-  );
-}
-
-function InterventionDetail({
-  item,
-  blockName,
-}: {
-  item: Intervention;
-  blockName: string;
-}) {
-  const done = item.steps.filter((s) => s.done).length;
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <DetailKV label="Code">{item.code}</DetailKV>
-        <DetailKV label="Cost">
-          <span className="cf-numeric font-medium">{fmtEtb(item.costEtb)}</span>
-        </DetailKV>
-        <DetailKV label="Block / area">{blockName || "—"}</DetailKV>
-        <DetailKV label="Vendor">{item.vendor || "—"}</DetailKV>
-        <DetailKV label="Steps">
-          {done}/{item.steps.length} complete
-        </DetailKV>
-      </div>
-      {item.steps.length > 0 ? (
-        <ul className="divide-y divide-border rounded-md border border-border">
-          {item.steps.map((s) => (
-            <li
-              key={s.id}
-              className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
-            >
-              <span>{s.title}</span>
-              <StatusBadge status={s.done ? "complete" : "planned"} />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <ReviewGate
-        items={[
-          { ok: item.costEtb > 0, label: "Intervention cost is stated" },
-          { ok: Boolean(item.vendor), label: "Vendor assigned" },
-          { ok: item.steps.length > 0, label: "Work steps defined" },
-        ]}
-      />
-    </div>
-  );
-}
-
-function AfeDetail({
-  afe,
-  blockName,
-  sourceLabel,
-}: {
-  afe: AfeDoc;
-  blockName: string;
-  sourceLabel: string;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <DetailKV label="AFE code">{afe.code}</DetailKV>
         <DetailKV label="Band">
           <span className="font-medium">Band {afe.band}</span>
         </DetailKV>
         <DetailKV label="Amount">
           <span className="cf-numeric font-medium">{fmtEtb(afe.amountEtb)}</span>
         </DetailKV>
-        <DetailKV label="Source">{sourceLabel}</DetailKV>
-        <DetailKV label="Block / area">{blockName || "—"}</DetailKV>
+        <DetailKV label="Source">{afe.sourceType || "manual"}</DetailKV>
+        <DetailKV label="Version">v{afe.version}</DetailKV>
         <DetailKV label="Title">{afe.title}</DetailKV>
+        <DetailKV label="Submitted by">{afe.createdByName || "—"}</DetailKV>
+        <DetailKV label="Submitted">
+          {afe.submittedAt ? new Date(afe.submittedAt).toLocaleString() : "—"}
+        </DetailKV>
       </div>
       <ReviewGate
         items={[
           { ok: afe.amountEtb > 0, label: "Authority amount is stated" },
-          { ok: Boolean(afe.sourceId), label: "Linked to a programme source" },
+          { ok: afe.status === "submitted", label: "AFE is awaiting decision" },
           {
             ok: afe.band === "C" || afe.band === "D",
             label:
@@ -553,114 +543,117 @@ function WeeklyDetail({ plan }: { plan: WeeklyPlan }) {
 export default function ApprovalsView() {
   const { user, activeProgram } = useCropfortAuth();
   const area = getCropfortArea("approvals");
-  const projects = useCropfortOpsStore((s) => s.projects);
-  const interventions = useCropfortOpsStore((s) => s.interventions);
-  const afes = useCropfortOpsStore((s) => s.afes);
-  const nodes = useCropfortOpsStore((s) => s.nodes);
-  const decide = useCropfortOpsStore((s) => s.decide);
-  const plan = useCoreOpsPlanStore((s) => s.plan);
-  const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
-  const decidePromotion = useCoreOpsPlanStore((s) => s.decidePromotion);
-  const monthlyOrders = useMonthlyWorkOrderStore((s) => s.orders);
-  const decideMonthly = useMonthlyWorkOrderStore((s) => s.decide);
-  const weeklyPlans = useWeeklyPlanStore((s) => s.plans);
-  const decideWeekly = useWeeklyPlanStore((s) => s.decide);
+  const canDecide = canApproveOperations(user.role);
+  const afesQuery = useAfes(Boolean(activeProgram?.id), "submitted");
+  const decideAfe = useDecideAfe();
+  const afes = afesQuery.data || [];
+  const weeklyQuery = useWeeklyPlans(Boolean(activeProgram?.id), "submitted");
+  const decideWeeklyMut = useDecideWeeklyPlan();
+  const weeklyPlans = weeklyQuery.data || [];
+  const monthlyQuery = useMonthlyWorkOrders(Boolean(activeProgram?.id), "submitted");
+  const decideMonthlyMut = useDecideMonthlyWorkOrder();
+  const monthlyOrders = monthlyQuery.data || [];
+  const afpPlansQuery = useProgrammePlans(Boolean(activeProgram?.id), {
+    status: "submitted",
+  });
+  const decideAfpMut = useDecideProgrammePlan();
+  const afpPlans = afpPlansQuery.data || [];
+  const projectsQuery = useProjects(Boolean(activeProgram?.id), "submitted");
+  const decideProjectMut = useDecideProject();
+  const projects = projectsQuery.data || [];
+  const interventionsQuery = useInterventions(Boolean(activeProgram?.id), "submitted");
+  const decideInterventionMut = useDecideIntervention();
+  const interventions = interventionsQuery.data || [];
   const bandAutoApproves = useSpendBandStore((s) => s.bandAutoApproves);
 
-  const [tab, setTab] = useState<Tab>("project");
+  const [tab, setTab] = useState<Tab>("afe");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [decisionNote, setDecisionNote] = useState("");
-
-  useEffect(() => {
-    void loadContext();
-  }, [loadContext]);
 
   useEffect(() => {
     setDecisionNote("");
   }, [selectedId, tab]);
 
-  const blockName = (id: string) => nodes.find((n) => n.id === id)?.name || id;
-
   const queues = useMemo(() => {
-    const project: QueueRow[] = projects
-      .filter((p) => p.status === "submitted")
-      .map((p) => ({
-        id: p.id,
-        kind: "project" as const,
-        title: p.title,
-        meta: `${p.code} · ${blockName(p.blockId)} · ${p.vendor || "No vendor"}`,
-        amount: p.budgetEtb,
-        risk: p.band === "C" || p.band === "D" ? `Band ${p.band}` : undefined,
-      }));
-    const intervention: QueueRow[] = interventions
-      .filter((p) => p.status === "submitted")
-      .map((p) => ({
-        id: p.id,
-        kind: "intervention" as const,
-        title: p.title,
-        meta: `${p.code} · ${blockName(p.blockId)}`,
-        amount: p.costEtb,
-      }));
-    const afe: QueueRow[] = afes
-      .filter((p) => p.status === "submitted")
-      .map((p) => ({
-        id: p.id,
-        kind: "afe" as const,
-        title: p.title,
-        meta: `${p.code} · Band ${p.band} · ${p.sourceType}`,
-        amount: p.amountEtb,
-        risk: p.band === "C" || p.band === "D" ? `Band ${p.band} gate` : undefined,
-      }));
-    const afp: QueueRow[] = (plan?.promotions ?? [])
-      .filter((p) => p.status === "pending_silva")
-      .map((p) => ({
+    const afe: QueueRow[] = afes.map((p) => ({
+      id: p.id,
+      kind: "afe" as const,
+      title: p.title,
+      meta: `${p.id.slice(0, 10)} · Band ${p.band} · ${p.sourceType}`,
+      amount: p.amountEtb,
+      risk: p.band === "C" || p.band === "D" ? `Band ${p.band} gate` : undefined,
+    }));
+    const afp: QueueRow[] = afpPlans.map((p) => {
+      const included = Object.values(p.activities ?? {}).filter((a) => a.included).length;
+      const band = p.resolvedBand || "?";
+      return {
         id: p.id,
         kind: "afp" as const,
-        title: plan?.farmName ? `${plan.farmName} AFP` : "AFP",
-        meta: `${plan?.budgetYearLabel ?? ""} · Band ${p.band} · ${Object.values(plan?.activities ?? {}).filter((a) => a.included).length} lines`,
-        amount: p.totalEtb,
-        risk: `Band ${p.band} · Silva`,
-      }));
-    const monthly: QueueRow[] = monthlyOrders
-      .filter((o) => o.status === "submitted")
-      .map((o) => {
-        const out = o.lines.filter((l) => !l.inPlan).length;
-        return {
-          id: o.id,
-          kind: "monthly" as const,
-          title: o.code,
-          meta: `${o.farmName} · ${PLAN_MONTH_LABELS[o.ethiopianMonth]} · ${o.lines.length} lines`,
-          amount: o.totalEtb,
-          risk: out > 0 ? `${out} out-of-plan` : undefined,
-        };
-      });
-    const weekly: QueueRow[] = weeklyPlans
-      .filter((p) => p.status === "submitted")
-      .map((p) => ({
-        id: p.id,
-        kind: "weekly" as const,
-        title: p.code,
-        meta: `${p.weekLabel} · ${p.lines.length} lines`,
-        amount: p.lines.reduce((s, l) => s + l.etb, 0),
-      }));
-    return { project, intervention, afe, afp, monthly, weekly };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- blockName uses nodes
-  }, [projects, interventions, afes, plan, monthlyOrders, weeklyPlans, nodes]);
+        title: p.farmName ? `${p.farmName} AFP` : "AFP",
+        meta: `${p.budgetYearLabel ?? ""} · Band ${band} · ${included} lines`,
+        amount: p.plannedCostEtb ?? 0,
+        risk: `Band ${band} · Silva`,
+      };
+    });
+    const projectsQ: QueueRow[] = projects.map((p) => ({
+      id: p.id,
+      kind: "projects" as const,
+      title: p.title,
+      meta: `${p.code} · Band ${p.band} · ${p.blockCode || p.blockId}`,
+      amount: p.budgetEtb,
+      risk: p.band === "C" || p.band === "D" ? `Band ${p.band}` : undefined,
+    }));
+    const interventionsQ: QueueRow[] = interventions.map((i) => ({
+      id: i.id,
+      kind: "interventions" as const,
+      title: i.title,
+      meta: `${i.code} · Band ${i.band} · ${i.blockCode || i.blockId}`,
+      amount: i.costEtb,
+      risk: i.band === "C" || i.band === "D" ? `Band ${i.band}` : undefined,
+    }));
+    const monthly: QueueRow[] = monthlyOrders.map((o) => {
+      const out = o.lines.filter((l) => !l.inPlan).length;
+      return {
+        id: o.id,
+        kind: "monthly" as const,
+        title: o.code,
+        meta: `${o.farmName} · ${PLAN_MONTH_LABELS[o.ethiopianMonth as keyof typeof PLAN_MONTH_LABELS] || o.ethiopianMonth} · ${o.lines.length} lines`,
+        amount: o.totalEtb,
+        risk: out > 0 ? `${out} out-of-plan` : undefined,
+      };
+    });
+    const weekly: QueueRow[] = weeklyPlans.map((p) => ({
+      id: p.id,
+      kind: "weekly" as const,
+      title: p.code,
+      meta: `${p.weekLabel} · ${p.lines.length} lines`,
+      amount: p.lines.reduce((s, l) => s + l.etb, 0),
+    }));
+    return {
+      afe,
+      afp,
+      projects: projectsQ,
+      interventions: interventionsQ,
+      monthly,
+      weekly,
+    };
+  }, [afes, afpPlans, projects, interventions, monthlyOrders, weeklyPlans]);
 
   const rows = queues[tab];
   const selected = rows.find((r) => r.id === selectedId) ?? rows[0] ?? null;
 
-  const selectedProject =
-    selected?.kind === "project" ? projects.find((p) => p.id === selected.id) : null;
-  const selectedIntervention =
-    selected?.kind === "intervention"
-      ? interventions.find((p) => p.id === selected.id)
-      : null;
   const selectedAfe =
     selected?.kind === "afe" ? afes.find((p) => p.id === selected.id) : null;
-  const selectedPromo =
-    selected?.kind === "afp"
-      ? plan?.promotions.find((p) => p.id === selected.id) ?? null
+  const selectedAfpPlan =
+    selected?.kind === "afp" ? afpPlans.find((p) => p.id === selected.id) ?? null : null;
+  const selectedPromo = selectedAfpPlan ? afpPromotionFromPlan(selectedAfpPlan) : null;
+  const selectedProject =
+    selected?.kind === "projects"
+      ? projects.find((p) => p.id === selected.id) ?? null
+      : null;
+  const selectedIntervention =
+    selected?.kind === "interventions"
+      ? interventions.find((i) => i.id === selected.id) ?? null
       : null;
   const selectedMonthly =
     selected?.kind === "monthly"
@@ -671,50 +664,72 @@ export default function ApprovalsView() {
       ? weeklyPlans.find((p) => p.id === selected.id) ?? null
       : null;
 
-  const afeSourceLabel = selectedAfe
-    ? (() => {
-        if (selectedAfe.sourceType === "project") {
-          const src = projects.find((p) => p.id === selectedAfe.sourceId);
-          return src ? `Project · ${src.code} · ${src.title}` : "Project source";
-        }
-        if (selectedAfe.sourceType === "intervention") {
-          const src = interventions.find((p) => p.id === selectedAfe.sourceId);
-          return src ? `Intervention · ${src.code} · ${src.title}` : "Intervention source";
-        }
-        return "AFP programme source";
-      })()
-    : "";
-
-  const decideRow = (decision: "approved" | "returned") => {
+  const decideRow = async (decision: "approved" | "returned") => {
     if (!selected) return;
+    if (!canDecide) {
+      toast.error("Only Silva / asset owners can approve or return");
+      return;
+    }
     if (decision === "returned" && !decisionNote.trim()) {
       toast.error("Add a return reason so the submitter knows what to fix");
       return;
     }
     const note = decisionNote.trim() || undefined;
-    if (selected.kind === "afp") {
-      decidePromotion(selected.id, decision, note);
-    } else if (selected.kind === "monthly") {
-      decideMonthly(selected.id, decision, note);
-    } else if (selected.kind === "weekly") {
-      decideWeekly(selected.id, decision, note);
-    } else {
-      decide(selected.kind as ApprovalKind, selected.id, decision, note);
+    try {
+      if (selected.kind === "afe") {
+        await decideAfe.mutateAsync({
+          id: selected.id,
+          decision: decision === "approved" ? "approve" : "return",
+          comment: note,
+        });
+      } else if (selected.kind === "afp") {
+        await decideAfpMut.mutateAsync({
+          id: selected.id,
+          decision: decision === "approved" ? "approve" : "return",
+          comment: note,
+        });
+      } else if (selected.kind === "projects") {
+        await decideProjectMut.mutateAsync({
+          id: selected.id,
+          decision: decision === "approved" ? "approve" : "return",
+          comment: note,
+        });
+      } else if (selected.kind === "interventions") {
+        await decideInterventionMut.mutateAsync({
+          id: selected.id,
+          decision: decision === "approved" ? "approve" : "return",
+          comment: note,
+        });
+      } else if (selected.kind === "monthly") {
+        await decideMonthlyMut.mutateAsync({
+          id: selected.id,
+          decision: decision === "approved" ? "approve" : "return",
+          comment: note,
+        });
+      } else if (selected.kind === "weekly") {
+        await decideWeeklyMut.mutateAsync({
+          id: selected.id,
+          decision: decision === "approved" ? "approve" : "return",
+          comment: note,
+        });
+      }
+      setSelectedId(null);
+      setDecisionNote("");
+      toast.success(
+        decision === "approved"
+          ? `Approved by ${user.name.split(" ")[0] || "reviewer"}`
+          : "Returned with comments",
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Decision failed");
     }
-    setSelectedId(null);
-    setDecisionNote("");
-    toast.success(
-      decision === "approved"
-        ? `Approved by ${user.name.split(" ")[0] || "reviewer"}`
-        : "Returned with comments",
-    );
   };
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "project", label: "Projects" },
-    { id: "intervention", label: "Interventions" },
     { id: "afe", label: "AFEs" },
     { id: "afp", label: "AFPs" },
+    { id: "projects", label: "Projects" },
+    { id: "interventions", label: "Interventions" },
     { id: "monthly", label: "Monthly WOs" },
     { id: "weekly", label: "Weekly plans" },
   ];
@@ -726,7 +741,6 @@ export default function ApprovalsView() {
       <PageHeader
         eyebrow={activeProgram?.name || "Control"}
         title={area.label}
-        description="Review scope, cost, and risk before Silva or asset-owner approval."
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Control" },
@@ -847,31 +861,17 @@ export default function ApprovalsView() {
                   ) : null}
                 </div>
 
-                {selectedProject ? (
-                  <ProjectDetail
-                    project={selectedProject}
-                    blockName={blockName(selectedProject.blockId)}
-                  />
-                ) : null}
-                {selectedIntervention ? (
-                  <InterventionDetail
-                    item={selectedIntervention}
-                    blockName={blockName(selectedIntervention.blockId)}
-                  />
-                ) : null}
-                {selectedAfe ? (
-                  <AfeDetail
-                    afe={selectedAfe}
-                    blockName={blockName(selectedAfe.blockId)}
-                    sourceLabel={afeSourceLabel}
-                  />
-                ) : null}
-                {selectedPromo && plan ? (
+                {selectedAfe ? <AfeDetail afe={selectedAfe} /> : null}
+                {selectedPromo && selectedAfpPlan ? (
                   <AfpDetail
-                    plan={plan}
+                    plan={selectedAfpPlan}
                     promotion={selectedPromo}
-                    activities={Object.values(plan.activities)}
+                    activities={Object.values(selectedAfpPlan.activities)}
                   />
+                ) : null}
+                {selectedProject ? <ProjectDetail project={selectedProject} /> : null}
+                {selectedIntervention ? (
+                  <InterventionDetail intervention={selectedIntervention} />
                 ) : null}
                 {selectedMonthly ? <MonthlyDetail order={selectedMonthly} /> : null}
                 {selectedWeekly ? <WeeklyDetail plan={selectedWeekly} /> : null}
@@ -889,21 +889,29 @@ export default function ApprovalsView() {
                     value={decisionNote}
                     onChange={(e) => setDecisionNote(e.target.value)}
                     placeholder="What did you verify? If returning, what must change?"
+                    disabled={!canDecide}
                   />
                 </div>
 
-                <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-border bg-card pt-3">
-                  <Button size="sm" onClick={() => decideRow("approved")}>
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => decideRow("returned")}
-                  >
-                    Return
-                  </Button>
-                </div>
+                {canDecide ? (
+                  <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-border bg-card pt-3">
+                    <Button size="sm" onClick={() => decideRow("approved")}>
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => decideRow("returned")}
+                    >
+                      Return
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="border-t border-border pt-3 text-sm text-muted-foreground">
+                    Waiting for Silva / asset-owner decision. You can review the
+                    detail but cannot approve from this desk.
+                  </p>
+                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Select an item to review.</p>

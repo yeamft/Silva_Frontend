@@ -1,4 +1,4 @@
-/** Core Operations annual plan v2 (frontend; backend later). */
+/** Core Operations annual plan (frontend types; persisted via /api/v1/programme-plans). */
 
 import type { PlanMonth } from "@/lib/cropfort/ethiopian-year";
 
@@ -57,6 +57,12 @@ export type AfpPromotion = {
 
 export type CoreOpsPlan = {
   id: string;
+  /** Programme plan title (not workspace / farm area). */
+  name?: string;
+  code?: string;
+  description?: string;
+  /** Global planning cycle label e.g. "2027 Programme". */
+  planningCycleLabel?: string;
   farmEstateId: string;
   farmName: string;
   budgetYearGc: number;
@@ -67,11 +73,18 @@ export type CoreOpsPlan = {
   vendorLabel: string;
   notes: string;
   status: CoreOpsPlanStatus;
+  statusRaw?: string;
   /** Block ids applicable to this plan (default: all for farm). */
   applicableBlockIds: string[];
   activityIds: string[];
   activities: Record<string, CoreOpsActivity>;
   promotions: AfpPromotion[];
+  plannedCostEtb?: number;
+  includedCount?: number;
+  scheduledCount?: number;
+  ratesOkCount?: number;
+  totalLines?: number;
+  archivedAt?: string | null;
   updatedAt: string;
 };
 

@@ -22,48 +22,36 @@ import {
   computePerformanceSnapshot,
   fmtEtb,
 } from "@/lib/cropfort/performance-metrics";
-import { ticketWaitingOn, useCropfortOpsStore } from "@/store/cropfortOpsStore";
+import { usePerformanceLiveData } from "@/lib/query/hooks/use-performance-live";
+import { ticketWaitingOn } from "@/store/cropfortOpsStore";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
 
 export default function ProgressView() {
   const { activeProgram } = useCropfortAuth();
   const area = getCropfortArea("progress");
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const nodes = useCropfortOpsStore((s) => s.nodes);
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const afes = useCropfortOpsStore((s) => s.afes);
+  const { workOrders, tickets, committedEtb, weekly, dfrs } = usePerformanceLiveData(
+    Boolean(activeProgram?.id),
+  );
   const plan = useCoreOpsPlanStore((s) => s.plan);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
   const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
 
   useEffect(() => {
     void loadContext();
   }, [loadContext]);
-
-  const committed = useMemo(
-    () =>
-      afes
-        .filter((a) => a.status === "approved" || a.status === "issued")
-        .reduce((s, a) => s + (a.amountEtb || 0), 0),
-    [afes],
-  );
 
   const snap = useMemo(
     () =>
       computePerformanceSnapshot({
         plan,
         planBudgetEtb: planCompletion().budgetEtb,
-        committedEtb: committed,
+        committedEtb,
         workOrders,
         tickets,
         dfrs,
         weekly,
       }),
-    [plan, planCompletion, committed, workOrders, tickets, dfrs, weekly],
+    [plan, planCompletion, committedEtb, workOrders, tickets, dfrs, weekly],
   );
 
   const waiting = {
@@ -73,11 +61,14 @@ export default function ProgressView() {
   };
 
   const byBlock = useMemo(() => {
-    const blocks = nodes.filter((n) => n.kind === "block");
-    return blocks
-      .map((block) => {
-        const tix = tickets.filter((t) => t.block === block.name);
-        const wos = workOrders.filter((w) => w.block === block.name);
+    const names = new Set<string>();
+    for (const w of workOrders) if (w.block && w.block !== "—") names.add(w.block);
+    for (const t of tickets) if (t.block && t.block !== "—") names.add(t.block);
+
+    return [...names]
+      .map((name) => {
+        const tix = tickets.filter((t) => t.block === name);
+        const wos = workOrders.filter((w) => w.block === name);
         const avg = tix.length
           ? Math.round((tix.filter((t) => t.status === "validated").length / tix.length) * 100)
           : wos.length
@@ -102,11 +93,11 @@ export default function ProgressView() {
             : avg >= 50
               ? "on_track"
               : "at_risk";
-        return { block, tix, wos, avg, spend, planned, status: stuck, hold };
+        return { id: name, name, tix, wos, avg, spend, planned, status: stuck, hold };
       })
       .filter((row) => row.wos.length > 0 || row.tix.length > 0)
       .sort((a, b) => a.avg - b.avg);
-  }, [nodes, workOrders, tickets]);
+  }, [workOrders, tickets]);
 
   const byActivity = useMemo(
     () => activityVarianceRows(workOrders, tickets).slice(0, 8),
@@ -159,10 +150,10 @@ export default function ProgressView() {
         ) : (
           <ul className="divide-y divide-border">
             {byBlock.map((row) => (
-              <li key={row.block.id} className="space-y-2 px-5 py-4">
+              <li key={row.id} className="space-y-2 px-5 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-medium">{row.block.name}</p>
+                    <p className="text-sm font-medium">{row.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {row.tix.length} tickets · {fmtEtb(row.spend)} of {fmtEtb(row.planned)}
                     </p>

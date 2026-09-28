@@ -12,6 +12,11 @@ import {
   DEFAULT_WORKSPACE_COLOR,
   type WorkspaceColorId,
 } from "@/lib/workspace-themes";
+import {
+  applyWorkspaceFont,
+  DEFAULT_WORKSPACE_FONT,
+  type WorkspaceFontId,
+} from "@/lib/workspace-fonts";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -27,7 +32,7 @@ function makeQueryClient() {
 
 const LOCAL_RESET_VERSION_KEY = "coffee-field-os-reset-v1";
 
-/** Marketing / auth surfaces stay on fixed Green (upwork) light, ignoring dashboard theme. */
+/** Marketing / auth surfaces use the default Cropfort palette (not workspace prefs). */
 function isPublicThemeLockedPath(pathname: string | null | undefined) {
   if (!pathname) return false;
   if (pathname === "/" || pathname === "/login" || pathname === "/register") return true;
@@ -35,18 +40,25 @@ function isPublicThemeLockedPath(pathname: string | null | undefined) {
   return false;
 }
 
-const PUBLIC_THEME_COLOR: WorkspaceColorId = "upwork";
+const PUBLIC_THEME_COLOR: WorkspaceColorId = DEFAULT_WORKSPACE_COLOR;
+const PUBLIC_THEME_FONT: WorkspaceFontId = DEFAULT_WORKSPACE_FONT;
 
-function applyDocumentTheme(isDark: boolean, color: WorkspaceColorId) {
+function applyDocumentTheme(
+  isDark: boolean,
+  color: WorkspaceColorId,
+  font: WorkspaceFontId = DEFAULT_WORKSPACE_FONT,
+) {
   document.documentElement.classList.toggle("dark", isDark);
   document.documentElement.style.colorScheme = isDark ? "dark" : "light";
   applyWorkspaceColor(color, isDark);
+  applyWorkspaceFont(font);
 }
 
 const ThemeApplier = () => {
   const pathname = usePathname();
   const dark = useThemeStore((s) => s.dark);
   const workspaceColor = useThemeStore((s) => s.workspaceColor);
+  const workspaceFont = useThemeStore((s) => s.workspaceFont);
   const syncForUser = useThemeStore((s) => s.syncForUser);
   const clearActiveUser = useThemeStore((s) => s.clearActiveUser);
   const authUser = useAuthStore((s) => s.user);
@@ -64,13 +76,14 @@ const ThemeApplier = () => {
   useEffect(() => {
     const apply = () => {
       if (isPublicThemeLockedPath(pathname)) {
-        applyDocumentTheme(false, PUBLIC_THEME_COLOR);
+        applyDocumentTheme(false, PUBLIC_THEME_COLOR, PUBLIC_THEME_FONT);
         return;
       }
       const s = useThemeStore.getState();
       applyDocumentTheme(
         Boolean(s.dark),
         s.workspaceColor ?? DEFAULT_WORKSPACE_COLOR,
+        s.workspaceFont ?? DEFAULT_WORKSPACE_FONT,
       );
     };
 
@@ -84,7 +97,7 @@ const ThemeApplier = () => {
     }
 
     return unsub;
-  }, [dark, workspaceColor, pathname, locked, authUser?.id]);
+  }, [dark, workspaceColor, workspaceFont, pathname, locked, authUser?.id]);
 
   return null;
 };

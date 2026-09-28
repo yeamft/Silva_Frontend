@@ -23,44 +23,41 @@ import {
 } from "@/lib/cropfort/platform-access";
 import { validateDfr } from "@/lib/schedule5";
 import { useAgreementConfigStore } from "@/store/agreementConfigStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
+import {
+  useCorrectDailyFieldRecord,
+  useCreateDailyFieldRecord,
+  useDailyFieldRecords,
+  useSiteCheckDailyFieldRecord,
+  useSubmitDailyFieldRecord,
+  useUpdateDailyFieldRecord,
+} from "@/lib/query/hooks/use-daily-field-records";
+import { useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
 
 export default function DailyFieldRecordsView() {
   const { activeProgram, user } = useCropfortAuth();
-  const allPlans = useWeeklyPlanStore((s) => s.plans);
-  const allRecords = useDailyFieldRecordStore((s) => s.records);
-  const createFromWeeklyLine = useDailyFieldRecordStore((s) => s.createFromWeeklyLine);
-  const updateDraft = useDailyFieldRecordStore((s) => s.updateDraft);
-  const submit = useDailyFieldRecordStore((s) => s.submit);
-  const siteCheck = useDailyFieldRecordStore((s) => s.siteCheck);
-  const correctAsNewVersion = useDailyFieldRecordStore((s) => s.correctAsNewVersion);
+  const weeklyQuery = useWeeklyPlans(Boolean(activeProgram?.id));
+  const dfrQuery = useDailyFieldRecords(Boolean(activeProgram?.id));
+  const createMut = useCreateDailyFieldRecord();
+  const updateMut = useUpdateDailyFieldRecord();
+  const submitMut = useSubmitDailyFieldRecord();
+  const siteCheckMut = useSiteCheckDailyFieldRecord();
+  const correctMut = useCorrectDailyFieldRecord();
+  const allPlans = weeklyQuery.data || [];
+  const records = dfrQuery.data || [];
   const schedule5 = useAgreementConfigStore((s) => s.schedule5);
-
-  const records = useMemo(() => {
-    const byKey = new Map<string, (typeof allRecords)[0]>();
-    for (const r of allRecords) {
-      const key = r.code.split("-v")[0];
-      const prev = byKey.get(key);
-      if (!prev || r.version >= prev.version) byKey.set(key, r);
-    }
-    return Array.from(byKey.values()).sort((a, b) =>
-      b.updatedAt.localeCompare(a.updatedAt),
-    );
-  }, [allRecords]);
 
   const plans = useMemo(
     () => allPlans.filter((p) => p.status === "active"),
     [allPlans],
   );
 
-  const [planId, setPlanId] = useState(plans[0]?.id ?? "");
+  const [planId, setPlanId] = useState("");
   const plan = plans.find((p) => p.id === planId) ?? plans[0];
-  const [lineId, setLineId] = useState(plan?.lines[0]?.id ?? "");
+  const [lineId, setLineId] = useState("");
   const [actualQty, setActualQty] = useState("1.4");
   const [laborHours, setLaborHours] = useState("8");
   const [notes, setNotes] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(records[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!plans.length) {
@@ -99,19 +96,35 @@ export default function DailyFieldRecordsView() {
     ? validateDfr({ ...selected, expectedBlockId: selected.blockId }, schedule5)
     : [];
 
-  const onCreate = () => {
+  const onCreate = async () => {
     if (!canEnter) {
       toast.error("Only B-Agro enters field records on the Platform (Chaka Buna submits off-Platform)");
       return;
     }
+    const line = plan?.lines.find((l) => l.id === lineId) ?? plan?.lines[0];
+    if (!plan || !line) {
+      toast.error("Select an active weekly plan line");
+      return;
+    }
     try {
-      const row = createFromWeeklyLine({
-        weeklyPlanId: planId,
-        weeklyPlanLineId: lineId,
+      const row = await createMut.mutateAsync({
+        weeklyPlanId: plan.id,
+        weeklyPlanLineId: line.id,
+        monthlyWoId: plan.monthlyWoId,
+        monthlyWoCode: plan.monthlyWoCode,
+        monthlyLineId: line.monthlyLineId,
+        activityId: line.activityId,
+        activityCode: line.activityCode,
+        activityName: line.activityName,
+        blockId: line.blockId,
+        blockCode: line.blockCode,
+        plannedQty: line.qty,
         actualQty: Number(actualQty) || 0,
+        unit: line.unit,
         laborHours: Number(laborHours) || 0,
         notes,
         entrySource,
+        materialsUsed: line.materials ? [line.materials] : [],
       });
       setSelectedId(row.id);
       toast.success(`Created ${row.code}`);
@@ -131,10 +144,7 @@ export default function DailyFieldRecordsView() {
         ]}
       />
 
-      <p className="mb-3 text-xs text-muted-foreground">
-        Chaka Buna records work off-Platform; B-Agro is the only route for field data into the
-        Platform (RB04 / RB09).
-      </p>
+    
 
       <div className="mb-4 grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-1 lg:col-span-2">
@@ -259,13 +269,20 @@ export default function DailyFieldRecordsView() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      updateDraft(selected.id, {
-                        actualQty: Number(actualQty) || selected.actualQty,
-                        laborHours: Number(laborHours) || selected.laborHours,
-                        notes,
-                      });
-                      toast.message("Draft updated");
+                    onClick={async () => {
+                      try {
+                        await updateMut.mutateAsync({
+                          id: selected.id,
+                          patch: {
+                            actualQty: Number(actualQty) || selected.actualQty,
+                            laborHours: Number(laborHours) || selected.laborHours,
+                            notes,
+                          },
+                        });
+                        toast.message("Draft updated");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Save failed");
+                      }
                     }}
                   >
                     Save draft
@@ -274,12 +291,15 @@ export default function DailyFieldRecordsView() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => {
+                      onClick={async () => {
                         try {
-                          const next = correctAsNewVersion(selected.id, {
-                            actualQty: Number(actualQty) || selected.actualQty,
-                            laborHours: Number(laborHours) || selected.laborHours,
-                            notes,
+                          const next = await correctMut.mutateAsync({
+                            id: selected.id,
+                            patch: {
+                              actualQty: Number(actualQty) || selected.actualQty,
+                              laborHours: Number(laborHours) || selected.laborHours,
+                              notes,
+                            },
                           });
                           setSelectedId(next.id);
                           toast.success(`New version ${next.code} (original kept)`);
@@ -293,9 +313,13 @@ export default function DailyFieldRecordsView() {
                   ) : null}
                   <Button
                     size="sm"
-                    onClick={() => {
-                      submit(selected.id);
-                      toast.success("Submitted for site check");
+                    onClick={async () => {
+                      try {
+                        await submitMut.mutateAsync(selected.id);
+                        toast.success("Submitted for site check");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Submit failed");
+                      }
                     }}
                   >
                     Submit
@@ -305,9 +329,13 @@ export default function DailyFieldRecordsView() {
               {selected.status === "submitted" && isSite && (
                 <Button
                   size="sm"
-                  onClick={() => {
+                  onClick={async () => {
                     try {
-                      siteCheck(selected.id, "Site verified", 92);
+                      await siteCheckMut.mutateAsync({
+                        id: selected.id,
+                        note: "Site verified",
+                        qualityScore: 92,
+                      });
                       toast.success("Site checked");
                     } catch (e) {
                       toast.error(e instanceof Error ? e.message : "Failed");

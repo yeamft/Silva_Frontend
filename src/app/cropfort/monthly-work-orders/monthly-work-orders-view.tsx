@@ -29,8 +29,16 @@ import {
 } from "@/lib/cropfort/platform-access";
 import { fmtEtb } from "@/store/cropfortOpsStore";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
-import { useMonthlyWorkOrderStore } from "@/store/monthlyWorkOrderStore";
+import { deriveMonthlyLinesFromPlan } from "@/store/monthlyWorkOrderStore";
 import { useAgreementConfigStore } from "@/store/agreementConfigStore";
+import {
+  useActivateMonthlyWorkOrder,
+  useAddMonthlyOutOfPlanLine,
+  useCreateMonthlyWorkOrder,
+  useDecideMonthlyWorkOrder,
+  useMonthlyWorkOrders,
+  useSubmitMonthlyWorkOrder,
+} from "@/lib/query/hooks/use-monthly-work-orders";
 import type { MonthlyWoStatus } from "@/types/agronomic-cycle";
 
 const STATUS_ORDER: MonthlyWoStatus[] = [
@@ -45,17 +53,17 @@ export default function MonthlyWorkOrdersView() {
   const { activeProgram, user } = useCropfortAuth();
   const params = useSearchParams();
   const plan = useCoreOpsPlanStore((s) => s.plan);
-  const orders = useMonthlyWorkOrderStore((s) => s.orders);
-  const createFromPlan = useMonthlyWorkOrderStore((s) => s.createFromPlan);
-  const submit = useMonthlyWorkOrderStore((s) => s.submit);
-  const decide = useMonthlyWorkOrderStore((s) => s.decide);
-  const activate = useMonthlyWorkOrderStore((s) => s.activate);
-  const addOutOfPlanLine = useMonthlyWorkOrderStore((s) => s.addOutOfPlanLine);
-  const setAdjustmentAccepted = useMonthlyWorkOrderStore((s) => s.setAdjustmentAccepted);
+  const ordersQuery = useMonthlyWorkOrders(Boolean(activeProgram?.id));
+  const createMut = useCreateMonthlyWorkOrder();
+  const submitMut = useSubmitMonthlyWorkOrder();
+  const decideMut = useDecideMonthlyWorkOrder();
+  const activateMut = useActivateMonthlyWorkOrder();
+  const addOutOfPlanMut = useAddMonthlyOutOfPlanLine();
+  const orders = ordersQuery.data || [];
   const schedule7Blocking = useAgreementConfigStore((s) => s.schedule7Blocking);
 
   const [month, setMonth] = useState<PlanMonth>("sep");
-  const [selectedId, setSelectedId] = useState<string | null>(orders[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [outReason, setOutReason] = useState("");
   const [outName, setOutName] = useState("");
   const [outQty, setOutQty] = useState("1");
@@ -76,6 +84,16 @@ export default function MonthlyWorkOrdersView() {
     }
   }, [params]);
 
+  useEffect(() => {
+    if (!orders.length) {
+      if (selectedId) setSelectedId(null);
+      return;
+    }
+    if (!selectedId || !orders.some((o) => o.id === selectedId)) {
+      setSelectedId(orders[0].id);
+    }
+  }, [orders, selectedId]);
+
   const selected = useMemo(
     () => orders.find((o) => o.id === selectedId) ?? orders[0] ?? null,
     [orders, selectedId],
@@ -87,7 +105,7 @@ export default function MonthlyWorkOrdersView() {
   /** In-plan-only MWOs: SPX may activate; out-of-plan needs Silva approve first. */
   const canActivateScope = canEdit || canApprove;
 
-  const onCreate = () => {
+  const onCreate = async () => {
     if (!canEdit) {
       toast.error("Only SPX can create monthly work orders from the plan");
       return;
@@ -97,49 +115,53 @@ export default function MonthlyWorkOrdersView() {
       return;
     }
     try {
-      const row = createFromPlan({
-        planId: plan.id,
-        month,
-        programId: activeProgram?.id,
+      const lines = deriveMonthlyLinesFromPlan(plan.id, month);
+      if (!lines.length) {
+        toast.error("No included activities scheduled for this month");
+        return;
+      }
+      const row = await createMut.mutateAsync({
+        ethiopianMonth: month,
+        yearGc: new Date().getFullYear(),
+        farmName: plan.farmName || activeProgram?.name || "",
+        sourcePlanId: plan.id,
+        lines,
       });
       setSelectedId(row.id);
-      toast.success(
-        row.loop === "G_monthly_feedback"
-          ? `Created ${row.code} with Loop G adjustments from last report`
-          : `Created ${row.code} from ${PLAN_MONTH_LABELS[month]} calendar`,
-      );
+      toast.success(`Created ${row.code} from ${PLAN_MONTH_LABELS[month]} calendar`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not create monthly WO");
     }
   };
 
-  const onAddOutOfPlan = () => {
+  const onAddOutOfPlan = async () => {
     if (!canEdit) {
       toast.error("Only SPX can add out-of-plan lines");
       return;
     }
     if (!selected) return;
+    const name = outName.trim();
+    const reason = outReason.trim();
+    if (!name || !reason) {
+      toast.error("Activity name and reason are required");
+      return;
+    }
     try {
-      addOutOfPlanLine(
-        selected.id,
-        {
-          activityId: "act-oop",
-          activityCode: "OOP",
-          activityName: outName.trim() || "Out-of-plan activity",
-          blockId: selected.lines[0]?.blockId ?? "blk-sh01",
-          blockCode: selected.lines[0]?.blockCode ?? "SH-01",
-          plannedQty: Number(outQty) || 1,
-          unit: "ha",
-          etb: Number(outEtb) || 0,
-          manualsRef: "",
-        },
-        outReason,
-      );
+      await addOutOfPlanMut.mutateAsync({
+        id: selected.id,
+        activityName: name,
+        plannedQty: Number(outQty) || 1,
+        unit: selected.lines[0]?.unit || "ha",
+        etb: Number(outEtb) || 0,
+        blockId: selected.lines[0]?.blockId,
+        blockCode: selected.lines[0]?.blockCode,
+        reason,
+      });
       setOutName("");
       setOutReason("");
-      toast.success("Out-of-plan line added — Silva approval required");
+      toast.success("Out-of-plan line added — Silva approval required on submit");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not add line");
+      toast.error(e instanceof Error ? e.message : "Could not add out-of-plan line");
     }
   };
 
@@ -236,7 +258,7 @@ export default function MonthlyWorkOrdersView() {
               {(selected.status === "draft" || selected.status === "returned") && canEdit && (
                 <Button
                   size="sm"
-                  onClick={() => {
+                  onClick={async () => {
                     const blocking = schedule7Blocking();
                     if (blocking.length) {
                       toast.error(
@@ -244,12 +266,16 @@ export default function MonthlyWorkOrdersView() {
                       );
                       return;
                     }
-                    submit(selected.id);
-                    toast.success(
-                      hasOutOfPlan
-                        ? "Submitted to Silva (out-of-plan items)"
-                        : "Submitted — inform Silva",
-                    );
+                    try {
+                      await submitMut.mutateAsync(selected.id);
+                      toast.success(
+                        hasOutOfPlan
+                          ? "Submitted to Silva (out-of-plan items)"
+                          : "Submitted — inform Silva",
+                      );
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Submit failed");
+                    }
                   }}
                 >
                   Submit
@@ -259,9 +285,13 @@ export default function MonthlyWorkOrdersView() {
                 <>
                   <Button
                     size="sm"
-                    onClick={() => {
-                      decide(selected.id, "approved");
-                      toast.success("Approved by Silva");
+                    onClick={async () => {
+                      try {
+                        await decideMut.mutateAsync({ id: selected.id, decision: "approve" });
+                        toast.success("Approved by Silva");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Approve failed");
+                      }
                     }}
                   >
                     Approve (Silva)
@@ -269,9 +299,17 @@ export default function MonthlyWorkOrdersView() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      decide(selected.id, "returned", "Returned for revision");
-                      toast.message("Returned");
+                    onClick={async () => {
+                      try {
+                        await decideMut.mutateAsync({
+                          id: selected.id,
+                          decision: "return",
+                          comment: "Returned for revision",
+                        });
+                        toast.message("Returned");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Return failed");
+                      }
                     }}
                   >
                     Return
@@ -286,9 +324,9 @@ export default function MonthlyWorkOrdersView() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => {
+                  onClick={async () => {
                     try {
-                      activate(selected.id);
+                      await activateMut.mutateAsync(selected.id);
                       toast.success("Monthly WO active");
                     } catch (e) {
                       toast.error(e instanceof Error ? e.message : "Activate failed");
@@ -363,7 +401,7 @@ export default function MonthlyWorkOrdersView() {
                               variant={a.accepted ? "secondary" : "outline"}
                               className="h-7"
                               onClick={() =>
-                                setAdjustmentAccepted(selected.id, a.id, !a.accepted)
+                                toast.message("Adjustment accept/reject will ship with MWO patch API")
                               }
                             >
                               {a.accepted ? "Accepted" : "Rejected"}

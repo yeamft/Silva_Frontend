@@ -68,4 +68,86 @@ export const queryKeys = {
     assetOwners: () => [...queryKeys.orgMap.all, "asset-owners"] as const,
     overview: () => [...queryKeys.orgMap.all, "overview"] as const,
   },
+  workOrders: {
+    all: ["work-orders"] as const,
+    list: (params?: { status?: string; farmEstateId?: string }) =>
+      [...queryKeys.workOrders.all, "list", params ?? {}] as const,
+    detail: (id: string) => [...queryKeys.workOrders.all, "detail", id] as const,
+  },
+  afes: {
+    all: ["afes"] as const,
+    list: (status?: string) => [...queryKeys.afes.all, "list", status ?? "all"] as const,
+    detail: (id: string) => [...queryKeys.afes.all, "detail", id] as const,
+  },
+  projects: {
+    all: ["projects"] as const,
+    list: (status?: string) => [...queryKeys.projects.all, "list", status ?? "all"] as const,
+    detail: (id: string) => [...queryKeys.projects.all, "detail", id] as const,
+  },
+  interventions: {
+    all: ["interventions"] as const,
+    list: (status?: string) => [...queryKeys.interventions.all, "list", status ?? "all"] as const,
+    detail: (id: string) => [...queryKeys.interventions.all, "detail", id] as const,
+  },
+  planScenarios: {
+    all: ["plan-scenarios"] as const,
+    list: () => [...queryKeys.planScenarios.all, "list"] as const,
+  },
+  reports: {
+    all: ["reports"] as const,
+    list: (status?: string) => [...queryKeys.reports.all, "list", status ?? "all"] as const,
+  },
+  messageThreads: {
+    all: ["message-threads"] as const,
+    list: () => [...queryKeys.messageThreads.all, "list"] as const,
+  },
+  agreementConfig: {
+    all: ["agreement-config"] as const,
+    current: () => [...queryKeys.agreementConfig.all, "current"] as const,
+  },
+  paymentRequests: {
+    all: ["payment-requests"] as const,
+    list: (status?: string) =>
+      [...queryKeys.paymentRequests.all, "list", status ?? "all"] as const,
+    settlements: () => [...queryKeys.paymentRequests.all, "settlements"] as const,
+  },
+  weeklyPlans: {
+    all: ["weekly-plans"] as const,
+    list: (status?: string) => [...queryKeys.weeklyPlans.all, "list", status ?? "all"] as const,
+    detail: (id: string) => [...queryKeys.weeklyPlans.all, "detail", id] as const,
+  },
+  monthlyWorkOrders: {
+    all: ["monthly-work-orders"] as const,
+    list: (status?: string) =>
+      [...queryKeys.monthlyWorkOrders.all, "list", status ?? "all"] as const,
+  },
+  dailyFieldRecords: {
+    all: ["daily-field-records"] as const,
+    list: (status?: string) =>
+      [...queryKeys.dailyFieldRecords.all, "list", status ?? "all"] as const,
+  },
+  directInstructions: {
+    all: ["direct-instructions"] as const,
+    list: (params?: { status?: string; monthlyWoId?: string }) =>
+      [...queryKeys.directInstructions.all, "list", params ?? {}] as const,
+    pending: (monthlyWoId: string) =>
+      [...queryKeys.directInstructions.all, "pending", monthlyWoId] as const,
+  },
+  programmePlans: {
+    all: ["programme-plans"] as const,
+    list: (params?: {
+      status?: string;
+      farmEstateId?: string;
+      planYear?: number;
+      q?: string;
+      includeArchived?: boolean;
+      /** Workspace id — plans are scoped by active-program auth headers. */
+      programId?: string | null;
+    }) => [...queryKeys.programmePlans.all, "list", params ?? {}] as const,
+  },
+  auditLog: {
+    all: ["audit-log"] as const,
+    list: (params?: { entityType?: string; entityId?: string; limit?: number }) =>
+      [...queryKeys.auditLog.all, "list", params ?? {}] as const,
+  },
 } as const;

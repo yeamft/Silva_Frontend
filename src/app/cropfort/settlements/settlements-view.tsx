@@ -30,8 +30,11 @@ import {
   canSeeSettlements,
 } from "@/lib/cropfort/commercial-access";
 import { isSilvaDesk } from "@/lib/cropfort/platform-access";
+import {
+  useMarkSettlementSettled,
+  useSettlements,
+} from "@/lib/query/hooks/use-payment-requests";
 import { fmtEtb } from "@/store/cropfortOpsStore";
-import { useCommercialStore } from "@/store/commercialStore";
 import type { SettlementStatus } from "@/types/cropfort-commercial";
 
 type Filter = "all" | SettlementStatus;
@@ -48,15 +51,13 @@ export default function SettlementsView() {
   const canMark = canAuthorizeSettlement(user.role) || isSilvaDesk(user.role);
   const silva = isSilvaDesk(user.role);
 
-  const list = useCommercialStore((s) => s.listSettlementsForRole);
-  const markSettlementSettled = useCommercialStore((s) => s.markSettlementSettled);
-  const rows = list(user.role);
+  const settlementsQuery = useSettlements(Boolean(activeProgram?.id));
+  const markSettled = useMarkSettlementSettled();
+  const rows = settlementsQuery.data || [];
 
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
-
-  const actor = { userId: user.id, name: user.name, role: user.role };
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -83,11 +84,6 @@ export default function SettlementsView() {
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Control"}
         title="Owner settlements"
-        description={
-          silva
-            ? "SPX-authorized commercial settlements — no raw field tickets."
-            : "Authorize verified payment requests for Silva review."
-        }
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Control", href: CROPFORT_ROUTES.approvals },
@@ -150,7 +146,7 @@ export default function SettlementsView() {
               {visible.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                    No settlements yet
+                    {settlementsQuery.isLoading ? "Loading…" : "No settlements yet"}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -182,9 +178,10 @@ export default function SettlementsView() {
                             size="sm"
                             variant="secondary"
                             className="h-8"
-                            onClick={() => {
+                            disabled={markSettled.isPending}
+                            onClick={async () => {
                               try {
-                                markSettlementSettled(r.id, actor);
+                                await markSettled.mutateAsync(r.id);
                                 toast.success(`${r.code} marked settled`);
                               } catch (e) {
                                 toast.error(e instanceof Error ? e.message : "Update failed");

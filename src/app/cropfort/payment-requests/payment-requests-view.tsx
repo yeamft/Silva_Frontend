@@ -45,8 +45,15 @@ import {
   canSeePaymentRequests,
   canVerifyPaymentRequest,
 } from "@/lib/cropfort/commercial-access";
-import { fmtEtb, useCropfortOpsStore } from "@/store/cropfortOpsStore";
-import { useCommercialStore } from "@/store/commercialStore";
+import { fmtEtb } from "@/store/cropfortOpsStore";
+import { mapTicketDto, useWorkOrders } from "@/lib/query/hooks/use-work-orders";
+import {
+  useAuthorizeSettlement,
+  useCreatePaymentRequest,
+  usePaymentRequests,
+  useReturnPaymentRequest,
+  useVerifyPaymentRequest,
+} from "@/lib/query/hooks/use-payment-requests";
 import type { PaymentRequestStatus } from "@/types/cropfort-commercial";
 
 type Filter = "all" | PaymentRequestStatus;
@@ -65,13 +72,21 @@ export default function PaymentRequestsView() {
   const canCreate = canCreatePaymentRequest(user.role);
   const canVerify = canVerifyPaymentRequest(user.role);
 
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const list = useCommercialStore((s) => s.listPaymentRequestsForRole);
-  const createPaymentRequest = useCommercialStore((s) => s.createPaymentRequest);
-  const verifyPaymentRequest = useCommercialStore((s) => s.verifyPaymentRequest);
-  const returnPaymentRequest = useCommercialStore((s) => s.returnPaymentRequest);
-  const authorizeSettlement = useCommercialStore((s) => s.authorizeSettlement);
-  const rows = list(user.role);
+  const enabled = Boolean(activeProgram?.id);
+  const prQuery = usePaymentRequests(enabled);
+  const woQuery = useWorkOrders(enabled);
+  const createPr = useCreatePaymentRequest();
+  const verifyPr = useVerifyPaymentRequest();
+  const returnPr = useReturnPaymentRequest();
+  const authorize = useAuthorizeSettlement();
+
+  const rows = prQuery.data || [];
+  const tickets = useMemo(() => {
+    const byId = new Map((woQuery.data || []).map((w) => [w.id, w]));
+    return (woQuery.data || []).flatMap((wo) =>
+      (wo.tickets || []).map((t) => mapTicketDto(t, byId.get(wo.id))),
+    );
+  }, [woQuery.data]);
 
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -81,12 +96,6 @@ export default function PaymentRequestsView() {
   const [returnNote, setReturnNote] = useState("");
   const [settleId, setSettleId] = useState<string | null>(null);
   const [narrative, setNarrative] = useState("");
-
-  const actor = {
-    userId: user.id,
-    name: user.name,
-    role: user.role,
-  };
 
   const validatedTickets = useMemo(
     () =>
@@ -121,7 +130,6 @@ export default function PaymentRequestsView() {
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Control"}
         title="Payment requests"
-        description="Bill from validated field tickets. SPX verifies; then authorize settlement for Silva."
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Control", href: CROPFORT_ROUTES.approvals },
@@ -185,7 +193,7 @@ export default function PaymentRequestsView() {
               {visible.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                    No payment requests in this filter
+                    {prQuery.isLoading ? "Loading…" : "No payment requests in this filter"}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -213,9 +221,10 @@ export default function PaymentRequestsView() {
                               size="sm"
                               variant="secondary"
                               className="h-8"
-                              onClick={() => {
+                              disabled={verifyPr.isPending}
+                              onClick={async () => {
                                 try {
-                                  verifyPaymentRequest(r.id, actor);
+                                  await verifyPr.mutateAsync(r.id);
                                   toast.success(`${r.code} verified`);
                                 } catch (e) {
                                   toast.error(e instanceof Error ? e.message : "Verify failed");
@@ -294,14 +303,10 @@ export default function PaymentRequestsView() {
               Cancel
             </Button>
             <Button
-              disabled={!ticketId}
-              onClick={() => {
+              disabled={!ticketId || createPr.isPending}
+              onClick={async () => {
                 try {
-                  const row = createPaymentRequest(
-                    ticketId,
-                    actor,
-                    activeProgram?.id || "prog-1",
-                  );
+                  const row = await createPr.mutateAsync(ticketId);
                   toast.success(`${row.code} submitted`);
                   setCreateOpen(false);
                   setTicketId("");
@@ -332,10 +337,11 @@ export default function PaymentRequestsView() {
               Cancel
             </Button>
             <Button
-              onClick={() => {
+              disabled={returnPr.isPending}
+              onClick={async () => {
                 if (!returnId) return;
                 try {
-                  returnPaymentRequest(returnId, returnNote, actor);
+                  await returnPr.mutateAsync({ id: returnId, comment: returnNote });
                   toast.message("Payment request returned");
                   setReturnId(null);
                 } catch (e) {
@@ -367,10 +373,14 @@ export default function PaymentRequestsView() {
               Cancel
             </Button>
             <Button
-              onClick={() => {
+              disabled={authorize.isPending}
+              onClick={async () => {
                 if (!settleId) return;
                 try {
-                  const stl = authorizeSettlement(settleId, narrative, actor);
+                  const stl = await authorize.mutateAsync({
+                    paymentRequestId: settleId,
+                    narrative,
+                  });
                   toast.success(`${stl.code} authorized for Silva`);
                   setSettleId(null);
                 } catch (e) {

@@ -51,8 +51,13 @@ import {
 } from "@/lib/cropfort/platform-access";
 import { validateDfr } from "@/lib/schedule5";
 import { cn } from "@/lib/utils";
+import {
+  useDailyFieldRecords,
+  useReturnDailyFieldRecord,
+  useSiteCheckDailyFieldRecord,
+  useValidateDailyFieldRecord,
+} from "@/lib/query/hooks/use-daily-field-records";
 import { useAgreementConfigStore } from "@/store/agreementConfigStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
 import type { DailyFieldRecord, DfrStatus } from "@/types/agronomic-cycle";
 
 const PAGE_SIZES = [10, 25, 50];
@@ -74,10 +79,11 @@ function varianceTone(pct: number) {
 
 export default function ValidationQueueView() {
   const { activeProgram, user } = useCropfortAuth();
-  const records = useDailyFieldRecordStore((s) => s.records);
-  const siteCheck = useDailyFieldRecordStore((s) => s.siteCheck);
-  const validate = useDailyFieldRecordStore((s) => s.validate);
-  const returnRecord = useDailyFieldRecordStore((s) => s.returnRecord);
+  const dfrQuery = useDailyFieldRecords(Boolean(activeProgram?.id));
+  const siteCheckMut = useSiteCheckDailyFieldRecord();
+  const validateMut = useValidateDailyFieldRecord();
+  const returnMut = useReturnDailyFieldRecord();
+  const records = dfrQuery.data || [];
   const schedule5 = useAgreementConfigStore((s) => s.schedule5);
 
   const [query, setQuery] = useState("");
@@ -143,10 +149,14 @@ export default function ValidationQueueView() {
     setPage(1);
   };
 
-  const runSiteCheck = (row: DailyFieldRecord) => {
+  const runSiteCheck = async (row: DailyFieldRecord) => {
     try {
       const q = Number(qualityScore);
-      siteCheck(row.id, note || "Site verified", Number.isFinite(q) ? q : undefined);
+      await siteCheckMut.mutateAsync({
+        id: row.id,
+        note: note || "Site verified",
+        qualityScore: Number.isFinite(q) ? q : undefined,
+      });
       setNote("");
       toast.success(`${row.code} site checked`);
     } catch (e) {
@@ -154,10 +164,12 @@ export default function ValidationQueueView() {
     }
   };
 
-  const runValidate = (row: DailyFieldRecord) => {
+  const runValidate = async (row: DailyFieldRecord) => {
     try {
       const q = Number(qualityScore);
-      validate(row.id, note || "Validated under Sch. 5", schedule5, {
+      await validateMut.mutateAsync({
+        id: row.id,
+        note: note || "Validated under Sch. 5",
         qualityScore: Number.isFinite(q) ? q : undefined,
         missCause: missCause || null,
       });
@@ -170,7 +182,7 @@ export default function ValidationQueueView() {
     }
   };
 
-  const runReturn = (row: DailyFieldRecord) => {
+  const runReturn = async (row: DailyFieldRecord) => {
     if (!note.trim()) {
       toast.error("Return note required");
       return;
@@ -179,11 +191,19 @@ export default function ValidationQueueView() {
       .split(/[\n,;]+/)
       .map((s) => s.trim())
       .filter(Boolean);
-    returnRecord(row.id, note, criteria.length ? criteria : [note.trim()]);
-    setSelectedId(null);
-    setNote("");
-    setFailedCriteriaText("");
-    toast.message(`${row.code} returned for correction`);
+    try {
+      await returnMut.mutateAsync({
+        id: row.id,
+        note,
+        failedCriteria: criteria.length ? criteria : [note.trim()],
+      });
+      setSelectedId(null);
+      setNote("");
+      setFailedCriteriaText("");
+      toast.message(`${row.code} returned for correction`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Return failed");
+    }
   };
 
   return (
@@ -191,7 +211,6 @@ export default function ValidationQueueView() {
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Control"}
         title="Validation"
-        description="Site-check and Schedule 5 validation for daily field records."
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Control" },

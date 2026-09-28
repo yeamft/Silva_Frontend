@@ -122,7 +122,7 @@ export const CROPFORT_AREAS: CropfortAreaDef[] = [
     interfaceKind: "planning_workspace",
     interfaceLabel: "Planning workspace + calendar",
     description: "Annual Tier 1 plan: activities, qty, schedule.",
-    href: "/cropfort/afp",
+    href: "/cropfort/planning/programmes",
     readiness: "ready",
   },
   {

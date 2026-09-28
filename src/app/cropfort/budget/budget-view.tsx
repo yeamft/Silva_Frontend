@@ -30,10 +30,10 @@ import {
   activityVarianceRows,
   computePerformanceSnapshot,
 } from "@/lib/cropfort/performance-metrics";
+import { useInterventions } from "@/lib/query/hooks/use-interventions";
+import { usePerformanceLiveData } from "@/lib/query/hooks/use-performance-live";
+import { useProjects } from "@/lib/query/hooks/use-projects";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
-import { useCropfortOpsStore } from "@/store/cropfortOpsStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
 
 function varLabel(pct: number) {
   return `${pct > 0 ? "+" : ""}${pct}%`;
@@ -45,13 +45,12 @@ export default function BudgetForecastView() {
   const loading = useCoreOpsPlanStore((s) => s.loading);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
   const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
-  const afes = useCropfortOpsStore((s) => s.afes);
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const projects = useCropfortOpsStore((s) => s.projects);
-  const interventions = useCropfortOpsStore((s) => s.interventions);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
+
+  const live = usePerformanceLiveData(Boolean(activeProgram?.id));
+  const projectsQuery = useProjects(Boolean(activeProgram?.id));
+  const interventionsQuery = useInterventions(Boolean(activeProgram?.id));
+  const projects = projectsQuery.data || [];
+  const interventions = interventionsQuery.data || [];
 
   useEffect(() => {
     void loadContext();
@@ -61,31 +60,31 @@ export default function BudgetForecastView() {
   const categories = useMemo(() => categoryBudget(acts), [acts]);
   const completion = planCompletion();
 
-  const committed = useMemo(
-    () =>
-      afes
-        .filter((a) => a.status === "approved" || a.status === "issued")
-        .reduce((s, a) => s + (a.amountEtb || 0), 0),
-    [afes],
-  );
-
   const snap = useMemo(
     () =>
       computePerformanceSnapshot({
         plan,
         planBudgetEtb: completion.budgetEtb,
-        committedEtb: committed,
-        workOrders,
-        tickets,
-        dfrs,
-        weekly,
+        committedEtb: live.committedEtb,
+        workOrders: live.workOrders,
+        tickets: live.tickets,
+        dfrs: live.dfrs,
+        weekly: live.weekly,
       }),
-    [plan, completion.budgetEtb, committed, workOrders, tickets, dfrs, weekly],
+    [
+      plan,
+      completion.budgetEtb,
+      live.committedEtb,
+      live.workOrders,
+      live.tickets,
+      live.dfrs,
+      live.weekly,
+    ],
   );
 
   const activityRows = useMemo(
-    () => activityVarianceRows(workOrders, tickets),
-    [workOrders, tickets],
+    () => activityVarianceRows(live.workOrders, live.tickets),
+    [live.workOrders, live.tickets],
   );
 
   /** Map plan category → actual from WO activity labels (best-effort). */

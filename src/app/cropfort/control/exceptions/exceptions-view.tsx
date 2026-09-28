@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
@@ -27,12 +27,17 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { canIssueDirectInstruction } from "@/lib/cropfort/platform-access";
-import { fmtEtb, ticketWaitingOn, useCropfortOpsStore } from "@/store/cropfortOpsStore";
-import { useAgreementConfigStore } from "@/store/agreementConfigStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useDirectInstructionStore } from "@/store/directInstructionStore";
-import { useMonthlyWorkOrderStore } from "@/store/monthlyWorkOrderStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
+import { mapTicketDto, mapWorkOrderDto, useWorkOrders } from "@/lib/query/hooks/use-work-orders";
+import { useAfes } from "@/lib/query/hooks/use-afes";
+import { useDailyFieldRecords } from "@/lib/query/hooks/use-daily-field-records";
+import { useMonthlyWorkOrders } from "@/lib/query/hooks/use-monthly-work-orders";
+import { useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
+import {
+  useConfirmDirectInstruction,
+  useDirectInstructions,
+  useIssueDirectInstruction,
+} from "@/lib/query/hooks/use-direct-instructions";
+import { fmtEtb, ticketWaitingOn } from "@/store/cropfortOpsStore";
 
 type ExceptionRow = {
   id: string;
@@ -45,30 +50,51 @@ type ExceptionRow = {
 
 export default function ExceptionsView() {
   const { activeProgram, user } = useCropfortAuth();
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const afes = useCropfortOpsStore((s) => s.afes);
-  const projects = useCropfortOpsStore((s) => s.projects);
-  const interventions = useCropfortOpsStore((s) => s.interventions);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
-  const monthly = useMonthlyWorkOrderStore((s) => s.orders);
-  const instructions = useDirectInstructionStore((s) => s.instructions);
-  const issueDi = useDirectInstructionStore((s) => s.issue);
-  const confirmWritten = useDirectInstructionStore((s) => s.confirmWritten);
-  const diValue = useAgreementConfigStore((s) => s.directInstructionValueEtb);
+  const woQuery = useWorkOrders(Boolean(activeProgram?.id));
+  const afesQuery = useAfes(Boolean(activeProgram?.id));
+  const workOrders = useMemo(
+    () => (woQuery.data || []).map(mapWorkOrderDto),
+    [woQuery.data],
+  );
+  const tickets = useMemo(() => {
+    const byId = new Map((woQuery.data || []).map((w) => [w.id, w]));
+    return (woQuery.data || []).flatMap((wo) =>
+      (wo.tickets || []).map((t) => mapTicketDto(t, byId.get(wo.id))),
+    );
+  }, [woQuery.data]);
+  const afes = afesQuery.data || [];
+  const weeklyQuery = useWeeklyPlans(Boolean(activeProgram?.id));
+  const weekly = weeklyQuery.data || [];
+  const monthlyQuery = useMonthlyWorkOrders(Boolean(activeProgram?.id));
+  const monthly = monthlyQuery.data || [];
+  const dfrQuery = useDailyFieldRecords(Boolean(activeProgram?.id));
+  const dfrs = dfrQuery.data || [];
+  const diQuery = useDirectInstructions(Boolean(activeProgram?.id));
+  const instructions = diQuery.data || [];
+  const issueDiMut = useIssueDirectInstruction();
+  const confirmDiMut = useConfirmDirectInstruction();
 
   const canIssue = canIssueDirectInstruction(user.role);
   const [diTitle, setDiTitle] = useState("");
   const [diDesc, setDiDesc] = useState("");
   const [diAmount, setDiAmount] = useState("10000");
-  const [diMonthlyId, setDiMonthlyId] = useState(monthly[0]?.id ?? "");
+  const [diMonthlyId, setDiMonthlyId] = useState("");
   const [diOral, setDiOral] = useState(false);
 
   const activeMonthly = useMemo(
     () => monthly.filter((o) => o.status === "active" || o.status === "approved"),
     [monthly],
   );
+
+  useEffect(() => {
+    if (!activeMonthly.length) {
+      if (diMonthlyId) setDiMonthlyId("");
+      return;
+    }
+    if (!activeMonthly.some((o) => o.id === diMonthlyId)) {
+      setDiMonthlyId(activeMonthly[0].id);
+    }
+  }, [activeMonthly, diMonthlyId]);
 
   const rows = useMemo(() => {
     const list: ExceptionRow[] = [];
@@ -205,35 +231,31 @@ export default function ExceptionsView() {
           id: `afe-${a.id}`,
           severity: "info",
           title: a.title,
-          detail: `${a.code} · Band ${a.band}`,
+          detail: `${a.id.slice(0, 10)} · Band ${a.band} · ${fmtEtb(a.amountEtb)}`,
           source: "AFE approval",
-          href: CROPFORT_ROUTES.approvals,
+          href: CROPFORT_ROUTES.afe,
         });
-      }
-    }
-
-    for (const p of projects) {
-      if (p.status === "submitted") {
+      } else if (a.status === "returned") {
         list.push({
-          id: `prj-${p.id}`,
-          severity: "info",
-          title: p.title,
-          detail: `${p.code} · Band ${p.band}`,
-          source: "Project approval",
-          href: CROPFORT_ROUTES.approvals,
-        });
-      }
-    }
-
-    for (const i of interventions) {
-      if (i.status === "draft" && i.code.startsWith("INT-DI-")) {
-        list.push({
-          id: `int-${i.id}`,
+          id: `afe-ret-${a.id}`,
           severity: "warning",
-          title: i.title,
-          detail: `${i.code} · DI over threshold`,
-          source: "Intervention",
-          href: CROPFORT_ROUTES.interventions,
+          title: a.title,
+          detail: a.returnedComment || "Returned for revision",
+          source: "AFE",
+          href: CROPFORT_ROUTES.afe,
+        });
+      }
+    }
+
+    for (const wo of workOrders) {
+      if (wo.status === "draft") {
+        list.push({
+          id: `wo-draft-${wo.id}`,
+          severity: "info",
+          title: wo.title,
+          detail: `${wo.code} · queued, not issued`,
+          source: "Work order",
+          href: `${CROPFORT_ROUTES.workOrders}?wo=${wo.id}`,
         });
       }
     }
@@ -247,8 +269,6 @@ export default function ExceptionsView() {
     weekly,
     monthly,
     afes,
-    projects,
-    interventions,
     instructions,
   ]);
 
@@ -258,7 +278,7 @@ export default function ExceptionsView() {
     info: rows.filter((r) => r.severity === "info").length,
   };
 
-  const onIssueDi = () => {
+  const onIssueDi = async () => {
     if (!canIssue) {
       toast.error("Only SPX can issue Direct Instructions");
       return;
@@ -269,12 +289,12 @@ export default function ExceptionsView() {
       return;
     }
     try {
-      const row = issueDi({
+      const row = await issueDiMut.mutateAsync({
         title: diTitle.trim() || "Urgent field change",
         description: diDesc,
         amountEtb: Number(diAmount) || 0,
-        blockId: mwo.lines[0]?.blockId ?? "blk-sh01",
-        blockCode: mwo.lines[0]?.blockCode ?? "SH-01",
+        blockId: mwo.lines[0]?.blockId ?? "",
+        blockCode: mwo.lines[0]?.blockCode ?? "",
         monthlyWoId: mwo.id,
         monthlyWoCode: mwo.code,
         oral: diOral,
@@ -317,7 +337,6 @@ export default function ExceptionsView() {
 
       <SectionCard
         title="Direct Instruction"
-        description={`Under ${fmtEtb(diValue)} binds Chaka Buna; above routes to Intervention (RB03.7–8 / RB10.11)`}
         className="mb-4"
       >
         {canIssue ? (
@@ -399,7 +418,19 @@ export default function ExceptionsView() {
                     label={d.status.replace(/_/g, " ")}
                   />
                   {d.oralPendingConfirm ? (
-                    <Button size="sm" variant="outline" onClick={() => confirmWritten(d.id)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={confirmDiMut.isPending}
+                      onClick={() => {
+                        void confirmDiMut
+                          .mutateAsync(d.id)
+                          .then(() => toast.success("Written confirmation recorded"))
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : "Confirm failed"),
+                          );
+                      }}
+                    >
                       Confirm written
                     </Button>
                   ) : null}

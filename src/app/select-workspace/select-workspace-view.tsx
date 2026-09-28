@@ -14,7 +14,6 @@ import {
   Pin,
   Search,
   Sprout,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -28,9 +27,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  buildWorkspaceInbox,
   buildWorkspaceQuickOpens,
-  inboxTotal,
   preferredProgramId,
   type WorkspaceInboxItem,
 } from "@/lib/cropfort/workspace-inbox";
@@ -42,6 +39,7 @@ import {
   togglePinnedProgram,
   type WorkspacePreferences,
 } from "@/lib/cropfort/workspace-preferences";
+import { useWorkspaceInboxLive } from "@/lib/query/hooks/use-workspace-inbox-live";
 import {
   clearWorkspaceSelectionRequired,
   WORKSPACE_HOME_PATH,
@@ -49,10 +47,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { AuthProgram } from "@/lib/api/types";
 import { useAuthStore } from "@/store/authStore";
-import { useCropfortOpsStore } from "@/store/cropfortOpsStore";
-import { useDailyFieldRecordStore } from "@/store/dailyFieldRecordStore";
-import { useMonthlyWorkOrderStore } from "@/store/monthlyWorkOrderStore";
-import { useWeeklyPlanStore } from "@/store/weeklyPlanStore";
 
 const ease = [0.16, 1, 0.36, 1] as const;
 
@@ -212,14 +206,7 @@ export default function SelectWorkspaceView() {
   const switchProgram = useAuthStore((s) => s.switchProgram);
   const logout = useAuthStore((s) => s.logout);
 
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const afes = useCropfortOpsStore((s) => s.afes);
-  const projects = useCropfortOpsStore((s) => s.projects);
-  const interventions = useCropfortOpsStore((s) => s.interventions);
-  const dfrs = useDailyFieldRecordStore((s) => s.records);
-  const monthly = useMonthlyWorkOrderStore((s) => s.orders);
-  const weekly = useWeeklyPlanStore((s) => s.plans);
+  const { items: inbox, total: attentionCount } = useWorkspaceInboxLive(isAuthenticated);
 
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -236,7 +223,6 @@ export default function SelectWorkspaceView() {
     () => (me?.programs ?? []).filter((p) => p.status !== "archived"),
     [me?.programs],
   );
-  const orgName = me?.tenant?.displayName || me?.tenant?.name || "Organization";
   const userName = user?.name || user?.email || "Account";
   const userRole = user?.role || me?.user?.role || "";
   const activeId = me?.activeProgram?.id;
@@ -247,35 +233,6 @@ export default function SelectWorkspaceView() {
     if (!isHydrated) return;
     setPrefs(loadWorkspacePreferences(userId));
   }, [isHydrated, userId]);
-
-  const inbox = useMemo(
-    () =>
-      buildWorkspaceInbox({
-        role: userRole,
-        userName,
-        workOrders,
-        tickets,
-        afes,
-        projects,
-        interventions,
-        dfrs,
-        monthly,
-        weekly,
-      }),
-    [
-      userRole,
-      userName,
-      workOrders,
-      tickets,
-      afes,
-      projects,
-      interventions,
-      dfrs,
-      monthly,
-      weekly,
-    ],
-  );
-  const attentionCount = inboxTotal(inbox);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -331,9 +288,10 @@ export default function SelectWorkspaceView() {
     if (pickingId) return;
     setPickingId(programId);
     const result = await switchProgram(programId);
-    if (!result.ok) {
+    if (result.ok === false) {
       setPickingId(null);
-      toast.error(result.error || "Could not open workspace — try again");
+      const message = "error" in result ? result.error : "Could not open workspace — try again";
+      toast.error(message || "Could not open workspace — try again");
       return;
     }
     const nextPrefs = markProgramOpened(userId, programId);
@@ -499,62 +457,6 @@ export default function SelectWorkspaceView() {
                   {item.label}
                 </button>
               ))}
-
-              <p className="px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Organization
-              </p>
-              <div className="rounded-lg border border-border/80 bg-muted/30 px-2.5 py-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-[10px] font-bold text-primary">
-                    {initials(orgName)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold">{orgName}</p>
-                    <p className="truncate text-[10px] text-muted-foreground">
-                      {programs.length} workspace{programs.length === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <StatusBadge
-                    status="active"
-                    label={me?.tenant?.type || "Org"}
-                    className="scale-90"
-                  />
-                </div>
-              </div>
-
-              <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
-                {sortProgramsByPreference(programs, prefs)
-                  .slice(0, 8)
-                  .map((p) => (
-                    <li key={p.id}>
-                      <button
-                        type="button"
-                        disabled={!!pickingId}
-                        onClick={() => void enter(p.id)}
-                        className={cn(
-                          "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/60",
-                          p.id === activeId && "bg-primary/[0.07] font-medium text-foreground",
-                        )}
-                      >
-                        <span className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/10 text-[9px] font-semibold text-primary">
-                          {initials(p.name)}
-                          {cardAttention(p.id) > 0 ? (
-                            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-warning" />
-                          ) : null}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                        {prefs.pinnedProgramIds.includes(p.id) ? (
-                          <Pin className="h-3 w-3 shrink-0 fill-current text-primary" aria-hidden />
-                        ) : null}
-                        {cardAttention(p.id) > 0 ? (
-                          <span className="tabular-nums text-[10px] font-semibold text-warning">
-                            {cardAttention(p.id)}
-                          </span>
-                        ) : null}
-                      </button>
-                    </li>
-                  ))}
-              </ul>
             </>
           ) : null}
         </nav>
@@ -579,65 +481,6 @@ export default function SelectWorkspaceView() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2 md:hidden">
-            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
-              {initials(userName)}
-              {attentionCount > 0 ? (
-                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warning ring-2 ring-background" />
-              ) : null}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{userName}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{orgName}</p>
-            </div>
-          </div>
-          <div className="hidden items-center gap-2 md:flex">
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium">
-              <Users className="h-3.5 w-3.5 text-muted-foreground" />
-              {orgName}
-            </span>
-            <button
-              type="button"
-              onClick={() => setInboxOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted/50"
-            >
-              <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-              Inbox
-              {attentionCount > 0 ? (
-                <span className="rounded bg-foreground px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-background">
-                  {attentionCount}
-                </span>
-              ) : null}
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="sm:hidden"
-              onClick={() => setInboxOpen(true)}
-            >
-              <Bell className="h-3.5 w-3.5" />
-              {attentionCount > 0 ? attentionCount : "Inbox"}
-            </Button>
-            {homeProgramId ? (
-              <Button
-                size="sm"
-                className="hidden sm:inline-flex"
-                disabled={!!pickingId}
-                onClick={() => enterPreferred()}
-              >
-                Continue
-              </Button>
-            ) : null}
-            <Button variant="ghost" size="sm" className="md:hidden" onClick={() => void signOut()}>
-              <LogOut className="h-3.5 w-3.5" />
-              Sign out
-            </Button>
-          </div>
-        </header>
-
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -655,73 +498,6 @@ export default function SelectWorkspaceView() {
                   className="h-10 pl-9"
                 />
               </div>
-            </div>
-
-            <div className="mb-8">
-              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Welcome back</p>
-                  <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-[1.75rem]">
-                    {userName.split(/\s+/)[0] || "there"}
-                  </h1>
-                </div>
-                {homeProgramId ? (
-                  <Button
-                    size="sm"
-                    disabled={!!pickingId}
-                    onClick={() => enterPreferred()}
-                    className="sm:hidden"
-                  >
-                    Continue
-                  </Button>
-                ) : null}
-              </div>
-
-              {homeProgramId ? (
-                <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
-                      {initials(
-                        programs.find((p) => p.id === homeProgramId)?.name || "WS",
-                      )}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {programs.find((p) => p.id === homeProgramId)?.name}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {formatRelativeOpened(prefs.lastOpenedAtByProgramId[homeProgramId]) ||
-                          "Last used"}
-                        {programs.find((p) => p.id === homeProgramId)?.roleInProgram
-                          ? ` · ${programs.find((p) => p.id === homeProgramId)?.roleInProgram}`
-                          : ""}
-                        {attentionCount > 0 ? ` · ${attentionCount} waiting` : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      disabled={!!pickingId}
-                      onClick={() => enterPreferred()}
-                    >
-                      Continue
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setInboxOpen(true)}
-                    >
-                      <Bell className="h-3.5 w-3.5" />
-                      Inbox
-                      {attentionCount > 0 ? (
-                        <span className="tabular-nums">{attentionCount}</span>
-                      ) : null}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
             </div>
 
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">

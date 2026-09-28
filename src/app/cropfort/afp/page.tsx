@@ -1,16 +1,18 @@
 ﻿"use client";
 
-import dynamic from "next/dynamic";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { CROPFORT_ROUTES } from "@/config/navigation";
 
-const View = dynamic(() => import("./core-operations-view"), {
-  ssr: false,
-  loading: () => (
+/** Legacy /cropfort/afp → programme plans register. */
+export default function LegacyAfpRedirect() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(CROPFORT_ROUTES.programmePlans);
+  }, [router]);
+  return (
     <div className="cf-page">
-      <p className="text-sm text-muted-foreground">Loading Core Operations…</p>
+      <p className="text-sm text-muted-foreground">Opening Programme Plans…</p>
     </div>
-  ),
-});
-
-export default function CoreOperationsPage() {
-  return <View />;
+  );
 }

@@ -66,7 +66,18 @@ import { CROPFORT_ROUTES } from "@/config/navigation";
 import { canCreatePaymentRequest } from "@/lib/cropfort/commercial-access";
 import { cn } from "@/lib/utils";
 import { CROPFORT_ROLE_LABELS } from "@/types/cropfort";
-import { useCommercialStore } from "@/store/commercialStore";
+import {
+  useCreatePaymentRequest,
+  usePaymentRequests,
+} from "@/lib/query/hooks/use-payment-requests";
+import {
+  mapTicketDto,
+  mapWorkOrderDto,
+  uiTicketToApi,
+  useCreateFieldTicket,
+  useTransitionFieldTicket,
+  useWorkOrders,
+} from "@/lib/query/hooks/use-work-orders";
 import {
   EXEC_CREW,
   TICKET_NEXT,
@@ -76,8 +87,25 @@ import {
   type ExecParty,
   type FieldTicket,
   type TicketStatus,
-  useCropfortOpsStore,
 } from "@/store/cropfortOpsStore";
+
+/** API-aligned next actions (maps through UI statuses). */
+const API_TICKET_NEXT: typeof TICKET_NEXT = {
+  vendor: {
+    assigned: { status: "submitted", label: "Submit work" },
+    returned: { status: "submitted", label: "Resubmit" },
+  },
+  site_owner: {
+    submitted: { status: "site_reviewed", label: "Site check OK" },
+  },
+  asset_owner: {
+    site_reviewed: { status: "validated", label: "Close ticket" },
+  },
+  spx: {
+    site_reviewed: { status: "validated", label: "Close ticket" },
+    submitted: { status: "site_reviewed", label: "Site check OK" },
+  },
+};
 
 const COLUMNS: {
   id: string;
@@ -177,13 +205,24 @@ export default function FieldExecutionView() {
   const { user, activeProgram } = useCropfortAuth();
   const party = execPartyForRole(user.role);
   const params = useSearchParams();
-  const tickets = useCropfortOpsStore((s) => s.tickets);
-  const workOrders = useCropfortOpsStore((s) => s.workOrders);
-  const assignTicket = useCropfortOpsStore((s) => s.assignTicket);
-  const advanceTicket = useCropfortOpsStore((s) => s.advanceTicket);
-  const reassignTicket = useCropfortOpsStore((s) => s.reassignTicket);
-  const createPaymentRequest = useCommercialStore((s) => s.createPaymentRequest);
-  const paymentRequests = useCommercialStore((s) => s.paymentRequests);
+  const woQuery = useWorkOrders(Boolean(activeProgram?.id));
+  const createTicket = useCreateFieldTicket();
+  const transitionTicket = useTransitionFieldTicket();
+
+  const workOrders = useMemo(
+    () => (woQuery.data || []).map(mapWorkOrderDto),
+    [woQuery.data],
+  );
+  const tickets = useMemo(() => {
+    const byId = new Map((woQuery.data || []).map((w) => [w.id, w]));
+    return (woQuery.data || []).flatMap((wo) =>
+      (wo.tickets || []).map((t) => mapTicketDto(t, byId.get(wo.id))),
+    );
+  }, [woQuery.data]);
+
+  const createPaymentRequest = useCreatePaymentRequest();
+  const paymentRequestsQuery = usePaymentRequests(Boolean(activeProgram?.id));
+  const paymentRequests = paymentRequestsQuery.data || [];
   const canAssign = party === "spx" || party === "asset_owner" || party === "site_owner";
   const canBill = canCreatePaymentRequest(user.role);
 
@@ -195,10 +234,7 @@ export default function FieldExecutionView() {
   const [reassignOpen, setReassignOpen] = useState(false);
   const [actionNote, setActionNote] = useState("");
   const [form, setForm] = useState({
-    workOrderId:
-      params.get("wo") ||
-      workOrders.find((w) => w.status === "issued" || w.status === "in_progress")?.id ||
-      "",
+    workOrderId: params.get("wo") || "",
     title: "",
     description: "",
     vendorLead: EXEC_CREW.vendors[0].name,
@@ -228,6 +264,15 @@ export default function FieldExecutionView() {
     setAssignOpen(true);
   }, [woParam, canAssign]);
 
+  useEffect(() => {
+    if (form.workOrderId) return;
+    const fallback =
+      workOrders.find((w) => w.status === "issued" || w.status === "in_progress")?.id ||
+      workOrders[0]?.id ||
+      "";
+    if (fallback) setForm((f) => ({ ...f, workOrderId: fallback }));
+  }, [workOrders, form.workOrderId]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tickets.filter((t) => {
@@ -251,7 +296,7 @@ export default function FieldExecutionView() {
   const selectedWo = selected
     ? workOrders.find((w) => w.id === selected.workOrderId)
     : null;
-  const next = selected ? TICKET_NEXT[party][selected.status] : undefined;
+  const next = selected ? API_TICKET_NEXT[party][selected.status] : undefined;
   const openWos = workOrders.filter(
     (w) => w.status === "issued" || w.status === "in_progress" || w.status === "draft",
   );
@@ -260,34 +305,60 @@ export default function FieldExecutionView() {
     (party === "site_owner" || party === "asset_owner" || party === "spx") &&
     (selected?.status === "submitted" || selected?.status === "site_reviewed");
 
-  const assign = () => {
-    const lead = EXEC_CREW.vendors.find((v) => v.name === form.vendorLead);
+  const assign = async () => {
+    if (!form.workOrderId) {
+      toast.error("Select a work order");
+      return;
+    }
+    const title = form.title.trim();
+    if (!title) {
+      toast.error("Enter a task title");
+      return;
+    }
     try {
-      const ticket = assignTicket({
+      const hours = Number(form.hours) || 0;
+      const amount = Number(form.amount) || 0;
+      const unitRate = hours > 0 ? amount / hours : amount || null;
+      const created = await createTicket.mutateAsync({
         workOrderId: form.workOrderId,
-        title: form.title,
-        description: form.description,
-        vendor: lead?.org ?? "RFSP",
-        vendorLead: form.vendorLead,
-        siteOwner: form.siteOwner,
-        assetOwner: form.assetOwner,
-        assignedBy: user.name,
-        hours: Number(form.hours) || 0,
-        amountEtb: Number(form.amount) || 0,
-        due: form.due,
+        input: {
+          activityRecorded: title,
+          materialsUsed: [
+            form.description,
+            `Crew: ${form.vendorLead}`,
+            `Site: ${form.siteOwner}`,
+            `Asset: ${form.assetOwner}`,
+            `Due: ${form.due}`,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          actualMandays: hours || null,
+          actualQuantity: hours || 1,
+          unitRateEtb: unitRate,
+          laborCount: 1,
+          areaHa: 0,
+        },
       });
       setAssignOpen(false);
       setForm((f) => ({ ...f, title: "", description: "" }));
-      setOpenId(ticket.id);
-      toast.success(`${ticket.code} assigned to ${form.vendorLead}`);
+      setOpenId(created.id);
+      toast.success(`Ticket assigned to ${form.vendorLead}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not assign");
     }
   };
 
-  const act = (ticket: FieldTicket, status: TicketStatus, label: string, note?: string) => {
+  const act = async (ticket: FieldTicket, status: TicketStatus, label: string, note?: string) => {
     try {
-      advanceTicket(ticket.id, status, user.name, party, note || label);
+      const apiStatus = uiTicketToApi(status);
+      if (!apiStatus || apiStatus === "draft") {
+        throw new Error("Unsupported transition");
+      }
+      await transitionTicket.mutateAsync({
+        ticketId: ticket.id,
+        status: apiStatus,
+        comment: note || label,
+      });
       setActionNote("");
       toast.success(label);
     } catch (err) {
@@ -296,25 +367,8 @@ export default function FieldExecutionView() {
   };
 
   const doReassign = () => {
-    if (!selected) return;
-    const lead = EXEC_CREW.vendors.find((v) => v.name === reassignForm.vendorLead);
-    try {
-      reassignTicket(
-        selected.id,
-        {
-          vendorLead: reassignForm.vendorLead,
-          vendor: lead?.org ?? selected.vendor,
-          siteOwner: reassignForm.siteOwner,
-          assetOwner: reassignForm.assetOwner,
-          due: reassignForm.due,
-        },
-        user.name,
-      );
-      setReassignOpen(false);
-      toast.success("Ticket reassigned");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Reassign failed");
-    }
+    toast.message("Crew reassignment is recorded on new tickets; create a follow-up ticket for changes.");
+    setReassignOpen(false);
   };
 
   const waitingCounts = {
@@ -328,7 +382,6 @@ export default function FieldExecutionView() {
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Execution"}
         title="Field execution"
-        description="Tickets on issued work — vendor does, site checks, asset closes."
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
@@ -429,7 +482,7 @@ export default function FieldExecutionView() {
                     </li>
                   ) : (
                     items.map((t) => {
-                      const cardNext = TICKET_NEXT[party][t.status];
+                      const cardNext = API_TICKET_NEXT[party][t.status];
                       return (
                         <li key={t.id}>
                           <div className="rounded-xl border border-border bg-card p-3 shadow-xs transition-colors hover:border-primary/30">
@@ -468,7 +521,7 @@ export default function FieldExecutionView() {
                                 className="mt-2 h-7 w-full text-xs"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  act(t, cardNext.status, cardNext.label);
+                                  void act(t, cardNext.status, cardNext.label);
                                 }}
                               >
                                 {cardNext.label}
@@ -512,7 +565,7 @@ export default function FieldExecutionView() {
                   </TableRow>
                 ) : (
                   visible.map((t) => {
-                    const rowNext = TICKET_NEXT[party][t.status];
+                    const rowNext = API_TICKET_NEXT[party][t.status];
                     return (
                       <TableRow key={t.id}>
                         <TableCell className="font-mono text-xs">{t.code}</TableCell>
@@ -548,7 +601,7 @@ export default function FieldExecutionView() {
                               </DropdownMenuItem>
                               {rowNext ? (
                                 <DropdownMenuItem
-                                  onClick={() => act(t, rowNext.status, rowNext.label)}
+                                  onClick={() => void act(t, rowNext.status, rowNext.label)}
                                 >
                                   {rowNext.label}
                                 </DropdownMenuItem>
@@ -668,7 +721,7 @@ export default function FieldExecutionView() {
                   {next ? (
                     <Button
                       onClick={() =>
-                        act(selected, next.status, next.label, actionNote || next.label)
+                        void act(selected, next.status, next.label, actionNote || next.label)
                       }
                     >
                       {next.label}
@@ -678,7 +731,7 @@ export default function FieldExecutionView() {
                     <Button
                       variant="outline"
                       onClick={() =>
-                        act(
+                        void act(
                           selected,
                           "returned",
                           "Returned for rework",
@@ -714,21 +767,16 @@ export default function FieldExecutionView() {
                       </Button>
                     ) : (
                       <Button
+                        disabled={createPaymentRequest.isPending}
                         onClick={() => {
-                          try {
-                            const row = createPaymentRequest(
-                              selected.id,
-                              {
-                                userId: user.id,
-                                name: user.name,
-                                role: user.role,
-                              },
-                              activeProgram?.id || "prog-1",
+                          void createPaymentRequest
+                            .mutateAsync(selected.id)
+                            .then((row) => toast.success(`${row.code} submitted`))
+                            .catch((err) =>
+                              toast.error(
+                                err instanceof Error ? err.message : "Could not create PR",
+                              ),
                             );
-                            toast.success(`${row.code} submitted`);
-                          } catch (err) {
-                            toast.error(err instanceof Error ? err.message : "Could not create PR");
-                          }
                         }}
                       >
                         Request payment
@@ -910,8 +958,13 @@ export default function FieldExecutionView() {
               Cancel
             </Button>
             <Button
-              onClick={assign}
-              disabled={!form.title.trim() || !form.workOrderId || openWos.length === 0}
+              onClick={() => void assign()}
+              disabled={
+                !form.title.trim() ||
+                !form.workOrderId ||
+                openWos.length === 0 ||
+                createTicket.isPending
+              }
             >
               Assign
             </Button>

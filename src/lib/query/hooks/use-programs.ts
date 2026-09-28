@@ -39,7 +39,14 @@ export function useUpdateProgram() {
       input,
     }: {
       id: string;
-      input: { name?: string; slug?: string; status?: "active" | "archived" };
+      input: {
+        name?: string;
+        slug?: string;
+        status?: "active" | "archived";
+        cropfortAfeBandAMaxEtb?: number;
+        cropfortAfeBandBMaxEtb?: number;
+        cropfortAfeBandCMaxEtb?: number;
+      };
     }) => updateProgram(id, input),
     onSuccess: () => invalidate(),
   });

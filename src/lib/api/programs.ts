@@ -11,6 +11,9 @@ export type AdminProgram = {
   updatedAt: string | null;
   memberCount: number;
   farmAreaCount: number;
+  cropfortAfeBandAMaxEtb?: number;
+  cropfortAfeBandBMaxEtb?: number;
+  cropfortAfeBandCMaxEtb?: number;
 };
 
 function asError(err: unknown): Error {
@@ -41,7 +44,14 @@ export async function createProgram(input: {
 
 export async function updateProgram(
   id: string,
-  input: { name?: string; slug?: string; status?: "active" | "archived" },
+  input: {
+    name?: string;
+    slug?: string;
+    status?: "active" | "archived";
+    cropfortAfeBandAMaxEtb?: number;
+    cropfortAfeBandBMaxEtb?: number;
+    cropfortAfeBandCMaxEtb?: number;
+  },
 ): Promise<AdminProgram> {
   try {
     return await apiFetch<AdminProgram>(`/programs/${id}`, { method: "PATCH", body: input });
