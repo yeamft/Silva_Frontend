@@ -257,6 +257,12 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
     roles: ALL_PLAN,
     modules: [
       {
+        id: "estate-map",
+        label: "Estate Map",
+        href: CROPFORT_ROUTES.estateMap,
+        description: "Farm areas and blocks on the map",
+      },
+      {
         id: "progress",
         label: "Progress",
         href: CROPFORT_ROUTES.progress,

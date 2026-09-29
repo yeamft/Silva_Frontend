@@ -89,7 +89,7 @@ export function mapWorkOrderDto(dto: WorkOrderDto): WorkOrder {
     ticketsTotal: dto.ticketsTotal,
     afe: dto.afeId || "—",
     due: dto.week,
-    attention: "none" as Attention,
+    attention: (dto.attention === "insurance" ? "insurance" : "none") as Attention,
     monthlyWoId: null,
     monthlyWoCode: null,
     monthlyLineId: null,

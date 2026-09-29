@@ -51,6 +51,10 @@ export type WorkOrderDto = {
   instructions: string;
   assignedVendorId: string | null;
   vendorName: string | null;
+  insuranceOnFile?: boolean | null;
+  insuranceExpiry?: string | null;
+  insuranceGatePassed?: boolean;
+  attention?: "insurance" | null;
   status: WorkOrderStatus;
   statusRaw: string;
   blocks: { blockId: string; blockCode: string | null; blockName: string | null }[];

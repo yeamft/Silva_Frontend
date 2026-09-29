@@ -39,6 +39,7 @@ export const CROPFORT_ROUTES = {
   users: "/cropfort/users",
   userRoles: "/cropfort/users/roles",
   farmMap: "/cropfort/admin/farm-map",
+  estateMap: "/cropfort/performance/estate-map",
   organizations: "/cropfort/admin/organizations",
   farmAreas: "/cropfort/admin/farm-areas",
   blocks: "/cropfort/admin/blocks",

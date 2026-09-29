@@ -246,7 +246,7 @@ const LoginPage = () => {
     <div className="cf-gold-marketing relative flex min-h-[100dvh] items-center justify-center cf-auth-shell px-4 py-10 text-foreground">
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div className="absolute -left-24 top-16 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -right-16 bottom-10 h-80 w-80 rounded-full bg-[hsl(36_70%_55%/0.14)] blur-3xl" />
+        <div className="absolute -right-16 bottom-10 h-80 w-80 rounded-full bg-[hsl(120_30%_60%/0.12)] blur-3xl" />
       </div>
 
       <motion.div
@@ -261,26 +261,21 @@ const LoginPage = () => {
             onClick={() => router.push("/")}
             className="cf-focus mx-auto mb-5 inline-flex items-center gap-2.5 rounded-xl"
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_hsl(40_78%_30%/0.7)]">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_hsl(120_35%_28%/0.35)]">
               <Sprout className="h-5 w-5" aria-hidden />
             </span>
             <span className="text-left leading-tight">
               <span className="block font-display text-xl font-semibold tracking-tight">
                 Cropfort
               </span>
-              <span className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Farm Operations
-              </span>
+            
             </span>
           </button>
-          {/* <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
-            {mfaStep ? "Verify authenticator" : "Welcome back"}
-          </h1> */}
-          <p className="mt-2 text-sm text-muted-foreground">
-            {mfaStep
-              ? "Open your authenticator app and enter the 6-digit code."
-              : "Sign in to your estate workspace."}
-          </p>
+          {mfaStep ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Open your authenticator app and enter the 6-digit code.
+            </p>
+          ) : null}
         </div>
 
         <div className="cf-auth-card rounded-2xl p-6 sm:p-7">
@@ -417,7 +412,7 @@ const LoginPage = () => {
 
             <Button
               type="submit"
-              className="h-11 w-full gap-2 text-[15px] font-semibold shadow-[0_12px_28px_-14px_hsl(40_78%_30%/0.8)] hover:bg-[hsl(var(--primary-hover))]"
+              className="h-11 w-full gap-2 text-[15px] font-semibold shadow-[0_12px_28px_-14px_hsl(120_35%_28%/0.4)] hover:bg-[hsl(var(--primary-hover))]"
               disabled={isLoading}
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}

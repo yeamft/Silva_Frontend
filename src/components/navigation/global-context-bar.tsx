@@ -72,19 +72,24 @@ export function GlobalContextBar({
     [plans, activePlanId],
   );
 
-  const estateLabel = useMemo(
-    () => activeProgram?.name || tenant?.displayName || tenant?.name || "Estate",
-    [activeProgram?.name, tenant?.displayName, tenant?.name],
-  );
+  const estateLabel = useMemo(() => {
+    if (activePlan?.farmName) return activePlan.farmName;
+    return activeProgram?.name || tenant?.displayName || tenant?.name || "Estate";
+  }, [activePlan?.farmName, activeProgram?.name, tenant?.displayName, tenant?.name]);
+
+  const yearLabel = useMemo(() => {
+    if (!activePlan) return null;
+    return activePlan.budgetYearLabel || activePlan.planningCycleLabel || null;
+  }, [activePlan]);
 
   const planLabel = useMemo(() => {
     if (activePlan) {
-      const year = activePlan.budgetYearLabel || activePlan.planningCycleLabel || "";
+      const year = yearLabel || "";
       return year ? `${activePlan.name} · ${year}` : activePlan.name;
     }
     if (plansQuery.isLoading) return "Loading plans…";
     return "Select programme plan";
-  }, [activePlan, plansQuery.isLoading]);
+  }, [activePlan, plansQuery.isLoading, yearLabel]);
 
   // Drop stale remembered plan ids. ActivePlanSync then picks a valid preferred
   // plan — both share the same useProgrammePlans cache so they cannot oscillate.

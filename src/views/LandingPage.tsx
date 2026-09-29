@@ -114,7 +114,7 @@ function HeroBackground() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-      <div className="absolute inset-0 bg-[#2A1F0E]" />
+      <div className="absolute inset-0 bg-[#0B1F0C]" />
 
       {HERO_IMAGES.map((image, index) => {
         const visible = ready[index] && index === activeIndex;
@@ -379,13 +379,15 @@ function ContactForm() {
 export default function LandingPage() {
   return (
     <main className="cf-gold-marketing min-h-screen bg-background text-foreground">
-      <section className="relative isolate min-h-[92vh] overflow-hidden bg-[#2A1F0E]">
-        <HeroBackground />
+      <section className="relative isolate min-h-[92vh] bg-[#0B1F0C] shadow-[0_28px_64px_-12px_rgba(6,20,8,0.45),0_12px_28px_-8px_rgba(0,0,0,0.28)]">
+        <div className="absolute inset-0 overflow-hidden rounded-none" aria-hidden>
+          <HeroBackground />
 
-        {/* Darker wash for readable light text — photo still shows through */}
-        <div className="absolute inset-0 z-[1] bg-[#1A140A]/45" />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#1A140A]/78 via-[#2A1F0E]/40 to-[#2A1F0E]/15" />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#1A140A]/70 via-transparent to-[#1A140A]/25" />
+          {/* Soft Upwork-green wash — keep photo readable */}
+          <div className="absolute inset-0 z-[1] bg-[#061408]/28" />
+          <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#061408]/50 via-[#0B1F0C]/20 to-transparent" />
+          <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#061408]/45 via-transparent to-[#061408]/10" />
+        </div>
 
         <header className="relative z-30 border-b border-white/10">
           <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10">
@@ -394,28 +396,38 @@ export default function LandingPage() {
               className="flex items-center gap-3 text-white"
               aria-label="Cropfort home"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-[0_10px_24px_-12px_hsl(40_78%_30%/0.75)]">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-[0_10px_24px_-12px_hsl(120_35%_28%/0.35)]">
                 <Sprout className="h-5 w-5 text-primary-foreground" />
               </span>
 
               <div className="leading-none">
                 <p className="font-display text-lg font-semibold tracking-tight">Cropfort</p>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.19em] text-[#E8D5A3]/75">
-                  Farm Operations
-                </p>
+                
               </div>
             </Link>
 
             <div className="flex items-center gap-2 sm:gap-3">
               <a
+                href="#platform"
+                className="hidden h-10 items-center px-3 text-sm font-medium text-white/75 transition hover:text-[#C8DFC9] sm:inline-flex"
+              >
+                Platform
+              </a>
+              <a
+                href="#how-it-works"
+                className="hidden h-10 items-center px-3 text-sm font-medium text-white/75 transition hover:text-[#C8DFC9] md:inline-flex"
+              >
+                How it works
+              </a>
+              <a
                 href="#contact"
-                className="hidden h-10 items-center px-3 text-sm font-medium text-white/75 transition hover:text-[#F3E2B4] sm:inline-flex"
+                className="hidden h-10 items-center px-3 text-sm font-medium text-white/75 transition hover:text-[#C8DFC9] sm:inline-flex"
               >
                 Contact
               </a>
               <Button
                 asChild
-                className="h-10 rounded-xl bg-primary px-5 font-semibold text-primary-foreground shadow-[0_10px_24px_-12px_hsl(40_78%_30%/0.75)] hover:bg-[hsl(var(--primary-hover))]"
+                className="h-10 rounded-xl bg-primary px-5 font-semibold text-primary-foreground shadow-[0_10px_24px_-12px_hsl(120_35%_28%/0.35)] hover:bg-[hsl(var(--primary-hover))]"
               >
                 <Link href="/login">
                   Sign in
@@ -433,25 +445,23 @@ export default function LandingPage() {
             transition={{ duration: 0.7, ease }}
             className="max-w-3xl"
           >
-            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-[#E8D5A3]">
-              Cropfort
-            </p>
-            <h1 className="max-w-3xl font-display text-4xl font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-5xl lg:text-[68px]">
+         
+
+            <h1 className="mt-8 max-w-3xl font-display text-3xl font-semibold leading-[1.1] tracking-[-0.03em] text-white sm:text-4xl lg:text-[52px]">
               Control field operations
-              <span className="block text-[#E8D5A3]">from plan to payment.</span>
+              <span className="block text-[#B7D4B9]">from plan to payment.</span>
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-7 text-white/80 sm:text-lg sm:leading-8">
-              Cropfort gives estate owners, SPX managers, and delivery partners one controlled
-              operating environment for planning, work execution, verification, commercial
-              governance, and settlement.
+              One controlled environment for estate owners, SPX managers, and delivery partners
+              planning, execution, verification, and settlement.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Button
                 asChild
                 size="lg"
-                className="h-12 rounded-xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_14px_30px_-14px_hsl(40_78%_30%/0.8)] hover:bg-[hsl(var(--primary-hover))]"
+                className="h-12 rounded-xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_14px_30px_-14px_hsl(120_35%_28%/0.4)] hover:bg-[hsl(var(--primary-hover))]"
               >
                 <Link href="/login">
                   Open Cropfort
@@ -461,11 +471,19 @@ export default function LandingPage() {
 
               <a
                 href="#platform"
-                className="inline-flex h-12 items-center justify-center rounded-xl border border-[#E8D5A3]/40 bg-black/20 px-7 text-sm font-medium text-white backdrop-blur-sm transition hover:border-[#E8D5A3]/60 hover:bg-black/30"
+                className="inline-flex h-12 items-center justify-center rounded-xl border border-[#B7D4B9]/35 bg-black/15 px-7 text-sm font-medium text-white backdrop-blur-sm transition hover:border-[#B7D4B9]/55 hover:bg-black/25"
               >
                 Explore the platform
               </a>
             </div>
+
+            <p className="mt-6 text-sm text-white/55">
+              Invited organisations sign in with their Cropfort account.{" "}
+              <a href="#contact" className="text-[#B7D4B9] underline-offset-2 hover:underline">
+                Request access
+              </a>
+              .
+            </p>
           </motion.div>
         </div>
       </section>
@@ -561,7 +579,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="border-y border-border bg-background py-20 sm:py-28">
+      <section id="how-it-works" className="border-y border-border bg-background py-20 sm:py-28">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <div className="grid gap-10 lg:grid-cols-[0.75fr_1.25fr]">
             <div>
@@ -612,14 +630,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="bg-primary py-20 text-primary-foreground sm:py-28">
+      <section className="bg-[#E7EFE8] py-20 text-foreground sm:py-28">
         <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-10">
           <div>
             <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
               Field execution you can verify before you pay.
             </h2>
 
-            <p className="mt-5 max-w-xl leading-7 text-primary-foreground/75">
+            <p className="mt-5 max-w-xl leading-7 text-muted-foreground">
               Cropfort separates work assignment, execution, verification, and approval so
               operational evidence is reviewed before it becomes a commercial obligation.
             </p>
@@ -636,10 +654,10 @@ export default function LandingPage() {
             ].map((item) => (
               <div
                 key={item}
-                className="flex items-center gap-3 rounded-xl border border-primary-foreground/15 bg-primary-foreground/[0.08] p-4"
+                className="flex items-center gap-3 rounded-xl border border-[#C5D6C8] bg-white/70 p-4"
               >
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary-foreground" />
-                <span className="text-sm text-primary-foreground/85">{item}</span>
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                <span className="text-sm text-foreground/85">{item}</span>
               </div>
             ))}
           </div>
@@ -693,10 +711,16 @@ export default function LandingPage() {
             <span>Farm Operations Platform</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <a href="#contact" className="hover:text-foreground">
               Contact
             </a>
+            <a href="mailto:noreply@cropfort.com" className="hover:text-foreground">
+              Support
+            </a>
+            <Link href="/login" className="hover:text-foreground">
+              Sign in
+            </Link>
             <p>Powered by SPX</p>
           </div>
         </div>

@@ -156,6 +156,8 @@ export interface FarmBlockRef {
   name: string;
   hectares: number;
   farmAreaId?: string | null;
+  mapLat?: number | null;
+  mapLng?: number | null;
   status?: EntityStatus;
 }
 

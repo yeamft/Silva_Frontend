@@ -152,37 +152,37 @@
 
   /*
    * Marketing / auth surfaces only (home + login).
-   * Keeps Cropfort ops shell on forest green.
+   * Softened Upwork-inspired green — ops shell keeps its forest primary.
    */
   .cf-gold-marketing {
-    --background: 40 32% 97%;
-    --foreground: 30 28% 12%;
+    --background: 90 16% 98%;
+    --foreground: 150 10% 14%;
 
-    --card: 40 40% 99%;
-    --card-foreground: 30 28% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 150 10% 14%;
 
-    --popover: 40 40% 99%;
-    --popover-foreground: 30 28% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 10% 14%;
 
-    /* Warm harvest gold — readable as primary actions */
-    --primary: 40 78% 40%;
-    --primary-foreground: 40 45% 98%;
-    --primary-hover: 38 82% 33%;
+    /* Softened from Upwork #14A800 — lower saturation */
+    --primary: 120 42% 38%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 120 44% 30%;
 
-    --secondary: 40 28% 94%;
-    --secondary-foreground: 30 28% 14%;
+    --secondary: 100 14% 95%;
+    --secondary-foreground: 150 10% 16%;
 
-    --muted: 40 22% 93%;
-    --muted-foreground: 30 12% 40%;
+    --muted: 100 12% 94%;
+    --muted-foreground: 150 6% 42%;
 
-    --accent: 40 48% 92%;
-    --accent-foreground: 36 55% 28%;
+    --accent: 110 22% 94%;
+    --accent-foreground: 120 35% 28%;
 
-    --border: 38 18% 86%;
-    --input: 38 18% 86%;
-    --ring: 40 78% 40%;
+    --border: 100 10% 88%;
+    --input: 100 10% 88%;
+    --ring: 120 42% 38%;
 
-    --gold-glow: 40 70% 48%;
+    --gold-glow: 120 30% 50%;
   }
 }
 
@@ -219,31 +219,31 @@
 @layer components {
   .cf-auth-shell {
     background:
-      radial-gradient(ellipse 90% 60% at 12% -10%, hsl(40 85% 70% / 0.28), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 100% 0%, hsl(36 70% 55% / 0.16), transparent 50%),
-      radial-gradient(ellipse 50% 40% at 50% 100%, hsl(42 60% 60% / 0.12), transparent 55%),
-      linear-gradient(180deg, hsl(40 40% 98%) 0%, hsl(38 28% 94%) 100%);
+      radial-gradient(ellipse 90% 60% at 12% -10%, hsl(110 30% 82% / 0.28), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 100% 0%, hsl(120 28% 50% / 0.07), transparent 50%),
+      radial-gradient(ellipse 50% 40% at 50% 100%, hsl(100 20% 75% / 0.1), transparent 55%),
+      linear-gradient(180deg, hsl(90 18% 99%) 0%, hsl(100 12% 96%) 100%);
   }
 
   .cf-auth-card {
-    border: 1px solid hsl(38 30% 82% / 0.9);
-    background: hsl(0 0% 100% / 0.88);
+    border: 1px solid hsl(100 10% 87% / 0.95);
+    background: hsl(0 0% 100% / 0.92);
     box-shadow:
-      0 1px 0 hsl(40 50% 96% / 0.9) inset,
-      0 18px 40px -24px hsl(35 40% 20% / 0.35);
+      0 1px 0 hsl(100 20% 98% / 0.9) inset,
+      0 18px 40px -24px hsl(120 20% 22% / 0.18);
     backdrop-filter: blur(10px);
   }
 
   .lp {
-    --lp-espresso: hsl(30 28% 10%);
-    --lp-cream: hsl(42 38% 94%);
-    --lp-cream-muted: hsl(42 18% 72%);
+    --lp-espresso: hsl(150 10% 14%);
+    --lp-cream: hsl(100 14% 95%);
+    --lp-cream-muted: hsl(100 10% 68%);
     --lp-gold: hsl(var(--primary));
-    --lp-gold-ink: hsl(36 55% 32%);
-    --lp-paper: hsl(40 32% 97%);
-    --lp-ink: hsl(30 28% 12%);
-    --lp-mute: hsl(30 12% 40%);
-    --lp-rule: hsl(38 18% 86%);
+    --lp-gold-ink: hsl(120 35% 28%);
+    --lp-paper: hsl(90 16% 98%);
+    --lp-ink: hsl(150 10% 14%);
+    --lp-mute: hsl(150 6% 42%);
+    --lp-rule: hsl(100 10% 88%);
   }
 
   .dark .lp {

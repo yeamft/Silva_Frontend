@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Gauge, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
@@ -89,11 +89,12 @@ export default function SpendBandsView() {
   const canView = canViewOrgMap(user.role) || canManagePrograms(user.role);
   const canEdit = canManagePrograms(user.role);
 
-  const programsQuery = usePrograms(canEdit);
+  const programsQuery = usePrograms(canView);
   const apiPrograms = programsQuery.data ?? [];
   const updateProgram = useUpdateProgram();
 
   const sets = useSpendBandStore((s) => s.sets);
+  const hydrateFromPrograms = useSpendBandStore((s) => s.hydrateFromPrograms);
   const activeProgramId = useSpendBandStore((s) => s.activeProgramId);
   const createSet = useSpendBandStore((s) => s.createSet);
   const removeSet = useSpendBandStore((s) => s.removeSet);
@@ -101,6 +102,19 @@ export default function SpendBandsView() {
   const resetToDefaults = useSpendBandStore((s) => s.resetToDefaults);
   const setEffectiveYear = useSpendBandStore((s) => s.setEffectiveYear);
   const setActiveProgram = useSpendBandStore((s) => s.setActiveProgram);
+
+  useEffect(() => {
+    if (apiPrograms.length === 0) return;
+    hydrateFromPrograms(
+      apiPrograms.map((p) => ({
+        id: p.id,
+        name: p.name,
+        cropfortAfeBandAMaxEtb: p.cropfortAfeBandAMaxEtb,
+        cropfortAfeBandBMaxEtb: p.cropfortAfeBandBMaxEtb,
+        cropfortAfeBandCMaxEtb: p.cropfortAfeBandCMaxEtb,
+      })),
+    );
+  }, [apiPrograms, hydrateFromPrograms]);
 
   const programOptions = useMemo(() => {
     if (apiPrograms.length > 0) {
