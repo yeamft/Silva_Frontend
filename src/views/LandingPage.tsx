@@ -37,8 +37,8 @@ const HERO_IMAGES = [
     alt: "Active crop rows across estate land",
   },
   {
-    src: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1600&q=65",
-    alt: "Rolling farmland ready for field work",
+    src: "https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&w=1600&q=65",
+    alt: "Vegetable rows across productive estate land",
   },
 ] as const;
 
@@ -51,8 +51,8 @@ function HeroBackground() {
 
   useEffect(() => {
     let cancelled = false;
-    const markReady = (index: number) => {
-      if (cancelled) return;
+    const markReady = (index: number, ok: boolean) => {
+      if (cancelled || !ok) return;
       setReady((prev) => {
         if (prev[index]) return prev;
         const next = [...prev];
@@ -66,11 +66,12 @@ function HeroBackground() {
         const img = new window.Image();
         img.decoding = "async";
         img.onload = () => {
-          markReady(index);
+          markReady(index, true);
           resolve();
         };
         img.onerror = () => {
-          markReady(index);
+          // Keep this slide out of rotation — never show an empty frame
+          markReady(index, false);
           resolve();
         };
         img.src = HERO_IMAGES[index].src;
@@ -379,7 +380,7 @@ function ContactForm() {
 export default function LandingPage() {
   return (
     <main className="cf-gold-marketing min-h-screen bg-background text-foreground">
-      <section className="relative isolate min-h-[92vh] bg-[#0B1F0C] shadow-[0_28px_64px_-12px_rgba(6,20,8,0.45),0_12px_28px_-8px_rgba(0,0,0,0.28)]">
+      <section className="relative isolate flex h-[100dvh] min-h-[100svh] w-full flex-col bg-[#0B1F0C] shadow-[0_28px_64px_-12px_rgba(6,20,8,0.45),0_12px_28px_-8px_rgba(0,0,0,0.28)]">
         <div className="absolute inset-0 overflow-hidden rounded-none" aria-hidden>
           <HeroBackground />
 
@@ -389,7 +390,7 @@ export default function LandingPage() {
           <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#061408]/45 via-transparent to-[#061408]/10" />
         </div>
 
-        <header className="relative z-30 border-b border-white/10">
+        <header className="relative z-30 shrink-0 border-b border-white/10">
           <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10">
             <Link
               href="/"
@@ -438,7 +439,7 @@ export default function LandingPage() {
           </div>
         </header>
 
-        <div className="relative z-20 mx-auto flex min-h-[calc(92vh-72px)] max-w-7xl items-center px-5 py-20 sm:px-8 lg:px-10">
+        <div className="relative z-20 mx-auto flex w-full max-w-7xl flex-1 items-center px-5 py-10 sm:px-8 sm:py-16 lg:px-10">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
