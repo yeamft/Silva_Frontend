@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Building2, MoreHorizontal, Plus } from "lucide-react";
+import { Building2, MoreHorizontal, Plus, Store, Trees } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
-import { PageContainer, PageHeader, PageMetaStrip, SectionCard } from "@/components/cropfort/page-shell";
+import { PageContainer, PageHeader, SectionCard, StatusSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -105,15 +105,6 @@ export default function OrganizationsPage() {
       <PageHeader
         eyebrow="Administration"
         title="Organizations"
-        meta={
-          <PageMetaStrip
-            items={[
-              { value: String(orgs.length), label: "Organizations" },
-              { value: String(vendors.length), label: "Vendors" },
-              { value: String(areas.length), label: "Farm areas" },
-            ]}
-          />
-        }
         actions={
           canEdit ? (
             <Button size="sm" onClick={() => startEdit()}>
@@ -123,6 +114,36 @@ export default function OrganizationsPage() {
           ) : null
         }
       />
+
+      <StatusSummaryCards
+        label="Organization map summary"
+        columns={3}
+        items={[
+          {
+            id: "orgs",
+            label: "Organizations",
+            value: String(orgs.length),
+            icon: Building2,
+            footnote: "Registered entities",
+            emphasis: true,
+          },
+          {
+            id: "vendors",
+            label: "Vendors",
+            value: String(vendors.length),
+            icon: Store,
+            footnote: "Delivery partners",
+          },
+          {
+            id: "areas",
+            label: "Farm areas",
+            value: String(areas.length),
+            icon: Trees,
+            footnote: "Mapped estates",
+          },
+        ]}
+      />
+
       <SectionCard flush>
         <div className="border-b px-4 py-3">
           <TableToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search name or type" />

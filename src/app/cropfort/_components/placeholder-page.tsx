@@ -21,7 +21,6 @@ export default function CropfortPlaceholderPage() {
       <EmptyState
         icon={Construction}
         title="Coming soon"
-        description={area?.interfaceLabel}
       />
     </PageContainer>
   );

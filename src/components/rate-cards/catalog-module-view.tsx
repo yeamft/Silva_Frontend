@@ -276,7 +276,6 @@ export function CatalogModuleView({
     <PageContainer>
       <PageHeader
         title={title}
-        description={description}
         actions={
           canEdit ? (
             <>

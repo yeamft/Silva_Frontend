@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ClipboardList, MoreHorizontal, Plus } from "lucide-react";
+import { CheckCircle2, ClipboardList, FileEdit, MoreHorizontal, Plus, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
@@ -13,8 +13,8 @@ import {
 import {
   PageContainer,
   PageHeader,
-  PageMetaStrip,
   SectionCard,
+  StatusSummaryCards,
 } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -119,10 +119,9 @@ export default function ProgrammePlansRegisterView() {
   const plansQuery = useProgrammePlans(Boolean(activeProgram?.id), {
     farmEstateId: farmFilter !== "all" ? farmFilter : undefined,
     planYear: yearFilter !== "all" ? Number(yearFilter) : undefined,
-    status: statusFilter !== "all" ? statusFilter : undefined,
     q: query.trim() || undefined,
   });
-  const plans = plansQuery.data || [];
+  const allPlans = plansQuery.data || [];
   const createMut = useCreateProgrammePlan();
   const duplicateMut = useDuplicateProgrammePlan();
   const archiveMut = useArchiveProgrammePlan();
@@ -130,22 +129,34 @@ export default function ProgrammePlansRegisterView() {
 
   const years = useMemo(() => {
     const set = new Set<number>();
-    for (const p of plans) set.add(p.budgetYearGc);
+    for (const p of allPlans) set.add(p.budgetYearGc);
     const y = new Date().getFullYear();
     for (let i = y - 1; i <= y + 2; i++) set.add(i);
     return [...set].sort((a, b) => b - a);
-  }, [plans]);
+  }, [allPlans]);
 
   const stats = useMemo(() => {
-    const all = plansQuery.data || [];
     return {
-      total: all.length,
-      draft: all.filter((p) => p.statusRaw === "draft" || p.statusRaw === "ready_for_review").length,
-      submitted: all.filter((p) => p.statusRaw === "submitted").length,
-      approved: all.filter((p) => p.statusRaw === "approved" || p.statusRaw === "active").length,
-      returned: all.filter((p) => p.statusRaw === "returned").length,
+      total: allPlans.length,
+      draft: allPlans.filter((p) => p.statusRaw === "draft" || p.statusRaw === "ready_for_review").length,
+      submitted: allPlans.filter((p) => p.statusRaw === "submitted").length,
+      approved: allPlans.filter((p) => p.statusRaw === "approved" || p.statusRaw === "active").length,
+      returned: allPlans.filter((p) => p.statusRaw === "returned").length,
     };
-  }, [plansQuery.data]);
+  }, [allPlans]);
+
+  const plans = useMemo(() => {
+    if (statusFilter === "all") return allPlans;
+    if (statusFilter === "draft") {
+      return allPlans.filter(
+        (p) => p.statusRaw === "draft" || p.statusRaw === "ready_for_review",
+      );
+    }
+    if (statusFilter === "approved") {
+      return allPlans.filter((p) => p.statusRaw === "approved" || p.statusRaw === "active");
+    }
+    return allPlans.filter((p) => p.statusRaw === statusFilter);
+  }, [allPlans, statusFilter]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -215,23 +226,82 @@ export default function ProgrammePlansRegisterView() {
           { label: "Planning" },
           { label: "Programme Plans" },
         ]}
-        meta={
-          <PageMetaStrip
-            items={[
-              { label: "total", value: String(stats.total) },
-              { label: "draft", value: String(stats.draft) },
-              { label: "submitted", value: String(stats.submitted) },
-              { label: "approved", value: String(stats.approved) },
-              { label: "returned", value: String(stats.returned) },
-            ]}
-          />
-        }
         actions={
           <Button size="sm" onClick={openCreate} disabled={!canCreate}>
             <Plus className="h-3.5 w-3.5" />
             New programme plan
           </Button>
         }
+      />
+
+      <StatusSummaryCards
+        label="Programme plan status summary"
+        columns={5}
+        items={[
+          {
+            id: "all",
+            label: "Total",
+            value: String(stats.total),
+            icon: ClipboardList,
+            footnote: "All programme plans",
+            emphasis: true,
+            active: statusFilter === "all",
+            onClick: () => {
+              setStatusFilter("all");
+              setPage(1);
+            },
+          },
+          {
+            id: "draft",
+            label: "Draft",
+            value: String(stats.draft),
+            icon: FileEdit,
+            footnote: "Still being prepared",
+            active: statusFilter === "draft",
+            onClick: () => {
+              setStatusFilter("draft");
+              setPage(1);
+            },
+          },
+          {
+            id: "submitted",
+            label: "Submitted",
+            value: String(stats.submitted),
+            icon: Send,
+            footnote: "Awaiting Silva review",
+            active: statusFilter === "submitted",
+            onClick: () => {
+              setStatusFilter("submitted");
+              setPage(1);
+            },
+          },
+          {
+            id: "approved",
+            label: "Approved",
+            value: String(stats.approved),
+            icon: CheckCircle2,
+            footnote: "Ready to execute",
+            intent: "positive",
+            active: statusFilter === "approved",
+            onClick: () => {
+              setStatusFilter("approved");
+              setPage(1);
+            },
+          },
+          {
+            id: "returned",
+            label: "Returned",
+            value: String(stats.returned),
+            icon: RotateCcw,
+            footnote: "Needs revision",
+            intent: "negative",
+            active: statusFilter === "returned",
+            onClick: () => {
+              setStatusFilter("returned");
+              setPage(1);
+            },
+          },
+        ]}
       />
 
       <SectionCard title="Register" flush>

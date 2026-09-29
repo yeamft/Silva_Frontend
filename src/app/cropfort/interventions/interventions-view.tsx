@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { MoreHorizontal, Plus, Zap } from "lucide-react";
+import { Clock3, FileEdit, MoreHorizontal, Plus, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
@@ -13,8 +13,8 @@ import { FormField } from "@/components/cropfort/form-field";
 import {
   PageContainer,
   PageHeader,
-  PageMetaStrip,
   SectionCard,
+  StatusSummaryCards,
 } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -240,15 +240,6 @@ export default function InterventionsView() {
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: area.label },
         ]}
-        meta={
-          <PageMetaStrip
-            items={[
-              { value: String(stats.total), label: "Interventions" },
-              { value: String(stats.live), label: "Draft / active" },
-              { value: String(stats.waiting), label: "Awaiting sign-off" },
-            ]}
-          />
-        }
         actions={
           <>
             <Button size="sm" variant="outline" asChild>
@@ -260,6 +251,35 @@ export default function InterventionsView() {
             </Button>
           </>
         }
+      />
+
+      <StatusSummaryCards
+        label="Intervention status summary"
+        columns={3}
+        items={[
+          {
+            id: "total",
+            label: "Interventions",
+            value: String(stats.total),
+            icon: Zap,
+            footnote: "All interventions in scope",
+            emphasis: true,
+          },
+          {
+            id: "live",
+            label: "Draft / active",
+            value: String(stats.live),
+            icon: FileEdit,
+            footnote: "In preparation or live",
+          },
+          {
+            id: "waiting",
+            label: "Awaiting sign-off",
+            value: String(stats.waiting),
+            icon: Clock3,
+            footnote: "Submitted for review",
+          },
+        ]}
       />
 
       {!blocks.length ? (

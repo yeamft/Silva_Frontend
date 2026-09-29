@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, ClipboardCheck, MoreHorizontal } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, ClipboardList, MapPinned, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
@@ -13,9 +13,9 @@ import {
   OpsDeskFilterChips,
   OpsDeskHeader,
   OpsDeskList,
-  OpsDeskMeta,
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
+import { StatusSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -216,15 +216,47 @@ export default function ValidationQueueView() {
           { label: "Control" },
           { label: "Validation" },
         ]}
-        meta={
-          <OpsDeskMeta
-            items={[
-              { label: "submitted", value: String(stats.submitted) },
-              { label: "site checked", value: String(stats.siteChecked) },
-              { label: ">10% variance", value: String(stats.highVariance) },
-            ]}
-          />
-        }
+      />
+
+      <StatusSummaryCards
+        label="Validation queue status summary"
+        columns={3}
+        items={[
+          {
+            id: "submitted",
+            label: "Submitted",
+            value: String(stats.submitted),
+            icon: ClipboardList,
+            footnote: "Awaiting site check",
+            active: statusFilter === "submitted",
+            onClick: () => {
+              setStatusFilter("submitted");
+              setPage(1);
+            },
+          },
+          {
+            id: "site_checked",
+            label: "Site checked",
+            value: String(stats.siteChecked),
+            icon: MapPinned,
+            footnote: "Ready to validate",
+            intent: "positive",
+            active: statusFilter === "site_checked",
+            onClick: () => {
+              setStatusFilter("site_checked");
+              setPage(1);
+            },
+          },
+          {
+            id: "high_variance",
+            label: ">10% variance",
+            value: String(stats.highVariance),
+            icon: AlertTriangle,
+            footnote: "Needs attention",
+            intent: "negative",
+            emphasis: stats.highVariance > 0,
+          },
+        ]}
       />
 
       <OpsDeskControlPanel

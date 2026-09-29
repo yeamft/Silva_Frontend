@@ -83,11 +83,7 @@ export default function AfpRegisterView() {
         }
       />
 
-      <SectionCard
-        title="AFP register"
-        description="Submitted and approved programme plans awaiting or ready for AFE"
-        flush
-      >
+      <SectionCard title="AFP register" flush>
         {plansQuery.isLoading ? (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">
             Loading AFP register…

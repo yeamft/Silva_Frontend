@@ -19,7 +19,6 @@ import {
   OpsDeskFilterChips,
   OpsDeskHeader,
   OpsDeskList,
-  OpsDeskMeta,
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
 import { StatCard } from "@/components/cropfort/page-shell";
@@ -323,24 +322,6 @@ export default function WorkOrdersView() {
           { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
           { label: area.label },
         ]}
-        meta={
-          <OpsDeskMeta
-            items={[
-              {
-                label: "open",
-                value: String(orders.filter((o) => o.status !== "complete").length),
-              },
-              {
-                label: "in field",
-                value: String(orders.filter((o) => o.status === "in_progress").length),
-              },
-              {
-                label: "attention",
-                value: String(orders.filter((o) => o.attention !== "none").length),
-              },
-            ]}
-          />
-        }
         actions={
           <Button size="sm" onClick={() => setIssueOpen(true)}>
             <Plus className="h-3.5 w-3.5" />

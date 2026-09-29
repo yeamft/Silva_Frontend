@@ -193,7 +193,7 @@ function WorkflowShell({ area }: { area: CropfortAreaDef }) {
           </Button>
         ))}
       </div>
-      <SectionCard title="Neighbor rates" description="Enter evidence, then lock the average">
+      <SectionCard title="Neighbor rates">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-md border border-border bg-background px-3 py-2 shadow-xs">
             <p className="text-xs text-muted-foreground">Neighbor east</p>
@@ -248,10 +248,10 @@ function PlanningShell({ area }: { area: CropfortAreaDef }) {
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <SectionCard title="Activities" description="3 included · ETB 20,800" className="lg:col-span-2">
+        <SectionCard title="Activities" className="lg:col-span-2">
           <DemoList compact clickable />
         </SectionCard>
-        <SectionCard title="Oct – Sep" description="Peak / Active / Light">
+        <SectionCard title="Oct – Sep">
           <div className="grid grid-cols-4 gap-1.5 text-center text-[10px]">
             {["O", "N", "D", "J", "F", "M", "A", "M", "J", "J", "A", "S"].map((m, i) => (
               <button
@@ -285,7 +285,6 @@ function ProjectShell({ area }: { area: CropfortAreaDef }) {
         <SectionCard
           title="Sheka nursery expansion"
           className="lg:col-span-2"
-          description="Scope · budget · milestones"
         >
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -308,7 +307,7 @@ function ActionShell({ area }: { area: CropfortAreaDef }) {
       <SectionCard title="Active interventions">
         <DemoList compact clickable />
       </SectionCard>
-      <SectionCard title="Action panel" description="One intervention at a time">
+      <SectionCard title="Action panel">
         <div className="rounded-md border border-border bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
           Select an intervention to see steps, rates, and sign-off.
         </div>
@@ -331,7 +330,7 @@ function DocumentShell({
           <DemoList clickable />
         </div>
       </SectionCard>
-      <SectionCard title="Preview" description="Totals · sections · approval route">
+      <SectionCard title="Preview">
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background">
@@ -373,7 +372,7 @@ function ReviewQueueShell({ area }: { area: CropfortAreaDef }) {
           </Button>
         ))}
       </div>
-      <SectionCard title="Awaiting your decision" description="Tap a row, then Approve or Reject" flush>
+      <SectionCard title="Awaiting your decision" flush>
         <div className="px-4 sm:px-5">
           <DemoList clickable />
         </div>
@@ -422,7 +421,7 @@ function MobileTaskShell({ area }: { area: CropfortAreaDef }) {
   return (
     <ShellChrome area={area}>
       <div className="mx-auto w-full max-w-sm space-y-4">
-        <SectionCard title="Today’s tasks" description="One job at a time">
+        <SectionCard title="Today’s tasks">
           <ul className="space-y-2">
             {DEMO_ROWS.map((row) => (
               <li key={row.id}>
@@ -492,7 +491,7 @@ function FinancialShell({ area }: { area: CropfortAreaDef }) {
           </span>
         ))}
       </div>
-      <SectionCard title="Budget vs actual" description="Plan ETB 51,300 · Actual ETB 19,400">
+      <SectionCard title="Budget vs actual">
         <div className="space-y-2">
           <div className="h-3 overflow-hidden rounded-full bg-muted">
             <div className="h-full w-[38%] rounded-full bg-primary" />
@@ -512,7 +511,7 @@ function FinancialShell({ area }: { area: CropfortAreaDef }) {
 function ReportShell({ area }: { area: CropfortAreaDef }) {
   return (
     <ShellChrome area={area} primaryLabel="Release report">
-      <SectionCard title="Weekly operations summary" description="Readable narrative for Silva">
+      <SectionCard title="Weekly operations summary">
         <article className="max-w-2xl space-y-4 text-sm leading-relaxed">
           <p className="text-muted-foreground">
             Week of 15 Sep · Sheka Program · prepared by SPX
@@ -606,7 +605,6 @@ export function CropfortAreaWorkspace({ area }: { area: CropfortAreaDef }) {
         <EmptyState
           icon={Construction}
           title="Use Home"
-          description="Attention + continue-work lives on the Home screen."
           action={
             <Button size="sm" asChild>
               <Link href={CROPFORT_ROUTES.dashboard}>Go to Home</Link>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { FileText, MoreHorizontal, Plus } from "lucide-react";
+import { CheckCircle2, Clock3, FileText, MoreHorizontal, Plus, RotateCcw, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
@@ -12,8 +12,8 @@ import {
 import {
   PageContainer,
   PageHeader,
-  PageMetaStrip,
   SectionCard,
+  StatusSummaryCards,
 } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { canApproveOperations, canEditPlanScope } from "@/lib/cropfort/platform-access";
@@ -166,22 +166,69 @@ export default function AfeView() {
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: area.label },
         ]}
-        meta={
-          <PageMetaStrip
-            items={[
-              { label: "awaiting", value: String(stats.waiting) },
-              { label: "approved", value: String(stats.approved) },
-              { label: "returned", value: String(stats.returned) },
-              { label: "authorized", value: fmtEtb(stats.value) },
-            ]}
-          />
-        }
         actions={
           <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!canCreate}>
             <Plus className="h-3.5 w-3.5" />
             New AFE
           </Button>
         }
+      />
+
+      <StatusSummaryCards
+        label="AFE status summary"
+        items={[
+          {
+            id: "awaiting",
+            label: "Awaiting",
+            value: String(stats.waiting),
+            icon: Clock3,
+            footnote: "Submitted for review",
+            active: statusFilter === "submitted",
+            onClick: () => {
+              setStatusFilter("submitted");
+              setPage(1);
+            },
+          },
+          {
+            id: "approved",
+            label: "Approved",
+            value: String(stats.approved),
+            icon: CheckCircle2,
+            footnote: "Authorized to proceed",
+            intent: "positive",
+            active: statusFilter === "approved",
+            onClick: () => {
+              setStatusFilter("approved");
+              setPage(1);
+            },
+          },
+          {
+            id: "returned",
+            label: "Returned",
+            value: String(stats.returned),
+            icon: RotateCcw,
+            footnote: "Needs revision",
+            intent: "negative",
+            active: statusFilter === "returned",
+            onClick: () => {
+              setStatusFilter("returned");
+              setPage(1);
+            },
+          },
+          {
+            id: "authorized",
+            label: "Authorized",
+            value: fmtEtb(stats.value),
+            icon: Wallet,
+            footnote: "Approved AFE value",
+            emphasis: true,
+            active: statusFilter === "approved",
+            onClick: () => {
+              setStatusFilter("approved");
+              setPage(1);
+            },
+          },
+        ]}
       />
 
       {afesQuery.isError ? (

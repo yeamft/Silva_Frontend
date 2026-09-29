@@ -157,12 +157,9 @@ export default function FarmMapPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Farm map"
-        description="Estate farm areas and blocks on the map. Select a block for details."
-      />
+      <PageHeader title="Farm map" />
 
-      <SectionCard title="Map view" description="OpenStreetMap · blocks sized by hectares">
+      <SectionCard title="Map view">
         {loading ? (
           <div className="flex h-[min(62vh,560px)] items-center justify-center text-sm text-muted-foreground">
             Loading farm structure…

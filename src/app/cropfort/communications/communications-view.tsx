@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquare, Plus } from "lucide-react";
+import { Inbox, MessageSquare, Plus, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
@@ -12,8 +12,8 @@ import { FormField } from "@/components/cropfort/form-field";
 import {
   PageContainer,
   PageHeader,
-  PageMetaStrip,
   SectionCard,
+  StatusSummaryCards,
 } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -194,21 +194,41 @@ export default function CommunicationsView() {
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Communications" },
         ]}
-        meta={
-          <PageMetaStrip
-            items={[
-              { value: String(visible.length), label: "Threads" },
-              { value: String(openCount), label: "Open" },
-              { value: COMM_PARTY_LABEL[party], label: "Your desk" },
-            ]}
-          />
-        }
         actions={
           <Button size="sm" onClick={() => setComposeOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
             New thread
           </Button>
         }
+      />
+
+      <StatusSummaryCards
+        label="Communications summary"
+        columns={3}
+        items={[
+          {
+            id: "threads",
+            label: "Threads",
+            value: String(visible.length),
+            icon: MessageSquare,
+            footnote: "Visible in this desk",
+            emphasis: true,
+          },
+          {
+            id: "open",
+            label: "Open",
+            value: String(openCount),
+            icon: Inbox,
+            footnote: "Still active",
+          },
+          {
+            id: "desk",
+            label: "Your desk",
+            value: COMM_PARTY_LABEL[party],
+            icon: UserRound,
+            footnote: "Current party view",
+          },
+        ]}
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">

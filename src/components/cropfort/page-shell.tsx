@@ -245,6 +245,76 @@ export function StatCard({
   );
 }
 
+export type StatusSummaryItem = {
+  id: string;
+  label: string;
+  value: string;
+  footnote?: string;
+  icon?: LucideIcon;
+  intent?: "positive" | "negative" | "neutral";
+  emphasis?: boolean;
+  active?: boolean;
+  onClick?: () => void;
+};
+
+/** Workflow / status KPI row used on registers (AFE, programme plans, etc.). */
+export function StatusSummaryCards({
+  items,
+  label = "Status summary",
+  columns = 4,
+}: {
+  items: StatusSummaryItem[];
+  label?: string;
+  columns?: 3 | 4 | 5;
+}) {
+  const grid =
+    columns === 3
+      ? "grid-cols-2 gap-3 sm:grid-cols-3"
+      : columns === 5
+        ? "grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5"
+        : "grid-cols-2 gap-3 xl:grid-cols-4";
+
+  return (
+    <div className={cn("grid", grid)} role="group" aria-label={label}>
+      {items.map((item) => {
+        const card = (
+          <StatCard
+            label={item.label}
+            value={item.value}
+            icon={item.icon}
+            footnote={item.footnote}
+            emphasis={Boolean(item.emphasis || item.active)}
+            intent={item.intent ?? "neutral"}
+          />
+        );
+
+        if (!item.onClick) {
+          return (
+            <div key={item.id} className="min-w-0">
+              {card}
+            </div>
+          );
+        }
+
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={item.onClick}
+            aria-pressed={Boolean(item.active)}
+            className={cn(
+              "min-w-0 rounded-xl text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              item.active && "ring-2 ring-primary/35",
+            )}
+          >
+            {card}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Card with a consistent header/action pattern for dashboard and list sections. */
 export function SectionCard({
   title,

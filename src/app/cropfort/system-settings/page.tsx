@@ -49,7 +49,7 @@ export default function SystemSettingsPage() {
         ]}
       />
 
-      <SectionCard title="Workspace settings" description="Jump to live configuration desks">
+      <SectionCard title="Workspace settings">
         <ul className="divide-y rounded-lg border">
           {LINKS.map((item) => (
             <li key={item.href} className="flex items-center gap-3 px-4 py-3">

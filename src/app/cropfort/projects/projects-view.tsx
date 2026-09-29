@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FolderKanban, MoreHorizontal, Plus } from "lucide-react";
+import { Clock3, FolderKanban, FolderOpen, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
@@ -13,8 +13,8 @@ import { FormField } from "@/components/cropfort/form-field";
 import {
   PageContainer,
   PageHeader,
-  PageMetaStrip,
   SectionCard,
+  StatusSummaryCards,
 } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -242,15 +242,6 @@ export default function ProjectsView() {
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: area.label },
         ]}
-        meta={
-          <PageMetaStrip
-            items={[
-              { value: String(stats.total), label: "Projects" },
-              { value: String(stats.open), label: "Open" },
-              { value: String(stats.waiting), label: "Awaiting approval" },
-            ]}
-          />
-        }
         actions={
           <>
             <Button size="sm" variant="outline" asChild>
@@ -262,6 +253,35 @@ export default function ProjectsView() {
             </Button>
           </>
         }
+      />
+
+      <StatusSummaryCards
+        label="Project status summary"
+        columns={3}
+        items={[
+          {
+            id: "total",
+            label: "Projects",
+            value: String(stats.total),
+            icon: FolderKanban,
+            footnote: "All projects in scope",
+            emphasis: true,
+          },
+          {
+            id: "open",
+            label: "Open",
+            value: String(stats.open),
+            icon: FolderOpen,
+            footnote: "Not yet complete",
+          },
+          {
+            id: "waiting",
+            label: "Awaiting approval",
+            value: String(stats.waiting),
+            icon: Clock3,
+            footnote: "Submitted for review",
+          },
+        ]}
       />
 
       {!blocks.length ? (

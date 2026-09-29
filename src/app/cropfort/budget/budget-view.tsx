@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   PageContainer,
   PageHeader,
-  PageMetaStrip,
   SectionCard,
   StatCard,
 } from "@/components/cropfort/page-shell";
@@ -161,18 +160,6 @@ export default function BudgetForecastView() {
           { label: "Planning", href: CROPFORT_ROUTES.coreOperations },
           { label: "Cost Management" },
         ]}
-        meta={
-          <PageMetaStrip
-            items={[
-              { value: fmtEtb(snap.planEtb), label: "Budget" },
-              { value: fmtEtb(snap.actualEtb), label: "Actual" },
-              {
-                value: varLabel(snap.variancePct),
-                label: "Variance",
-              },
-            ]}
-          />
-        }
         actions={
           <>
             <Button size="sm" variant="outline" asChild>

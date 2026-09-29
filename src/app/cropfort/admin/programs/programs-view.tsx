@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Layers3, MoreHorizontal, Plus } from "lucide-react";
+import { CheckCircle2, Layers3, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
-import { PageContainer, PageHeader, PageMetaStrip, SectionCard } from "@/components/cropfort/page-shell";
+import { PageContainer, PageHeader, SectionCard, StatusSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -134,23 +134,35 @@ export default function ProgramsPage() {
       <PageHeader
         eyebrow="Administration"
         title="Programs"
-        meta={
-          <PageMetaStrip
-            items={[
-              { value: String(rows.length), label: "Programs" },
-              {
-                value: String(rows.filter((p) => p.status === "active").length),
-                label: "Active",
-              },
-            ]}
-          />
-        }
         actions={
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" aria-hidden />
             New program
           </Button>
         }
+      />
+
+      <StatusSummaryCards
+        label="Programs summary"
+        columns={3}
+        items={[
+          {
+            id: "total",
+            label: "Programs",
+            value: String(rows.length),
+            icon: Layers3,
+            footnote: "All programs",
+            emphasis: true,
+          },
+          {
+            id: "active",
+            label: "Active",
+            value: String(rows.filter((p) => p.status === "active").length),
+            icon: CheckCircle2,
+            footnote: "Currently available",
+            intent: "positive",
+          },
+        ]}
       />
 
       <SectionCard flush>

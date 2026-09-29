@@ -9,7 +9,7 @@ import { CROPFORT_ROUTES } from "@/config/navigation";
 type WorkspaceModuleShellProps = {
   workspace: string;
   title: string;
-  description: string;
+  description?: string;
   continueHref?: string;
   continueLabel?: string;
 };
@@ -18,7 +18,6 @@ type WorkspaceModuleShellProps = {
 export function WorkspaceModuleShell({
   workspace,
   title,
-  description,
   continueHref,
   continueLabel = "Continue",
 }: WorkspaceModuleShellProps) {
@@ -27,7 +26,6 @@ export function WorkspaceModuleShell({
       <PageHeader
         eyebrow={workspace}
         title={title}
-        description={description}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: workspace },
@@ -37,8 +35,7 @@ export function WorkspaceModuleShell({
       <SectionCard>
         <EmptyState
           icon={Construction}
-          title={`${title} is in the workspace map`}
-          description="Navigation is live. Detailed workflows will land here without moving this module out of its workspace."
+          title={`${title} is coming soon`}
           action={
             continueHref ? (
               <Button asChild>

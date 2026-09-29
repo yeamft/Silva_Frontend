@@ -63,7 +63,6 @@ export default function EstateMapView() {
       <PageHeader
         eyebrow={activeProgram?.name || "Performance"}
         title="Estate map"
-        description="Farm areas and blocks on your estate (read-only)."
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Performance", href: CROPFORT_ROUTES.progress },
@@ -71,7 +70,7 @@ export default function EstateMapView() {
         ]}
       />
 
-      <SectionCard title="Map" description="Select a block to see hectares and status">
+      <SectionCard title="Map">
         {loading ? (
           <div className="flex h-[min(62vh,560px)] items-center justify-center text-sm text-muted-foreground">
             Loading…

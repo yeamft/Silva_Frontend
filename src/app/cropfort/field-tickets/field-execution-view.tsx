@@ -17,7 +17,6 @@ import {
   OpsDeskFilterChips,
   OpsDeskHeader,
   OpsDeskList,
-  OpsDeskMeta,
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
 import { StatCard } from "@/components/cropfort/page-shell";
@@ -428,19 +427,6 @@ export default function FieldExecutionView() {
           { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
           { label: area.label },
         ]}
-        meta={
-          <OpsDeskMeta
-            items={[
-              { label: "vendor", value: String(waitingCounts.vendor) },
-              { label: "site", value: String(waitingCounts.site) },
-              { label: "asset", value: String(waitingCounts.asset) },
-              {
-                label: "closed",
-                value: String(tickets.filter((t) => t.status === "validated").length),
-              },
-            ]}
-          />
-        }
         actions={
           canAssign ? (
             <Button size="sm" onClick={() => setAssignOpen(true)}>

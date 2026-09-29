@@ -99,7 +99,6 @@ export default function RolesConfigPage() {
     <PageContainer>
       <PageHeader
         title="Roles"
-        description="System Cropfort desks. Assign roles to people on Users — this page is the catalogue and matrix."
         actions={
           <Button size="sm" asChild>
             <Link href={CROPFORT_ROUTES.users}>
@@ -110,7 +109,7 @@ export default function RolesConfigPage() {
         }
       />
 
-      <SectionCard title="Role catalogue" description="Click a role to see capabilities and assignee count">
+      <SectionCard title="Role catalogue">
         <ul className="divide-y rounded-lg border">
           {SYSTEM_ROLES.map((role) => (
             <li key={role}>
@@ -173,7 +172,7 @@ export default function RolesConfigPage() {
         </SectionCard>
       ) : null}
 
-      <SectionCard title="Tenancy snapshot" description="Critical chain gates by desk">
+      <SectionCard title="Tenancy snapshot">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>

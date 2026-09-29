@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapPinned, MoreHorizontal, Plus } from "lucide-react";
+import { LandPlot, MapPinned, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { MultiCheck } from "@/components/cropfort/multi-check";
-import { PageContainer, PageHeader, PageMetaStrip, SectionCard } from "@/components/cropfort/page-shell";
+import { PageContainer, PageHeader, SectionCard, StatusSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -166,19 +166,6 @@ export default function FarmAreasPage() {
       <PageHeader
         eyebrow="Administration"
         title="Farm areas"
-        meta={
-          <PageMetaStrip
-            items={[
-              { value: String(areas.length), label: "Farm areas" },
-              {
-                value: String(
-                  areas.reduce((sum, a) => sum + (Number(a.totalHectares) || 0), 0).toLocaleString(),
-                ),
-                label: "ha",
-              },
-            ]}
-          />
-        }
         actions={
           canEdit ? (
             <Button size="sm" onClick={() => startEdit()}>
@@ -188,6 +175,31 @@ export default function FarmAreasPage() {
           ) : null
         }
       />
+
+      <StatusSummaryCards
+        label="Farm areas summary"
+        columns={3}
+        items={[
+          {
+            id: "areas",
+            label: "Farm areas",
+            value: String(areas.length),
+            icon: MapPinned,
+            footnote: "Mapped areas",
+            emphasis: true,
+          },
+          {
+            id: "ha",
+            label: "Total hectares",
+            value: areas
+              .reduce((sum, a) => sum + (Number(a.totalHectares) || 0), 0)
+              .toLocaleString(),
+            icon: LandPlot,
+            footnote: "Combined estate size",
+          },
+        ]}
+      />
+
       <SectionCard flush>
         <div className="border-b px-4 py-3">
           <TableToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search farm or organization" />

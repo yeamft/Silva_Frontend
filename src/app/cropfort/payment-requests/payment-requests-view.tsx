@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { WalletCards } from "lucide-react";
+import { BadgeCheck, CircleDollarSign, Inbox, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
 import {
@@ -10,9 +10,9 @@ import {
   OpsDeskFilterChips,
   OpsDeskHeader,
   OpsDeskList,
-  OpsDeskMeta,
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
+import { StatusSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -137,15 +137,6 @@ export default function PaymentRequestsView() {
           { label: "Control", href: CROPFORT_ROUTES.approvals },
           { label: "Payment Requests" },
         ]}
-        meta={
-          <OpsDeskMeta
-            items={[
-              { label: "open", value: String(rows.filter((r) => r.status === "submitted").length) },
-              { label: "verified", value: String(rows.filter((r) => r.status === "verified").length) },
-              { label: "settled", value: String(rows.filter((r) => r.status === "settled").length) },
-            ]}
-          />
-        }
         actions={
           canCreate ? (
             <Button size="sm" onClick={() => setCreateOpen(true)} disabled={validatedTickets.length === 0}>
@@ -154,6 +145,42 @@ export default function PaymentRequestsView() {
             </Button>
           ) : null
         }
+      />
+
+      <StatusSummaryCards
+        label="Payment request status summary"
+        columns={3}
+        items={[
+          {
+            id: "open",
+            label: "Open",
+            value: String(rows.filter((r) => r.status === "submitted").length),
+            icon: Inbox,
+            footnote: "Submitted, awaiting verify",
+            active: filter === "submitted",
+            onClick: () => setFilter("submitted"),
+          },
+          {
+            id: "verified",
+            label: "Verified",
+            value: String(rows.filter((r) => r.status === "verified").length),
+            icon: BadgeCheck,
+            footnote: "Ready to settle",
+            intent: "positive",
+            active: filter === "verified",
+            onClick: () => setFilter("verified"),
+          },
+          {
+            id: "settled",
+            label: "Settled",
+            value: String(rows.filter((r) => r.status === "settled").length),
+            icon: CircleDollarSign,
+            footnote: "Payment complete",
+            emphasis: true,
+            active: filter === "settled",
+            onClick: () => setFilter("settled"),
+          },
+        ]}
       />
 
       <OpsDeskControlPanel

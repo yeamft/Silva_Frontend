@@ -332,7 +332,6 @@ const UserManagementView = () => {
     <PageContainer>
       <PageHeader
         title="User management"
-        description="Create accounts and control which desk each person can access."
         actions={
           <Button className="gap-1.5" onClick={openCreate}>
             <Plus className="h-4 w-4" aria-hidden />
