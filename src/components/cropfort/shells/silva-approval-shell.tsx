@@ -86,7 +86,7 @@ function SessionBanner() {
   );
 }
 
-/** Approval-first desk for farm_owner / asset owner. */
+/** Approval-first desk for any asset owner (farm_owner). */
 export function SilvaApprovalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { activeProgram } = useCropfortAuth();
@@ -108,13 +108,13 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
         <div className="border-b border-border px-4 py-4">
           <p className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden />
-            Silva desk
+            Asset owner desk
           </p>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {activeProgram?.name || "Approvals"}
           </p>
         </div>
-        <nav aria-label="Silva desk" className="flex flex-1 flex-col gap-0.5 p-2">
+        <nav aria-label="Asset owner desk" className="flex flex-1 flex-col gap-0.5 p-2">
           {SILVA_NAV.map((item) => {
             const Icon = item.icon;
             const active = item.match
@@ -171,7 +171,7 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
 
         {/* Mobile bottom nav */}
         <nav
-          aria-label="Silva desk"
+          aria-label="Asset owner desk"
           className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur md:hidden supports-[padding:max(0px)]:pb-[env(safe-area-inset-bottom)]"
         >
           <ul className="grid grid-cols-5">

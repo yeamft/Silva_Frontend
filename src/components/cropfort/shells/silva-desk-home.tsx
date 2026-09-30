@@ -26,14 +26,14 @@ export function SilvaDeskHome() {
   const afesQuery = useAfes(enabled);
   const settlementsQuery = useSettlements(enabled);
 
-  const assetTickets = useMemo(() => {
+  const assetTicketsAll = useMemo(() => {
     const tickets = (woQuery.data || []).flatMap((wo) =>
       (wo.tickets || []).map((t) => mapTicketDto(t, wo)),
     );
-    return tickets
-      .filter((t) => ticketWaitingOn(t.status) === "asset_owner")
-      .slice(0, 6);
+    return tickets.filter((t) => ticketWaitingOn(t.status) === "asset_owner");
   }, [woQuery.data]);
+
+  const assetTickets = assetTicketsAll.slice(0, 6);
 
   const awaitingAfe = useMemo(
     () => (afesQuery.data || []).filter((a) => a.status === "submitted").length,
@@ -43,8 +43,13 @@ export function SilvaDeskHome() {
   const settlementHint = useMemo(() => {
     const rows = settlementsQuery.data || [];
     const authorized = rows.filter((r) => r.status === "authorized");
-    const value = authorized.reduce((s, r) => s + (r.amountEtb || 0), 0);
-    return { count: authorized.length, value };
+    const settled = rows.filter((r) => r.status === "settled");
+    return {
+      authorizedCount: authorized.length,
+      authorizedValue: authorized.reduce((s, r) => s + (r.amountEtb || 0), 0),
+      settledCount: settled.length,
+      settledValue: settled.reduce((s, r) => s + (r.amountEtb || 0), 0),
+    };
   }, [settlementsQuery.data]);
 
   const firstName = user.name.split(" ")[0] || user.name;
@@ -61,27 +66,40 @@ export function SilvaDeskHome() {
         </p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-          <p className="text-xs text-muted-foreground">AFEs awaiting</p>
-          <p className="cf-numeric mt-1 text-2xl font-semibold sm:text-3xl">{awaitingAfe}</p>
+      <div className="grid grid-cols-4 gap-2 sm:gap-3">
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
+          <p className="text-[10px] text-muted-foreground sm:text-xs">AFEs awaiting</p>
+          <p className="cf-numeric mt-1 text-lg font-semibold sm:text-3xl">{awaitingAfe}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-          <p className="text-xs text-muted-foreground">Asset tickets</p>
-          <p className="cf-numeric mt-1 text-2xl font-semibold sm:text-3xl">{assetTickets.length}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4 sm:col-span-2 sm:p-5">
-          <p className="text-xs text-muted-foreground">Authorized to settle</p>
-          <p className="cf-numeric mt-1 text-2xl font-semibold sm:text-3xl">
-            {fmtEtb(settlementHint.value)}
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
+          <p className="text-[10px] text-muted-foreground sm:text-xs">Asset tickets</p>
+          <p className="cf-numeric mt-1 text-lg font-semibold sm:text-3xl">
+            {assetTicketsAll.length}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {settlementHint.count} settlement{settlementHint.count === 1 ? "" : "s"}
+        </div>
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
+          <p className="text-[10px] text-muted-foreground sm:text-xs">Authorized to settle</p>
+          <p className="cf-numeric mt-1 text-lg font-semibold sm:text-3xl">
+            {fmtEtb(settlementHint.authorizedValue)}
+          </p>
+          <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
+            {settlementHint.authorizedCount} settlement
+            {settlementHint.authorizedCount === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
+          <p className="text-[10px] text-muted-foreground sm:text-xs">Settled</p>
+          <p className="cf-numeric mt-1 text-lg font-semibold sm:text-3xl">
+            {fmtEtb(settlementHint.settledValue)}
+          </p>
+          <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
+            {settlementHint.settledCount} settlement
+            {settlementHint.settledCount === 1 ? "" : "s"}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:max-w-3xl">
+      <div className="grid grid-cols-4 gap-2 sm:gap-3">
         <Button asChild className="h-auto flex-col gap-1.5 py-4">
           <Link href={CROPFORT_ROUTES.approvals}>
             <ClipboardCheck className="h-5 w-5" />

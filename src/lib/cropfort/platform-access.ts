@@ -83,6 +83,6 @@ export function deskLabel(role: CropfortRole | string): string {
   if (isSpxDesk(role)) return "SPX";
   if (role === "bagro_office") return "B-Agro";
   if (role === "field_supervisor") return "B-Agro (field)";
-  if (isSilvaDesk(role) || role === "farm_owner_viewer") return "Silva / asset owner";
+  if (isSilvaDesk(role) || role === "farm_owner_viewer") return "Asset owner";
   return String(role);
 }

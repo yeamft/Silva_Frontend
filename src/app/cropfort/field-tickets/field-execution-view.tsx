@@ -462,7 +462,7 @@ export default function FieldExecutionView() {
       )}
 
       {desk === "spx" ? (
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard
             label="Waiting on vendor"
             value={String(waitingCounts.vendor)}
@@ -522,19 +522,14 @@ export default function FieldExecutionView() {
       />
 
       {view === "board" ? (
-        <div
-          className={cn(
-            "cf-scroll -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0",
-            "lg:grid lg:snap-none lg:grid-cols-4 lg:overflow-visible lg:pb-0",
-          )}
-        >
+        <div className="cf-scroll -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
           {COLUMNS.map((col) => {
             const items = visible.filter((t) => col.statuses.includes(t.status));
             return (
               <section
                 key={col.id}
                 className={cn(
-                  "flex w-[min(100%,18.5rem)] shrink-0 snap-start flex-col rounded-xl border border-border/80 p-2 sm:w-[18.5rem] lg:w-auto lg:min-w-0",
+                  "flex w-[min(100%,18.5rem)] shrink-0 snap-start flex-col rounded-xl border border-border/80 p-2 sm:w-[18.5rem]",
                   col.wash,
                 )}
               >
