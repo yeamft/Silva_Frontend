@@ -48,7 +48,7 @@ const SILVA_NAV: NavItem[] = [
   },
   {
     href: CROPFORT_ROUTES.fieldTickets,
-    label: "Tickets",
+    label: "Field sign-offs",
     icon: ClipboardList,
     match: (p) => p.startsWith(CROPFORT_ROUTES.fieldTickets),
   },
@@ -103,14 +103,14 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
         Skip to main content
       </a>
 
-      {/* Desktop slim rail */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
-        <div className="border-b border-border px-4 py-4">
-          <p className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden />
+      {/* Desktop slim rail — same sidebar tokens as SPX so theme toggle updates it */}
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+        <div className="border-b border-sidebar-border px-4 py-4">
+          <p className="flex items-center gap-2 text-sm font-semibold tracking-tight text-sidebar-foreground">
+            <CheckCircle2 className="h-4 w-4 text-sidebar-primary" aria-hidden />
             Asset owner desk
           </p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
+          <p className="mt-1 truncate text-xs text-sidebar-foreground/50">
             {activeProgram?.name || "Approvals"}
           </p>
         </div>
@@ -125,14 +125,26 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   active
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                 )}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                {active ? (
+                  <span
+                    className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-sm bg-sidebar-primary"
+                    aria-hidden
+                  />
+                ) : null}
+                <Icon
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    active ? "text-sidebar-primary" : "text-sidebar-foreground/50",
+                  )}
+                  aria-hidden
+                />
                 {item.label}
               </Link>
             );
@@ -172,7 +184,7 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
         {/* Mobile bottom nav */}
         <nav
           aria-label="Asset owner desk"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur md:hidden supports-[padding:max(0px)]:pb-[env(safe-area-inset-bottom)]"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-sidebar-border bg-sidebar/95 text-sidebar-foreground backdrop-blur md:hidden supports-[padding:max(0px)]:pb-[env(safe-area-inset-bottom)]"
         >
           <ul className="grid grid-cols-5">
             {SILVA_NAV.map((item) => {
@@ -187,8 +199,8 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
                     className={cn(
                       "flex flex-col items-center gap-0.5 px-0.5 py-2.5 text-[10px] font-medium transition-colors",
                       active
-                        ? "text-primary"
-                        : "text-muted-foreground hover:text-foreground",
+                        ? "text-sidebar-primary"
+                        : "text-sidebar-foreground/60 hover:text-sidebar-foreground",
                     )}
                     aria-current={active ? "page" : undefined}
                   >

@@ -48,13 +48,12 @@ import { getWorkspacesForRole } from "@/config/cropfort-workspaces";
 import { SELECT_WORKSPACE_PATH } from "@/lib/workspace-gate";
 import {
   canApproveAsAssetOwner,
-  canProposeRateCard,
   canViewRateCard,
 } from "@/lib/cropfortAccess";
 import { cn } from "@/lib/utils";
 import { usePerformanceLiveData } from "@/lib/query/hooks/use-performance-live";
 import { ticketWaitingOn } from "@/store/cropfortOpsStore";
-import { CROPFORT_ROLE_LABELS, type CropfortRole } from "@/types/cropfort";
+import type { CropfortRole } from "@/types/cropfort";
 
 type HomeTab = "attention" | "workspace" | "modules";
 
@@ -217,7 +216,6 @@ function SpxDashboardView() {
   const { user, activeProgram, tenant } = useCropfortAuth();
   const firstName = user.name.split(" ")[0];
   const canRates = canViewRateCard(user.role);
-  const isSpx = canProposeRateCard(user.role);
   const isOwner = canApproveAsAssetOwner(user.role);
 
   const [tab, setTab] = useState<HomeTab>("attention");
@@ -485,34 +483,6 @@ function SpxDashboardView() {
     );
   }, [tab, workspaceAreas, roleModules, query, limitedDesk]);
 
-  const quickStarts = useMemo(() => {
-    if (isVendorRole(user.role)) {
-      return [
-        { href: CROPFORT_ROUTES.fieldTickets, label: "Tickets", icon: CalendarRange },
-        { href: CROPFORT_ROUTES.communications, label: "Messages", icon: MessageSquare },
-      ];
-    }
-    if (isAssetOwnerRole(user.role)) {
-      return [
-        { href: CROPFORT_ROUTES.approvals, label: "Approvals", icon: ClipboardCheck },
-        { href: CROPFORT_ROUTES.fieldTickets, label: "Tickets", icon: CalendarRange },
-        { href: CROPFORT_ROUTES.budget, label: "Costs", icon: TrendingUp },
-        { href: CROPFORT_ROUTES.rateCardProposals, label: "Rates", icon: WalletCards },
-        { href: CROPFORT_ROUTES.progress, label: "Progress", icon: TrendingUp },
-      ];
-    }
-    return [
-      { href: CROPFORT_ROUTES.coreOperations, label: "Plan", icon: Briefcase },
-      { href: CROPFORT_ROUTES.approvals, label: "Commit", icon: ClipboardCheck },
-      { href: CROPFORT_ROUTES.workOrders, label: "Execute", icon: Wrench },
-      { href: CROPFORT_ROUTES.fieldTickets, label: "Tickets", icon: CalendarRange },
-      { href: CROPFORT_ROUTES.farmAreas, label: "Farm Areas", icon: Network },
-      ...(isSpx || isOwner
-        ? [{ href: CROPFORT_ROUTES.rateCardProposals, label: "Rates", icon: WalletCards }]
-        : []),
-    ];
-  }, [user.role, isSpx, isOwner]);
-
   const kpiStrip = useMemo(() => {
     if (isVendorRole(user.role)) {
       return [{ label: "My queue", value: queues.vendor }];
@@ -553,15 +523,15 @@ function SpxDashboardView() {
 
   return (
     <PageContainer className="max-w-none gap-6 xl:max-w-[90rem]">
-      <section className="space-y-4 border-b border-border pb-5">
+      <section className="space-y-3 border-b border-border pb-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <p className="cf-eyebrow">Overview</p>
+            <p className="cf-eyebrow">Action center</p>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.65rem]">
               {workspaceName}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Hi {firstName} · {CROPFORT_ROLE_LABELS[user.role]}
+              Hi {firstName} · what needs attention, then where things stand
               {orgName ? ` · ${orgName}` : ""}
             </p>
           </div>
@@ -570,57 +540,102 @@ function SpxDashboardView() {
               <Link href={SELECT_WORKSPACE_PATH}>Switch workspace</Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href={CROPFORT_ROUTES.fieldTickets}>
-                {isVendorRole(user.role) ? "My tickets" : "Open tickets"}
+              <Link href={attention[0]?.href || CROPFORT_ROUTES.fieldTickets}>
+                {attention[0]?.title || "Open queue"}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
           </div>
         </div>
+      </section>
 
-        <div className="flex flex-wrap gap-1">
-          {quickStarts.map((q) => {
-            const Icon = q.icon;
-            return (
-              <Link
-                key={q.href + q.label}
-                href={q.href}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold tracking-tight">Needs your attention</h2>
+          <div className="flex gap-1 rounded-lg border border-border p-0.5">
+            {browseTabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  "h-8 rounded-md px-2.5 text-xs font-medium transition-colors",
+                  safeTab === t.id
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {q.label}
-              </Link>
-            );
-          })}
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {safeTab !== "attention" ? (
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search modules…"
+              className="h-9 pl-9"
+              aria-label="Search modules"
+            />
+          </div>
+        ) : null}
+        {safeTab === "attention" ? (
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {attention.map((item) => (
+              <li key={item.href + item.title}>
+                <AttentionCard item={item} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {filteredModules.length === 0 ? (
+              <li className="col-span-full rounded-xl border border-dashed border-border px-6 py-14 text-center text-sm text-muted-foreground">
+                No modules match “{query}”.
+              </li>
+            ) : (
+              filteredModules.map((area) => (
+                <li key={area.id}>
+                  <ModuleTile area={area} />
+                </li>
+              ))
+            )}
+          </ul>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold tracking-tight">Current position</h2>
+        <div
+          className={cn(
+            "grid gap-3",
+            kpiStrip.length === 1
+              ? "grid-cols-1 sm:grid-cols-2 sm:max-w-md"
+              : kpiStrip.length === 2
+                ? "grid-cols-2 sm:max-w-lg"
+                : "grid-cols-2 sm:grid-cols-4",
+          )}
+        >
+          {kpiStrip.map((kpi) => (
+            <div
+              key={kpi.label}
+              className="rounded-xl border border-border bg-card px-4 py-3"
+            >
+              <p className="text-[11px] text-muted-foreground">{kpi.label}</p>
+              <p className="cf-numeric mt-1 text-2xl font-semibold tabular-nums">{kpi.value}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      <div
-        className={cn(
-          "grid gap-3",
-          kpiStrip.length === 1
-            ? "grid-cols-1 sm:grid-cols-2 sm:max-w-md"
-            : kpiStrip.length === 2
-              ? "grid-cols-2 sm:max-w-lg"
-              : "grid-cols-2 sm:grid-cols-4",
-        )}
-      >
-        {kpiStrip.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="rounded-xl border border-border bg-card px-4 py-3 shadow-xs"
-          >
-            <p className="text-[11px] text-muted-foreground">{kpi.label}</p>
-            <p className="cf-numeric mt-1 text-2xl font-semibold tabular-nums">{kpi.value}</p>
-          </div>
-        ))}
-      </div>
-
       <section className="grid items-start gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
           <div className="mb-4 flex items-start justify-between gap-2">
             <div>
-              <h2 className="text-sm font-semibold">Execution snapshot</h2>
+              <h2 className="text-sm font-semibold">Operational progress</h2>
               <p className="text-xs text-muted-foreground">Live work orders and ticket queues</p>
             </div>
             {isLoading ? (
@@ -753,58 +768,6 @@ function SpxDashboardView() {
           )}
         </div>
       </section>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1 rounded-lg border border-border p-0.5">
-          {browseTabs.map((t) => (
-            <Button
-              key={t.id}
-              size="sm"
-              variant={safeTab === t.id ? "secondary" : "ghost"}
-              className="h-8"
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </Button>
-          ))}
-        </div>
-        {safeTab !== "attention" ? (
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search modules…"
-              className="h-9 pl-9"
-              aria-label="Search modules"
-            />
-          </div>
-        ) : null}
-      </div>
-
-      {safeTab === "attention" ? (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {attention.map((item) => (
-            <li key={item.href + item.title}>
-              <AttentionCard item={item} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {filteredModules.length === 0 ? (
-            <li className="col-span-full rounded-xl border border-dashed border-border px-6 py-14 text-center text-sm text-muted-foreground">
-              No modules match “{query}”.
-            </li>
-          ) : (
-            filteredModules.map((area) => (
-              <li key={area.id}>
-                <ModuleTile area={area} />
-              </li>
-            ))
-          )}
-        </ul>
-      )}
     </PageContainer>
   );
 }

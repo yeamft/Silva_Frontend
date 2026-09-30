@@ -306,25 +306,17 @@ export type WorkspaceQuickOpen = {
   href: string;
 };
 
-/** Role-aware shortcuts on the select-workspace sidebar. */
+/** Role-aware platform shortcuts on select-workspace (cross-workspace only). */
 export function buildWorkspaceQuickOpens(role: string): WorkspaceQuickOpen[] {
   if (isSilva(role) || isSpx(role)) {
     return [
       { id: "approvals", label: "Approvals", href: CROPFORT_ROUTES.approvals },
-      { id: "afe", label: "AFE", href: CROPFORT_ROUTES.afe },
-      { id: "programme", label: "Programme", href: CROPFORT_ROUTES.coreOperations },
     ];
   }
   if (isSite(role) || isVendor(role)) {
     return [
-      { id: "tickets", label: "Field tickets", href: CROPFORT_ROUTES.fieldTickets },
-      { id: "validation", label: "Validation", href: CROPFORT_ROUTES.validationQueue },
-      { id: "weekly", label: "Weekly plans", href: CROPFORT_ROUTES.weeklySubmissions },
+      { id: "inbox", label: "Inbox", href: CROPFORT_ROUTES.dashboard },
     ];
   }
-  return [
-    { id: "approvals", label: "Approvals", href: CROPFORT_ROUTES.approvals },
-    { id: "afe", label: "AFE", href: CROPFORT_ROUTES.afe },
-    { id: "tickets", label: "Field tickets", href: CROPFORT_ROUTES.fieldTickets },
-  ];
+  return [{ id: "approvals", label: "Approvals", href: CROPFORT_ROUTES.approvals }];
 }

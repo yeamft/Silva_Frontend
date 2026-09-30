@@ -3,22 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  ArrowRight,
-  Bell,
-  CheckSquare,
-  ChevronDown,
-  Layers3,
-  Loader2,
-  LogOut,
-  Pin,
-  Search,
-  Sprout,
-} from "lucide-react";
-import { toast } from "sonner";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -27,7 +22,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  buildWorkspaceQuickOpens,
   preferredProgramId,
   type WorkspaceInboxItem,
 } from "@/lib/cropfort/workspace-inbox";
@@ -44,13 +38,28 @@ import {
   clearWorkspaceSelectionRequired,
   WORKSPACE_HOME_PATH,
 } from "@/lib/workspace-gate";
+import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 import { cn } from "@/lib/utils";
 import type { AuthProgram } from "@/lib/api/types";
 import { useAuthStore } from "@/store/authStore";
+import { toast } from "sonner";
+import {
+  ArrowRight,
+  Bell,
+  CheckSquare,
+  ChevronDown,
+  ClipboardCheck,
+  Layers3,
+  Loader2,
+  LogOut,
+  Search,
+  Settings,
+  Sprout,
+} from "lucide-react";
 
 const ease = [0.16, 1, 0.36, 1] as const;
 
-type Tab = "attention" | "recent" | "all";
+type Filter = "recent" | "all";
 
 function initials(name: string) {
   return name
@@ -62,9 +71,26 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+function canSeeAdministration(role: string) {
+  return (
+    role === "system_admin" ||
+    role === "spx_platform_admin" ||
+    role === "spx_principal" ||
+    role.includes("platform_admin")
+  );
+}
+
+function canSeeCrossApprovals(role: string) {
+  return (
+    canSeeAdministration(role) ||
+    role.includes("spx") ||
+    role.includes("silva") ||
+    role === "farm_owner"
+  );
+}
+
 function WorkspaceCard({
   program,
-  active,
   busy,
   disabled,
   pinned,
@@ -74,7 +100,6 @@ function WorkspaceCard({
   onTogglePin,
 }: {
   program: AuthProgram;
-  active: boolean;
   busy: boolean;
   disabled: boolean;
   pinned: boolean;
@@ -84,73 +109,71 @@ function WorkspaceCard({
   onTogglePin: () => void;
 }) {
   return (
-    <div
+    <article
       className={cn(
-        "group flex w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-left shadow-xs",
-        "transition-[border-color,box-shadow] hover:border-primary/35 hover:shadow-card",
-        active && "border-primary/40 ring-1 ring-primary/20",
+        "flex flex-col rounded-xl border border-border bg-card",
+        "transition-colors hover:border-foreground/20",
         disabled && !busy && "opacity-55",
       )}
     >
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onOpen}
-        className="flex w-full flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <div
-          className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-primary/15 via-accent to-muted"
-          aria-hidden
-        >
-          <div className="cf-grid-lines absolute inset-0 opacity-30" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-background/90 text-base font-semibold text-primary shadow-xs backdrop-blur-sm">
-              {initials(program.name)}
-            </span>
-          </div>
-          {attentionCount > 0 ? (
-            <span className="absolute right-2.5 top-2.5 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold tabular-nums text-background">
-              {attentionCount}
-            </span>
-          ) : null}
-          {busy ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-[1px]">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : null}
+      <div className="flex items-start gap-3 px-4 pt-4">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-semibold text-foreground">
+          {initials(program.name)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold tracking-tight">{program.name}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {program.roleInProgram || "Member"}
+            <span className="mx-1.5 text-border">·</span>
+            <StatusBadge status={program.status || "active"} />
+          </p>
         </div>
-      </button>
-      <div className="flex items-start gap-2 px-3.5 py-3">
         <button
           type="button"
+          aria-label={pinned ? `Unpin ${program.name}` : `Pin ${program.name}`}
+          aria-pressed={pinned}
+          disabled={disabled}
+          onClick={onTogglePin}
+          className={cn(
+            "text-[11px] font-medium text-muted-foreground hover:text-foreground",
+            pinned && "text-primary",
+          )}
+        >
+          {pinned ? "Pinned" : "Pin"}
+        </button>
+      </div>
+
+      <div className="mt-3 space-y-1 px-4 pb-3 text-xs text-muted-foreground">
+        {attentionCount > 0 ? (
+          <p className="font-medium text-foreground">
+            {attentionCount} item{attentionCount === 1 ? "" : "s"} need
+            {attentionCount === 1 ? "s" : ""} attention
+          </p>
+        ) : null}
+        <p>{lastOpenedLabel ? `Last opened ${lastOpenedLabel}` : "Not opened yet"}</p>
+      </div>
+
+      <div className="border-t border-border px-4 py-3">
+        <Button
+          size="sm"
+          className="w-full justify-between"
           disabled={disabled}
           onClick={onOpen}
-          className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <p className="truncate text-sm font-semibold tracking-tight">{program.name}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {program.roleInProgram || program.slug}
-            {lastOpenedLabel ? ` · ${lastOpenedLabel}` : active ? " · Last used" : ""}
-          </p>
-        </button>
-        <div className="flex shrink-0 items-center gap-1">
-          <StatusBadge status={program.status || "active"} />
-          <button
-            type="button"
-            aria-label={pinned ? `Unpin ${program.name}` : `Pin ${program.name}`}
-            aria-pressed={pinned}
-            disabled={disabled}
-            onClick={onTogglePin}
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-              pinned && "text-primary",
-            )}
-          >
-            <Pin className={cn("h-3.5 w-3.5", pinned && "fill-current")} aria-hidden />
-          </button>
-        </div>
+          {busy ? (
+            <>
+              Opening…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            </>
+          ) : (
+            <>
+              Open
+              <ArrowRight className="h-3.5 w-3.5" />
+            </>
+          )}
+        </Button>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -182,7 +205,7 @@ function QueueList({
             onClick={() => onOpenItem(item.href)}
             className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 disabled:opacity-50"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-foreground">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums">
               {item.count}
             </span>
             <span className="min-w-0 flex-1">
@@ -210,8 +233,7 @@ export default function SelectWorkspaceView() {
 
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<Tab>("all");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [filter, setFilter] = useState<Filter>("all");
   const [inboxOpen, setInboxOpen] = useState(false);
   const [prefs, setPrefs] = useState<WorkspacePreferences>({
     pinnedProgramIds: [],
@@ -227,7 +249,8 @@ export default function SelectWorkspaceView() {
   const userRole = user?.role || me?.user?.role || "";
   const activeId = me?.activeProgram?.id;
   const homeProgramId = preferredProgramId(programs, activeId);
-  const quickOpens = useMemo(() => buildWorkspaceQuickOpens(userRole), [userRole]);
+  const showAdmin = canSeeAdministration(userRole);
+  const showApprovals = canSeeCrossApprovals(userRole);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -238,7 +261,7 @@ export default function SelectWorkspaceView() {
     const q = query.trim().toLowerCase();
     let list = sortProgramsByPreference(programs, prefs);
 
-    if (tab === "recent") {
+    if (filter === "recent") {
       list = list
         .filter(
           (p) =>
@@ -256,12 +279,6 @@ export default function SelectWorkspaceView() {
       if (list.length === 0) list = sortProgramsByPreference(programs, prefs).slice(0, 6);
     }
 
-    if (tab === "attention" && attentionCount > 0 && homeProgramId) {
-      const first = list.find((p) => p.id === homeProgramId);
-      const rest = list.filter((p) => p.id !== homeProgramId);
-      list = first ? [first, ...rest] : list;
-    }
-
     if (!q) return list;
     return list.filter(
       (p) =>
@@ -269,7 +286,7 @@ export default function SelectWorkspaceView() {
         p.slug.toLowerCase().includes(q) ||
         (p.roleInProgram || "").toLowerCase().includes(q),
     );
-  }, [programs, query, tab, activeId, attentionCount, homeProgramId, prefs]);
+  }, [programs, query, filter, activeId, prefs]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -314,8 +331,9 @@ export default function SelectWorkspaceView() {
   const onTogglePin = (programId: string) => {
     const next = togglePinnedProgram(userId, programId);
     setPrefs(next);
-    const pinned = next.pinnedProgramIds.includes(programId);
-    toast.success(pinned ? "Pinned workspace" : "Unpinned workspace");
+    toast.success(
+      next.pinnedProgramIds.includes(programId) ? "Pinned workspace" : "Unpinned workspace",
+    );
   };
 
   const signOut = async () => {
@@ -328,239 +346,196 @@ export default function SelectWorkspaceView() {
     programId === homeProgramId ? attentionCount : 0;
 
   return (
-    <div className="flex min-h-[100dvh] bg-background text-foreground">
-      <aside
-        className={cn(
-          "hidden shrink-0 flex-col border-r border-border bg-card md:flex",
-          sidebarOpen ? "w-[15.5rem]" : "w-[4.25rem]",
-        )}
-      >
-        <div className="border-b border-border px-3 py-3">
-          <button
-            type="button"
-            className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-muted/60"
-            onClick={() => setSidebarOpen((v) => !v)}
-            aria-label="Account"
-          >
-            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
-              {initials(userName)}
-              {attentionCount > 0 ? (
-                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warning ring-2 ring-card" />
-              ) : null}
-            </span>
-            {sidebarOpen ? (
-              <>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{userName}</span>
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              </>
-            ) : null}
-          </button>
-        </div>
-
-        <nav className="flex flex-1 flex-col gap-0.5 p-2">
-          <div className="relative px-1 pb-2">
-            {sidebarOpen ? (
-              <>
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search"
-                  className="h-9 border-border/80 bg-muted/40 pl-8 text-sm"
-                  aria-label="Search workspaces"
-                />
-              </>
-            ) : (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="mx-auto"
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Search"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
-            )}
+    <div className="flex min-h-[100dvh] flex-col bg-background text-foreground">
+      <header className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <Sprout className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold tracking-tight">Cropfort</p>
+              <p className="truncate text-[11px] text-muted-foreground">Workspaces</p>
+            </div>
           </div>
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="relative h-9 w-9"
+              onClick={() => setInboxOpen(true)}
+              aria-label="Inbox"
+            >
+              <Bell className="h-4 w-4" />
+              {attentionCount > 0 ? (
+                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-warning" />
+              ) : null}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
+                    {initials(userName)}
+                  </span>
+                  <span className="hidden max-w-[8rem] truncate text-xs sm:inline">{userName}</span>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel className="font-normal">
+                  <p className="text-sm font-medium">{userName}</p>
+                  <p className="text-xs text-muted-foreground">{userRole || "Signed in"}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {showAdmin ? (
+                  <DropdownMenuItem
+                    disabled={!homeProgramId || !!pickingId}
+                    onClick={() => enterPreferred(CROPFORT_ROUTES.users)}
+                  >
+                    <Settings className="mr-2 h-3.5 w-3.5" />
+                    Administration
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onClick={() => void signOut()}>
+                  <LogOut className="mr-2 h-3.5 w-3.5" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </header>
 
-          <p
-            className={cn(
-              "px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
-              !sidebarOpen && "sr-only",
-            )}
-          >
-            Browse
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-6 sm:px-6 sm:py-8 lg:flex-row lg:gap-10">
+        <aside className="hidden w-44 shrink-0 flex-col gap-1 lg:flex">
+          <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Platform
           </p>
           <button
             type="button"
-            onClick={() => setInboxOpen(true)}
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-              inboxOpen
-                ? "bg-muted font-medium"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )}
+            className="flex items-center gap-2 rounded-lg bg-muted px-2.5 py-2 text-sm font-medium"
           >
-            <Bell className="h-4 w-4 shrink-0" />
-            {sidebarOpen ? (
-              <span className="flex flex-1 items-center justify-between gap-2">
-                Inbox
-                {attentionCount > 0 ? (
-                  <span className="rounded-md bg-foreground px-1.5 text-[10px] font-semibold tabular-nums text-background">
-                    {attentionCount}
-                  </span>
-                ) : null}
+            <Layers3 className="h-4 w-4" />
+            Workspaces
+          </button>
+          <button
+            type="button"
+            onClick={() => setInboxOpen(true)}
+            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+          >
+            <Bell className="h-4 w-4" />
+            Inbox
+            {attentionCount > 0 ? (
+              <span className="ml-auto rounded-md bg-foreground px-1.5 text-[10px] font-semibold text-background">
+                {attentionCount}
               </span>
             ) : null}
           </button>
-          <button
-            type="button"
-            onClick={() => setTab("recent")}
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-              tab === "recent"
-                ? "bg-muted font-medium"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )}
-          >
-            <Layers3 className="h-4 w-4 shrink-0" />
-            {sidebarOpen ? "Recents" : null}
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("all")}
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-              tab === "all"
-                ? "bg-muted font-medium"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )}
-          >
-            <Layers3 className="h-4 w-4 shrink-0" />
-            {sidebarOpen ? "All workspaces" : null}
-          </button>
-
-          {sidebarOpen ? (
-            <>
-              <p className="px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Quick open
-              </p>
-              {quickOpens.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={!!pickingId || !homeProgramId}
-                  onClick={() => enterPreferred(item.href)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
-                >
-                  <CheckSquare className="h-3.5 w-3.5" />
-                  {item.label}
-                </button>
-              ))}
-            </>
+          {showApprovals ? (
+            <button
+              type="button"
+              disabled={!homeProgramId || !!pickingId}
+              onClick={() => enterPreferred(CROPFORT_ROUTES.approvals)}
+              className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              Approvals
+            </button>
           ) : null}
-        </nav>
-
-        <div className="mt-auto space-y-1 border-t border-border p-2">
-          {sidebarOpen ? (
-            <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
-              <Sprout className="h-3.5 w-3.5 text-primary" />
-              Cropfort
-            </div>
+          {showAdmin ? (
+            <button
+              type="button"
+              disabled={!homeProgramId || !!pickingId}
+              onClick={() => enterPreferred(CROPFORT_ROUTES.users)}
+              className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
+            >
+              <Settings className="h-4 w-4" />
+              Administration
+            </button>
           ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn("w-full justify-start gap-2", !sidebarOpen && "justify-center px-0")}
-            onClick={() => void signOut()}
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            {sidebarOpen ? "Sign out" : null}
-          </Button>
-        </div>
-      </aside>
+        </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+        <main className="min-w-0 flex-1">
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease }}
-            className="mx-auto max-w-6xl"
+            transition={{ duration: 0.35, ease }}
+            className="space-y-6"
           >
-            <div className="mb-6 md:hidden">
-              <div className="relative">
+            <div className="space-y-1">
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Your workspaces</h1>
+              
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search workspaces"
+                  placeholder="Search workspaces…"
                   className="h-10 pl-9"
+                  aria-label="Search workspaces"
                 />
-              </div>
-            </div>
-
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold tracking-tight">
-                  {tab === "recent" ? "Recently opened" : "Your workspaces"}
-                </h2>
-              
               </div>
               <div className="flex gap-1 rounded-lg border border-border p-0.5">
                 <Button
                   size="sm"
-                  variant={tab === "recent" ? "secondary" : "ghost"}
+                  variant={filter === "recent" ? "secondary" : "ghost"}
                   className="h-8"
-                  onClick={() => setTab("recent")}
+                  onClick={() => setFilter("recent")}
                 >
                   Recent
                 </Button>
                 <Button
                   size="sm"
-                  variant={tab === "all" || tab === "attention" ? "secondary" : "ghost"}
+                  variant={filter === "all" ? "secondary" : "ghost"}
                   className="h-8"
-                  onClick={() => setTab("all")}
+                  onClick={() => setFilter("all")}
                 >
                   All
                 </Button>
               </div>
             </div>
 
+            <div className="flex gap-2 lg:hidden">
+              <Button size="sm" variant="outline" onClick={() => setInboxOpen(true)}>
+                Inbox
+                {attentionCount > 0 ? ` (${attentionCount})` : ""}
+              </Button>
+              {showApprovals ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!homeProgramId || !!pickingId}
+                  onClick={() => enterPreferred(CROPFORT_ROUTES.approvals)}
+                >
+                  Approvals
+                </Button>
+              ) : null}
+            </div>
+
             {visible.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border bg-card px-6 py-16 text-center shadow-xs">
+              <div className="rounded-xl border border-dashed border-border px-6 py-14 text-center">
                 <Layers3 className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
                 <p className="mt-3 text-sm font-medium">
                   {programs.length === 0 ? "No workspaces assigned" : "No matches"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {programs.length === 0
-                    ? "Ask your SPX admin to add you to a programme, then sign in again."
+                    ? "Ask your administrator to add you to a programme."
                     : "Try a different search."}
                 </p>
-                {programs.length === 0 ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => void signOut()}
-                  >
-                    Sign out
-                  </Button>
-                ) : null}
               </div>
             ) : (
-              <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <ul className="grid gap-3 sm:grid-cols-2">
                 {visible.map((program, i) => (
                   <motion.li
                     key={program.id}
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.03 * i, ease }}
+                    transition={{ duration: 0.25, delay: 0.03 * i, ease }}
                   >
                     <WorkspaceCard
                       program={program}
-                      active={program.id === activeId}
                       busy={pickingId === program.id}
                       disabled={!!pickingId}
                       pinned={prefs.pinnedProgramIds.includes(program.id)}
@@ -584,7 +559,7 @@ export default function SelectWorkspaceView() {
           <SheetHeader className="border-b border-border px-6 py-5 text-left">
             <SheetTitle className="flex items-center gap-2">
               <Bell className="h-4 w-4 text-muted-foreground" />
-              Your queue
+              Inbox
               {attentionCount > 0 ? (
                 <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-semibold tabular-nums">
                   {attentionCount}
@@ -592,8 +567,7 @@ export default function SelectWorkspaceView() {
               ) : null}
             </SheetTitle>
             <SheetDescription>
-              Approvals, AFE, validation, and tickets waiting on you. Open one to enter your
-              workspace.
+              Cross-workspace items needing attention. Opening one enters your workspace.
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -606,21 +580,6 @@ export default function SelectWorkspaceView() {
               }}
             />
           </div>
-          {homeProgramId ? (
-            <div className="border-t border-border p-4">
-              <Button
-                className="w-full"
-                disabled={!!pickingId}
-                onClick={() => {
-                  setInboxOpen(false);
-                  enterPreferred();
-                }}
-              >
-                Continue to workspace
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ) : null}
         </SheetContent>
       </Sheet>
     </div>

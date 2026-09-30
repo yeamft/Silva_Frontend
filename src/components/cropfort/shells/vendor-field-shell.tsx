@@ -41,7 +41,7 @@ const VENDOR_NAV: NavItem[] = [
   },
   {
     href: CROPFORT_ROUTES.fieldTickets,
-    label: "Tickets",
+    label: "My work",
     icon: ClipboardList,
     match: (p) => p.startsWith(CROPFORT_ROUTES.fieldTickets),
   },
@@ -100,13 +100,13 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
         Skip to main content
       </a>
 
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
-        <div className="border-b border-border px-4 py-4">
-          <p className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <Wrench className="h-4 w-4 text-primary" aria-hidden />
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+        <div className="border-b border-sidebar-border px-4 py-4">
+          <p className="flex items-center gap-2 text-sm font-semibold tracking-tight text-sidebar-foreground">
+            <Wrench className="h-4 w-4 text-sidebar-primary" aria-hidden />
             Field desk
           </p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
+          <p className="mt-1 truncate text-xs text-sidebar-foreground/50">
             {activeProgram?.name || "Cropfort"}
           </p>
         </div>
@@ -119,14 +119,26 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   active
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                 )}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                {active ? (
+                  <span
+                    className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-sm bg-sidebar-primary"
+                    aria-hidden
+                  />
+                ) : null}
+                <Icon
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    active ? "text-sidebar-primary" : "text-sidebar-foreground/50",
+                  )}
+                  aria-hidden
+                />
                 {item.label}
               </Link>
             );
@@ -145,7 +157,7 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
             </div>
             <div className="hidden min-w-0 flex-1 md:block">
               <p className="truncate text-sm text-muted-foreground">
-                Tickets, payments, and messages
+                My work, payments, and messages
               </p>
             </div>
             <ThemeToggle />
@@ -165,7 +177,7 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
 
         <nav
           aria-label="Field desk"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur md:hidden supports-[padding:max(0px)]:pb-[env(safe-area-inset-bottom)]"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-sidebar-border bg-sidebar/95 text-sidebar-foreground backdrop-blur md:hidden supports-[padding:max(0px)]:pb-[env(safe-area-inset-bottom)]"
         >
           <ul className="grid grid-cols-4">
             {VENDOR_NAV.map((item) => {
@@ -178,8 +190,8 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
                     className={cn(
                       "flex flex-col items-center gap-0.5 px-1 py-2.5 text-[11px] font-medium transition-colors",
                       active
-                        ? "text-primary"
-                        : "text-muted-foreground hover:text-foreground",
+                        ? "text-sidebar-primary"
+                        : "text-sidebar-foreground/60 hover:text-sidebar-foreground",
                     )}
                     aria-current={active ? "page" : undefined}
                   >

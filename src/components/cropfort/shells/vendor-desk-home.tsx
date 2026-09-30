@@ -1,23 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import {
-  ArrowRight,
-  ClipboardList,
-  Home,
-  MessageSquare,
-  WalletCards,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { useMemo } from "react";
+import {
+  AttentionItem,
+  AttentionPanel,
+  DeskMetric,
+} from "@/components/cropfort/attention-panel";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
-import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
-import { mapTicketDto, useWorkOrders } from "@/lib/query/hooks/use-work-orders";
 import { usePaymentRequests } from "@/lib/query/hooks/use-payment-requests";
+import { mapTicketDto, useWorkOrders } from "@/lib/query/hooks/use-work-orders";
 import { ticketWaitingOn } from "@/store/cropfortOpsStore";
 
-/** Field desk home for bagro_office / field_supervisor. */
+/** Field desk home for bagro / field supervisor — same lean pattern as asset owner. */
 export function VendorDeskHome() {
   const { user, activeProgram } = useCropfortAuth();
   const enabled = Boolean(activeProgram?.id);
@@ -34,125 +32,113 @@ export function VendorDeskHome() {
     () => tickets.filter((t) => ticketWaitingOn(t.status) === "vendor"),
     [tickets],
   );
-
   const withSite = useMemo(
     () => tickets.filter((t) => ticketWaitingOn(t.status) === "site_owner").length,
     [tickets],
   );
-
   const closed = useMemo(
     () => tickets.filter((t) => t.status === "validated").length,
     [tickets],
   );
-
   const openPrs = useMemo(() => {
     const rows = prQuery.data || [];
-    return rows.filter((r) => r.status === "draft" || r.status === "submitted" || r.status === "returned")
-      .length;
+    return rows.filter(
+      (r) => r.status === "draft" || r.status === "submitted" || r.status === "returned",
+    ).length;
   }, [prQuery.data]);
 
-  const queuePreview = needsYou.slice(0, 6);
   const firstName = user.name.split(" ")[0] || user.name;
+  const estate = activeProgram?.name || "Your programme";
+  const loading = woQuery.isLoading;
+  const hasAttention = !loading && needsYou.length > 0;
+
+  const hour = new Date().getHours();
+  const hello =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="cf-page space-y-6">
-      <header className="space-y-1">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Field desk
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Hi {firstName}</h1>
-        <p className="text-sm text-muted-foreground">
-          {activeProgram?.name || "Your programme"} · tickets that need you
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm text-muted-foreground">{estate}</p>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            {hello}, {firstName}
+          </h1>
+        </div>
+        {!loading ? (
+          hasAttention ? (
+            <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              {needsYou.length} for you
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+              All clear
+            </span>
+          )
+        ) : null}
       </header>
 
-      <div className="grid grid-cols-4 gap-2 sm:gap-3">
-        <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
-          <p className="text-[10px] text-muted-foreground sm:text-xs">Needs you</p>
-          <p className="cf-numeric mt-1 text-lg font-semibold sm:text-3xl">{needsYou.length}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
-          <p className="text-[10px] text-muted-foreground sm:text-xs">With site</p>
-          <p className="cf-numeric mt-1 text-lg font-semibold sm:text-3xl">{withSite}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
-          <p className="text-[10px] text-muted-foreground sm:text-xs">Closed</p>
-          <p className="cf-numeric mt-1 text-lg font-semibold sm:text-3xl">{closed}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
-          <p className="text-[10px] text-muted-foreground sm:text-xs">Open PRs</p>
-          <p className="cf-numeric mt-1 text-lg font-semibold sm:text-3xl">{openPrs}</p>
-        </div>
-      </div>
+      {hasAttention ? (
+        <AttentionPanel
+          title="My work"
+          actionHref={CROPFORT_ROUTES.fieldTickets}
+          actionLabel="View all"
+        >
+          {needsYou.slice(0, 8).map((t) => (
+            <AttentionItem
+              key={t.id}
+              href={`${CROPFORT_ROUTES.fieldTickets}?ticket=${t.id}`}
+              eyebrow="Ticket"
+              title={t.code}
+              meta={[t.title || t.activity || "Field ticket", t.block]
+                .filter(Boolean)
+                .join(" · ")}
+              cta="Open"
+            />
+          ))}
+        </AttentionPanel>
+      ) : null}
 
-      <div className="grid grid-cols-4 gap-2 sm:gap-3">
-        <Button asChild className="h-auto flex-col gap-1.5 py-4">
-          <Link href={CROPFORT_ROUTES.dashboard}>
-            <Home className="h-5 w-5" />
-            <span className="text-xs sm:text-sm">Home</span>
-          </Link>
-        </Button>
-        <Button asChild variant="outline" className="h-auto flex-col gap-1.5 py-4">
-          <Link href={CROPFORT_ROUTES.fieldTickets}>
-            <ClipboardList className="h-5 w-5" />
-            <span className="text-xs sm:text-sm">Tickets</span>
-          </Link>
-        </Button>
-        <Button asChild variant="outline" className="h-auto flex-col gap-1.5 py-4">
-          <Link href={CROPFORT_ROUTES.paymentRequests}>
-            <WalletCards className="h-5 w-5" />
-            <span className="text-xs sm:text-sm">Payments</span>
-          </Link>
-        </Button>
-        <Button asChild variant="outline" className="h-auto flex-col gap-1.5 py-4">
-          <Link href={CROPFORT_ROUTES.communications}>
-            <MessageSquare className="h-5 w-5" />
-            <span className="text-xs sm:text-sm">Messages</span>
-          </Link>
-        </Button>
-      </div>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold sm:text-base">Needs you</h2>
-          <Button size="sm" variant="ghost" asChild>
-            <Link href={CROPFORT_ROUTES.fieldTickets}>
-              All
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-
-        {woQuery.isLoading ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            Loading tickets…
-          </p>
-        ) : queuePreview.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            No tickets waiting on you right now.
-          </p>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {queuePreview.map((t) => (
-              <li key={t.id}>
-                <Link
-                  href={`${CROPFORT_ROUTES.fieldTickets}?ticket=${t.id}`}
-                  className="flex h-full items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 transition hover:border-primary/30"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{t.code}</p>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground sm:text-sm">
-                      {t.title || t.activity || "Field ticket"}
-                      {t.block ? ` · ${t.block}` : ""}
-                    </p>
-                  </div>
-                  <StatusBadge status={t.status} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <DeskMetric
+          href={CROPFORT_ROUTES.fieldTickets}
+          label="Needs you"
+          value={loading ? "—" : String(needsYou.length)}
+          emphasis={!loading && needsYou.length > 0}
+        />
+        <DeskMetric
+          href={CROPFORT_ROUTES.fieldTickets}
+          label="With site"
+          value={loading ? "—" : String(withSite)}
+          hint={withSite > 0 ? "Awaiting check" : undefined}
+        />
+        <DeskMetric
+          label="Closed"
+          value={loading ? "—" : String(closed)}
+        />
+        <DeskMetric
+          href={CROPFORT_ROUTES.paymentRequests}
+          label="Open PRs"
+          value={loading ? "—" : String(openPrs)}
+          emphasis={!loading && openPrs > 0}
+        />
       </section>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" asChild>
+          <Link href={CROPFORT_ROUTES.fieldTickets}>
+            My work
+            <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link href={CROPFORT_ROUTES.paymentRequests}>
+            Payment requests
+            <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </Button>
+      </div>
     </div>
   );
 }
