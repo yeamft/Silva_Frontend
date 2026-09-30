@@ -45,7 +45,7 @@ import { Input } from "@/components/ui/input";
 import { CROPFORT_AREAS, type CropfortAreaDef } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { getWorkspacesForRole } from "@/config/cropfort-workspaces";
-import { SELECT_WORKSPACE_PATH } from "@/lib/workspace-gate";
+import { canChooseWorkspace, SELECT_WORKSPACE_PATH } from "@/lib/workspace-gate";
 import {
   canApproveAsAssetOwner,
   canViewRateCard,
@@ -213,7 +213,7 @@ export default function DashboardPage() {
 }
 
 function SpxDashboardView() {
-  const { user, activeProgram, tenant } = useCropfortAuth();
+  const { user, activeProgram, tenant, programs } = useCropfortAuth();
   const firstName = user.name.split(" ")[0];
   const canRates = canViewRateCard(user.role);
   const isOwner = canApproveAsAssetOwner(user.role);
@@ -536,9 +536,11 @@ function SpxDashboardView() {
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
-            <Button size="sm" variant="outline" asChild>
-              <Link href={SELECT_WORKSPACE_PATH}>Switch workspace</Link>
-            </Button>
+            {canChooseWorkspace(user.role, programs.length) ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link href={SELECT_WORKSPACE_PATH}>Switch workspace</Link>
+              </Button>
+            ) : null}
             <Button size="sm" asChild>
               <Link href={attention[0]?.href || CROPFORT_ROUTES.fieldTickets}>
                 {attention[0]?.title || "Open queue"}

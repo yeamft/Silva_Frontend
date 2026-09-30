@@ -17,10 +17,7 @@ import { toast } from "sonner";
 import { useAuthStore, MIN_PASSWORD_LENGTH } from "@/store/authStore";
 import { useLocaleStore } from "@/store/localeStore";
 import { t } from "@/lib/translations";
-import {
-  markWorkspaceSelectionRequired,
-  SELECT_WORKSPACE_PATH,
-} from "@/lib/workspace-gate";
+import { continueAfterAuth } from "@/lib/post-auth-workspace";
 import { FormField } from "@/components/cropfort/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -142,10 +139,15 @@ const LoginPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    if (isHydrated && isAuthenticated) {
-      markWorkspaceSelectionRequired();
-      router.replace(SELECT_WORKSPACE_PATH);
-    }
+    if (!isHydrated || !isAuthenticated) return;
+    let cancelled = false;
+    void (async () => {
+      const path = await continueAfterAuth();
+      if (!cancelled) router.replace(path);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, isHydrated, router]);
 
   if (!isHydrated || isAuthenticated) {
@@ -161,10 +163,10 @@ const LoginPage = () => {
     if (fieldErrors.email || fieldErrors.password || fieldErrors.code) setFieldErrors({});
   };
 
-  const finishSuccess = () => {
+  const finishSuccess = async () => {
     toast.success(t(locale, "login_welcomeBack"));
-    markWorkspaceSelectionRequired();
-    router.replace(SELECT_WORKSPACE_PATH);
+    const path = await continueAfterAuth();
+    router.replace(path);
   };
 
   const pickDemo = (accountEmail: string) => {
@@ -197,7 +199,7 @@ const LoginPage = () => {
         setFormError(mfaResult.error);
         return;
       }
-      finishSuccess();
+      void finishSuccess();
       return;
     }
 
@@ -219,7 +221,7 @@ const LoginPage = () => {
     setIsLoading(false);
 
     if (loginResult.ok) {
-      finishSuccess();
+      void finishSuccess();
       return;
     }
 

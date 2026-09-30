@@ -154,9 +154,17 @@ const mergeUsersData = (persisted: unknown): UsersData => {
 };
 
 function applySession(set: (partial: Partial<AuthStore>) => void, me: MeResponse) {
+  const programs = (me.programs ?? []).filter(
+    (p) => String(p.status || "").toLowerCase() !== "archived",
+  );
+  const activeStillListed = programs.some((p) => p.id === me.activeProgram?.id);
   set({
     user: userFromMe(me),
-    me,
+    me: {
+      ...me,
+      programs,
+      activeProgram: activeStillListed ? me.activeProgram : null,
+    },
     permissions: me.permissions || [],
     isAuthenticated: true,
     sessionPin: null,

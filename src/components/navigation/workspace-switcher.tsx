@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SELECT_WORKSPACE_PATH } from "@/lib/workspace-gate";
+import { canChooseWorkspace, SELECT_WORKSPACE_PATH } from "@/lib/workspace-gate";
 import { cn } from "@/lib/utils";
 
 const ORG_TYPE_LABELS: Record<string, string> = {
@@ -43,6 +43,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
   const orgTypeLabel = ORG_TYPE_LABELS[orgType] || orgType || "Org";
   const programName = activeProgram?.name || "No workspace";
   const activeId = activeProgram?.id;
+  const canSwitch = canChooseWorkspace(user.role, programs.length);
 
   const handleSelect = async (programId: string) => {
     if (programId === activeId || switchingId) return;
@@ -56,6 +57,38 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
       toast.error(result.error);
     }
   };
+
+  if (!canSwitch) {
+    return (
+      <div
+        className={cn("flex w-full items-center gap-2.5 rounded-lg text-left", compact ? "px-2 py-1.5" : "px-2.5 py-2")}
+        aria-label={`Workspace: ${programName}. Organization: ${orgName}`}
+      >
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-[11px] font-semibold text-sidebar-primary-foreground"
+          aria-hidden
+        >
+          {orgInitials(orgName)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
+              {programName}
+            </span>
+            {!compact ? (
+              <Badge
+                variant="muted"
+                className="h-5 shrink-0 px-1.5 text-[10px] font-medium uppercase tracking-wide"
+              >
+                {orgTypeLabel}
+              </Badge>
+            ) : null}
+          </span>
+          <span className="block truncate text-xs text-sidebar-foreground/50">{orgName}</span>
+        </span>
+      </div>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -164,7 +197,7 @@ export function WorkspaceChip() {
   const orgName = tenant?.displayName || tenant?.name || user.tenantName;
   const programName = activeProgram?.name || "Workspace";
   const activeId = activeProgram?.id;
-  const canSwitch = programs.length > 1;
+  const canSwitch = canChooseWorkspace(user.role, programs.length);
 
   const handleSelect = async (programId: string) => {
     if (programId === activeId || switchingId) return;
@@ -204,11 +237,7 @@ export function WorkspaceChip() {
   );
 
   if (!canSwitch) {
-    return (
-      <Link href={SELECT_WORKSPACE_PATH} className="min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md">
-        {chip}
-      </Link>
-    );
+    return <div className="min-w-0">{chip}</div>;
   }
 
   return (
@@ -216,7 +245,7 @@ export function WorkspaceChip() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+          className="min-w-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Switch program. Current: ${programName}`}
         >
           {chip}

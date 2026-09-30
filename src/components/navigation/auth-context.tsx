@@ -186,13 +186,24 @@ export function CropfortAuthProvider({ children }: { children: ReactNode }) {
       }
     : null;
 
+  const workspacePrograms = useMemo(
+    () =>
+      (me?.programs ?? []).filter(
+        (p) => String(p.status || "").toLowerCase() !== "archived",
+      ),
+    [me?.programs],
+  );
+
   const value = useMemo<CropfortAuthContextValue | null>(() => {
     if (!cropfortUser) return null;
+    const activeStillListed = workspacePrograms.some(
+      (p) => p.id === me?.activeProgram?.id,
+    );
     return {
       user: cropfortUser,
       tenant: me?.tenant ?? null,
-      activeProgram: me?.activeProgram ?? null,
-      programs: me?.programs ?? [],
+      activeProgram: activeStillListed ? me?.activeProgram ?? null : null,
+      programs: workspacePrograms,
       sessions,
       expiresAt,
       sessionWarning,
@@ -214,7 +225,7 @@ export function CropfortAuthProvider({ children }: { children: ReactNode }) {
     cropfortUser,
     me?.tenant,
     me?.activeProgram,
-    me?.programs,
+    workspacePrograms,
     sessions,
     expiresAt,
     sessionWarning,

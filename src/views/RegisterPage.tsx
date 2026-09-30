@@ -7,10 +7,7 @@ import { Loader2, Sprout } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, type UserRole } from "@/store/authStore";
 import { ROLE_LABELS } from "@/lib/rbac";
-import {
-  markWorkspaceSelectionRequired,
-  SELECT_WORKSPACE_PATH,
-} from "@/lib/workspace-gate";
+import { continueAfterAuth } from "@/lib/post-auth-workspace";
 import ThemeToggle from "@/components/ThemeToggle";
 import { FormField } from "@/components/cropfort/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -53,10 +50,15 @@ const RegisterPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      markWorkspaceSelectionRequired();
-      router.replace(SELECT_WORKSPACE_PATH);
-    }
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    void (async () => {
+      const path = await continueAfterAuth();
+      if (!cancelled) router.replace(path);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, router]);
 
   if (isAuthenticated) return null;
@@ -87,8 +89,8 @@ const RegisterPage = () => {
 
     if (ok) {
       toast.success("Account created");
-      markWorkspaceSelectionRequired();
-      router.replace(SELECT_WORKSPACE_PATH);
+      const path = await continueAfterAuth();
+      router.replace(path);
     } else {
       setFormError("That email is already registered.");
     }

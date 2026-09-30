@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -36,6 +36,7 @@ import {
 import { useWorkspaceInboxLive } from "@/lib/query/hooks/use-workspace-inbox-live";
 import {
   clearWorkspaceSelectionRequired,
+  planWorkspaceEntry,
   WORKSPACE_HOME_PATH,
 } from "@/lib/workspace-gate";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
@@ -242,7 +243,10 @@ export default function SelectWorkspaceView() {
 
   const userId = user?.id || me?.user?.id || "anon";
   const programs = useMemo(
-    () => (me?.programs ?? []).filter((p) => p.status !== "archived"),
+    () =>
+      (me?.programs ?? []).filter(
+        (p) => String(p.status || "").toLowerCase() !== "archived",
+      ),
     [me?.programs],
   );
   const userName = user?.name || user?.email || "Account";
@@ -288,10 +292,59 @@ export default function SelectWorkspaceView() {
     );
   }, [programs, query, filter, activeId, prefs]);
 
+  const enter = useCallback(
+    async (programId: string, deepLink?: string) => {
+      if (pickingId) return;
+      setPickingId(programId);
+      const result = await switchProgram(programId);
+      if (result.ok === false) {
+        setPickingId(null);
+        const message =
+          "error" in result ? result.error : "Could not open workspace — try again";
+        toast.error(message || "Could not open workspace — try again");
+        return;
+      }
+      const nextPrefs = markProgramOpened(userId, programId);
+      setPrefs(nextPrefs);
+      clearWorkspaceSelectionRequired();
+      const name = programs.find((p) => p.id === programId)?.name;
+      toast.success(name ? `Opened ${name}` : "Workspace ready");
+      router.replace(deepLink || WORKSPACE_HOME_PATH);
+    },
+    [pickingId, programs, router, switchProgram, userId],
+  );
+
   useEffect(() => {
     if (!isHydrated) return;
     if (!isAuthenticated) router.replace("/login");
   }, [isHydrated, isAuthenticated, router]);
+
+  // Asset owner / vendor with a single workspace: enter it and skip this screen.
+  useEffect(() => {
+    if (!isHydrated || !isAuthenticated || pickingId) return;
+    const plan = planWorkspaceEntry({
+      role: userRole,
+      programs,
+      activeProgramId: activeId,
+    });
+    if (plan.action === "home") {
+      clearWorkspaceSelectionRequired();
+      router.replace(WORKSPACE_HOME_PATH);
+      return;
+    }
+    if (plan.action === "auto") {
+      void enter(plan.programId);
+    }
+  }, [
+    isHydrated,
+    isAuthenticated,
+    userRole,
+    programs,
+    activeId,
+    pickingId,
+    router,
+    enter,
+  ]);
 
   if (!isHydrated || !isAuthenticated) {
     return (
@@ -301,23 +354,21 @@ export default function SelectWorkspaceView() {
     );
   }
 
-  const enter = async (programId: string, deepLink?: string) => {
-    if (pickingId) return;
-    setPickingId(programId);
-    const result = await switchProgram(programId);
-    if (result.ok === false) {
-      setPickingId(null);
-      const message = "error" in result ? result.error : "Could not open workspace — try again";
-      toast.error(message || "Could not open workspace — try again");
-      return;
-    }
-    const nextPrefs = markProgramOpened(userId, programId);
-    setPrefs(nextPrefs);
-    clearWorkspaceSelectionRequired();
-    const name = programs.find((p) => p.id === programId)?.name;
-    toast.success(name ? `Opened ${name}` : "Workspace ready");
-    router.replace(deepLink || WORKSPACE_HOME_PATH);
-  };
+  const singleDeskAuto =
+    planWorkspaceEntry({
+      role: userRole,
+      programs,
+      activeProgramId: activeId,
+    }).action !== "pick";
+
+  if (singleDeskAuto || pickingId) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />
+        Opening workspace…
+      </div>
+    );
+  }
 
   const enterPreferred = (deepLink?: string) => {
     const id = homeProgramId;
