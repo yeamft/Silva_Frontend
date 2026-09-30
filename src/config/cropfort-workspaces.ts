@@ -103,6 +103,12 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         description: "Programme plans register — multiple plans per workspace",
       },
       {
+        id: "programme-archive",
+        label: "Plan archive",
+        href: CROPFORT_ROUTES.programmePlansArchive,
+        description: "Archived and closed programme plans",
+      },
+      {
         id: "projects",
         label: "Projects",
         href: CROPFORT_ROUTES.projects,
@@ -485,6 +491,7 @@ export function resolveWorkspaceFromPath(
 
   // Fallback aliases for legacy routes still in use
   const aliases: { prefix: string; workspaceId: WorkspaceId; moduleId?: string }[] = [
+    { prefix: "/cropfort/planning/programmes/archive", workspaceId: "planning", moduleId: "programme-archive" },
     { prefix: "/cropfort/planning/programmes", workspaceId: "planning", moduleId: "programme" },
     { prefix: "/cropfort/afp", workspaceId: "planning", moduleId: "programme" },
     { prefix: "/cropfort/afp-register", workspaceId: "control", moduleId: "afp-register" },

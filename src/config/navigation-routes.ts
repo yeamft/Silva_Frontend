@@ -22,6 +22,7 @@ export const CROPFORT_ROUTES = {
   afp: "/cropfort/planning/programmes",
   coreOperations: "/cropfort/planning/programmes",
   programmePlans: "/cropfort/planning/programmes",
+  programmePlansArchive: "/cropfort/planning/programmes/archive",
   projects: "/cropfort/projects",
   interventions: "/cropfort/interventions",
   afpRegister: "/cropfort/afp-register",

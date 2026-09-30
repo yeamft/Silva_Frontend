@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardList, FileEdit, MoreHorizontal, Plus, RotateCcw, Send } from "lucide-react";
+import { CheckCircle2, ClipboardList, FileEdit, Library, MoreHorizontal, Plus, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
@@ -75,8 +75,7 @@ type StatusFilter =
   | "submitted"
   | "returned"
   | "approved"
-  | "active"
-  | "archived";
+  | "active";
 
 function statusLabel(raw?: string) {
   if (!raw) return "draft";
@@ -87,10 +86,15 @@ function planHref(id: string) {
   return `${CROPFORT_ROUTES.programmePlans}/${id}`;
 }
 
-export default function ProgrammePlansRegisterView() {
+export default function ProgrammePlansRegisterView({
+  archiveMode = false,
+}: {
+  archiveMode?: boolean;
+}) {
   const { activeProgram, user } = useCropfortAuth();
   const router = useRouter();
-  const canCreate = canCreateProgrammePlan(user.role);
+  const canCreate = canCreateProgrammePlan(user.role) && !archiveMode;
+  const canDuplicate = canCreateProgrammePlan(user.role);
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -117,6 +121,8 @@ export default function ProgrammePlansRegisterView() {
   const farms = farmsQuery.data || [];
 
   const plansQuery = useProgrammePlans(Boolean(activeProgram?.id), {
+    status: archiveMode ? "archived" : undefined,
+    includeArchived: archiveMode,
     farmEstateId: farmFilter !== "all" ? farmFilter : undefined,
     planYear: yearFilter !== "all" ? Number(yearFilter) : undefined,
     q: query.trim() || undefined,
@@ -146,6 +152,7 @@ export default function ProgrammePlansRegisterView() {
   }, [allPlans]);
 
   const plans = useMemo(() => {
+    if (archiveMode) return allPlans;
     if (statusFilter === "all") return allPlans;
     if (statusFilter === "draft") {
       return allPlans.filter(
@@ -156,7 +163,7 @@ export default function ProgrammePlansRegisterView() {
       return allPlans.filter((p) => p.statusRaw === "approved" || p.statusRaw === "active");
     }
     return allPlans.filter((p) => p.statusRaw === statusFilter);
-  }, [allPlans, statusFilter]);
+  }, [allPlans, statusFilter, archiveMode]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -220,20 +227,43 @@ export default function ProgrammePlansRegisterView() {
     <PageContainer>
       <PageHeader
         eyebrow={activeProgram?.name || "Workspace"}
-        title="Programme Plans"
+        title={archiveMode ? "Programme plan archive" : "Programme Plans"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Planning" },
-          { label: "Programme Plans" },
+          { label: "Programme Plans", href: CROPFORT_ROUTES.programmePlans },
+          ...(archiveMode ? [{ label: "Archive" }] : []),
         ]}
         actions={
-          <Button size="sm" onClick={openCreate} disabled={!canCreate}>
-            <Plus className="h-3.5 w-3.5" />
-            New programme plan
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {archiveMode ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link href={CROPFORT_ROUTES.programmePlans}>Back to register</Link>
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" asChild>
+                <Link href={CROPFORT_ROUTES.programmePlansArchive}>
+                  <Library className="h-3.5 w-3.5" />
+                  Archive
+                </Link>
+              </Button>
+            )}
+            {canCreate ? (
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="h-3.5 w-3.5" />
+                New programme plan
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
+      {archiveMode ? (
+        <p className="text-sm text-muted-foreground">
+          Closed and archived programme plans for this workspace. Open a plan to review history, or
+          duplicate it into a new draft.
+        </p>
+      ) : (
       <StatusSummaryCards
         label="Programme plan status summary"
         columns={5}
@@ -303,8 +333,9 @@ export default function ProgrammePlansRegisterView() {
           },
         ]}
       />
+      )}
 
-      <SectionCard title="Register" flush>
+      <SectionCard title={archiveMode ? "Archived plans" : "Register"} flush>
         <div className="space-y-2 border-b border-border px-4 py-2.5 sm:px-5">
           <TableToolbar
             search={query}
@@ -315,6 +346,7 @@ export default function ProgrammePlansRegisterView() {
             searchPlaceholder="Search programme, farm area, cycle…"
             filters={
               <div className="flex flex-wrap gap-2">
+                {archiveMode ? null : (
                 <Select
                   value={statusFilter}
                   onValueChange={(v) => {
@@ -333,9 +365,9 @@ export default function ProgrammePlansRegisterView() {
                     <SelectItem value="returned">Returned</SelectItem>
                     <SelectItem value="approved">Approved</SelectItem>
                     <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
                   </SelectContent>
                 </Select>
+                )}
                 <Select
                   value={farmFilter}
                   onValueChange={(v) => {
@@ -406,13 +438,17 @@ export default function ProgrammePlansRegisterView() {
                   icon={ClipboardList}
                   title={
                     plans.length === 0
-                      ? "No programme plans yet"
+                      ? archiveMode
+                        ? "No archived programme plans"
+                        : "No programme plans yet"
                       : "No matching programme plans"
                   }
                   description={
                     plans.length === 0
-                      ? "Create one to start scope → activities → schedule."
-                      : "Try a different search or status filter."
+                      ? archiveMode
+                        ? "Archived plans will appear here."
+                        : "Create one to start scope → activities → schedule."
+                      : "Try a different search or filter."
                   }
                 />
               ) : (
@@ -451,7 +487,9 @@ export default function ProgrammePlansRegisterView() {
                       <TableCell>
                         <StatusBadge
                           status={
-                            row.statusRaw === "approved" || row.statusRaw === "active"
+                            row.statusRaw === "archived"
+                              ? "archived"
+                              : row.statusRaw === "approved" || row.statusRaw === "active"
                               ? "approved"
                               : row.statusRaw === "submitted"
                                 ? "submitted"
@@ -478,13 +516,17 @@ export default function ProgrammePlansRegisterView() {
                                 <Link href={planHref(row.id)}>Edit</Link>
                               </DropdownMenuItem>
                             ) : null}
-                            {canCreate ? (
+                            {canDuplicate ? (
                               <DropdownMenuItem
                                 onClick={() =>
                                   void duplicateMut
                                     .mutateAsync(row.id)
                                     .then((p) => {
-                                      toast.success("Duplicated");
+                                      toast.success(
+                                        archiveMode
+                                          ? "Duplicated into a new draft"
+                                          : "Duplicated",
+                                      );
                                       router.push(planHref(p.id));
                                     })
                                     .catch((e) =>
@@ -497,7 +539,7 @@ export default function ProgrammePlansRegisterView() {
                                 Duplicate
                               </DropdownMenuItem>
                             ) : null}
-                            {canEditRow(row) ? (
+                            {!archiveMode && canEditRow(row) ? (
                               <DropdownMenuItem
                                 onClick={() =>
                                   void submitMut
@@ -513,12 +555,13 @@ export default function ProgrammePlansRegisterView() {
                                 Submit
                               </DropdownMenuItem>
                             ) : null}
-                            {row.statusRaw === "submitted" ? (
+                            {!archiveMode && row.statusRaw === "submitted" ? (
                               <DropdownMenuItem asChild>
                                 <Link href={CROPFORT_ROUTES.approvals}>View approval</Link>
                               </DropdownMenuItem>
                             ) : null}
-                            {canCreate &&
+                            {!archiveMode &&
+                            canCreate &&
                             row.statusRaw !== "archived" &&
                             row.statusRaw !== "submitted" ? (
                               <>
