@@ -29,6 +29,9 @@ import {
   YAxis,
 } from "recharts";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
+import { useDeskMode } from "@/components/cropfort/desk-mode";
+import { VendorDeskHome } from "@/components/cropfort/shells/vendor-desk-home";
+import { SilvaDeskHome } from "@/components/cropfort/shells/silva-desk-home";
 import { PageContainer } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
@@ -204,6 +207,13 @@ function AttentionCard({ item }: { item: QuickLink }) {
 }
 
 export default function DashboardPage() {
+  const desk = useDeskMode();
+  if (desk === "vendor") return <VendorDeskHome />;
+  if (desk === "silva") return <SilvaDeskHome />;
+  return <SpxDashboardView />;
+}
+
+function SpxDashboardView() {
   const { user, activeProgram, tenant } = useCropfortAuth();
   const firstName = user.name.split(" ")[0];
   const canRates = canViewRateCard(user.role);

@@ -189,6 +189,7 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
     label: "Control",
     icon: ClipboardCheck,
     href: CROPFORT_ROUTES.approvals,
+    /** SPX + Silva sidebar. Vendors reach Payment Requests via VendorFieldShell bottom nav. */
     roles: FIELD_NO_VENDOR,
     modules: [
       {

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
+import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -542,6 +543,8 @@ function WeeklyDetail({ plan }: { plan: WeeklyPlan }) {
 
 export default function ApprovalsView() {
   const { user, activeProgram } = useCropfortAuth();
+  const desk = useDeskMode();
+  const isSilva = desk === "silva";
   const area = getCropfortArea("approvals");
   const canDecide = canApproveOperations(user.role);
   const afesQuery = useAfes(Boolean(activeProgram?.id), "submitted");
@@ -737,21 +740,30 @@ export default function ApprovalsView() {
   const waitingTotal = tabs.reduce((s, t) => s + queues[t.id].length, 0);
 
   return (
-    <PageContainer>
-      <PageHeader
-        eyebrow={activeProgram?.name || "Control"}
-        title={area.label}
-        breadcrumbs={[
-          { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Control" },
-          { label: area.label },
-        ]}
-        meta={
-          <span className="text-xs text-muted-foreground">
-            {waitingTotal} awaiting decision
-          </span>
-        }
-      />
+    <PageContainer className={cn(isSilva && "gap-5")}>
+      {isSilva ? (
+        <header className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Approvals</h1>
+          <p className="text-sm text-muted-foreground">
+            {waitingTotal} awaiting your decision
+          </p>
+        </header>
+      ) : (
+        <PageHeader
+          eyebrow={activeProgram?.name || "Control"}
+          title={area.label}
+          breadcrumbs={[
+            { label: "Home", href: CROPFORT_ROUTES.dashboard },
+            { label: "Control" },
+            { label: area.label },
+          ]}
+          meta={
+            <span className="text-xs text-muted-foreground">
+              {waitingTotal} awaiting decision
+            </span>
+          }
+        />
+      )}
 
       <nav aria-label="Approval queues" className="cf-tab-scroll -mx-1 border-b border-border px-1">
         {tabs.map((t) => {

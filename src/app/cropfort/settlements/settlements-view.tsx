@@ -14,8 +14,10 @@ import {
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
 import { StatusBadge } from "@/components/cropfort/status-badge";
+import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -47,6 +49,8 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 export default function SettlementsView() {
   const { user, activeProgram } = useCropfortAuth();
+  const desk = useDeskMode();
+  const isSilvaUi = desk === "silva";
   const canView = canSeeSettlements(user.role);
   const canMark = canAuthorizeSettlement(user.role) || isSilvaDesk(user.role);
   const silva = isSilvaDesk(user.role);
@@ -80,37 +84,47 @@ export default function SettlementsView() {
   }
 
   return (
-    <OpsDeskPage>
-      <OpsDeskHeader
-        eyebrow={activeProgram?.name || "Control"}
-        title="Owner settlements"
-        breadcrumbs={[
-          { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Control", href: CROPFORT_ROUTES.approvals },
-          { label: "Settlements" },
-        ]}
-        meta={
-          <OpsDeskMeta
-            items={[
-              {
-                label: "authorized",
-                value: String(rows.filter((r) => r.status === "authorized").length),
-              },
-              {
-                label: "settled",
-                value: String(rows.filter((r) => r.status === "settled").length),
-              },
-            ]}
-          />
-        }
-        actions={
-          !silva ? (
-            <Button size="sm" variant="outline" asChild>
-              <Link href={CROPFORT_ROUTES.paymentRequests}>Payment requests</Link>
-            </Button>
-          ) : null
-        }
-      />
+    <OpsDeskPage className={cn(isSilvaUi && "gap-5")}>
+      {isSilvaUi ? (
+        <header className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Settlements</h1>
+          <p className="text-sm text-muted-foreground">
+            {rows.filter((r) => r.status === "authorized").length} authorized ·{" "}
+            {rows.filter((r) => r.status === "settled").length} settled
+          </p>
+        </header>
+      ) : (
+        <OpsDeskHeader
+          eyebrow={activeProgram?.name || "Control"}
+          title="Owner settlements"
+          breadcrumbs={[
+            { label: "Home", href: CROPFORT_ROUTES.dashboard },
+            { label: "Control", href: CROPFORT_ROUTES.approvals },
+            { label: "Settlements" },
+          ]}
+          meta={
+            <OpsDeskMeta
+              items={[
+                {
+                  label: "authorized",
+                  value: String(rows.filter((r) => r.status === "authorized").length),
+                },
+                {
+                  label: "settled",
+                  value: String(rows.filter((r) => r.status === "settled").length),
+                },
+              ]}
+            />
+          }
+          actions={
+            !silva ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link href={CROPFORT_ROUTES.paymentRequests}>Payment requests</Link>
+              </Button>
+            ) : null
+          }
+        />
+      )}
 
       <OpsDeskControlPanel
         search={query}

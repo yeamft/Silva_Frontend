@@ -14,8 +14,10 @@ import {
 } from "@/components/cropfort/ops-desk";
 import { StatusSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
+import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +71,8 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 export default function PaymentRequestsView() {
   const { user, activeProgram } = useCropfortAuth();
+  const desk = useDeskMode();
+  const isVendorDesk = desk === "vendor";
   const canView = canSeePaymentRequests(user.role);
   const canCreate = canCreatePaymentRequest(user.role);
   const canVerify = canVerifyPaymentRequest(user.role);
@@ -128,24 +132,49 @@ export default function PaymentRequestsView() {
   }
 
   return (
-    <OpsDeskPage>
-      <OpsDeskHeader
-        eyebrow={activeProgram?.name || "Control"}
-        title="Payment requests"
-        breadcrumbs={[
-          { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Control", href: CROPFORT_ROUTES.approvals },
-          { label: "Payment Requests" },
-        ]}
-        actions={
-          canCreate ? (
-            <Button size="sm" onClick={() => setCreateOpen(true)} disabled={validatedTickets.length === 0}>
+    <OpsDeskPage className={cn(isVendorDesk && "gap-5")}>
+      {isVendorDesk ? (
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">My payments</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Raise and track payment requests
+            </p>
+          </div>
+          {canCreate ? (
+            <Button
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+              disabled={validatedTickets.length === 0}
+            >
               <WalletCards className="h-3.5 w-3.5" />
-              New from ticket
+              New
             </Button>
-          ) : null
-        }
-      />
+          ) : null}
+        </header>
+      ) : (
+        <OpsDeskHeader
+          eyebrow={activeProgram?.name || "Control"}
+          title="Payment requests"
+          breadcrumbs={[
+            { label: "Home", href: CROPFORT_ROUTES.dashboard },
+            { label: "Control", href: CROPFORT_ROUTES.approvals },
+            { label: "Payment Requests" },
+          ]}
+          actions={
+            canCreate ? (
+              <Button
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+                disabled={validatedTickets.length === 0}
+              >
+                <WalletCards className="h-3.5 w-3.5" />
+                New from ticket
+              </Button>
+            ) : null
+          }
+        />
+      )}
 
       <StatusSummaryCards
         label="Payment request status summary"
@@ -156,7 +185,6 @@ export default function PaymentRequestsView() {
             label: "Open",
             value: String(rows.filter((r) => r.status === "submitted").length),
             icon: Inbox,
-            footnote: "Submitted, awaiting verify",
             active: filter === "submitted",
             onClick: () => setFilter("submitted"),
           },
@@ -165,7 +193,6 @@ export default function PaymentRequestsView() {
             label: "Verified",
             value: String(rows.filter((r) => r.status === "verified").length),
             icon: BadgeCheck,
-            footnote: "Ready to settle",
             intent: "positive",
             active: filter === "verified",
             onClick: () => setFilter("verified"),
@@ -175,7 +202,6 @@ export default function PaymentRequestsView() {
             label: "Settled",
             value: String(rows.filter((r) => r.status === "settled").length),
             icon: CircleDollarSign,
-            footnote: "Payment complete",
             emphasis: true,
             active: filter === "settled",
             onClick: () => setFilter("settled"),
@@ -199,9 +225,11 @@ export default function PaymentRequestsView() {
           />
         }
         trailing={
-          <Button size="sm" variant="outline" asChild>
-            <Link href={CROPFORT_ROUTES.settlements}>Settlements</Link>
-          </Button>
+          !isVendorDesk ? (
+            <Button size="sm" variant="outline" asChild>
+              <Link href={CROPFORT_ROUTES.settlements}>Settlements</Link>
+            </Button>
+          ) : null
         }
       />
 

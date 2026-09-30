@@ -69,10 +69,20 @@ export function canReadFieldRecords(role: CropfortRole | string): boolean {
   return true;
 }
 
+/** UI shell mode — SPX keeps the platform chrome; vendor/Silva get distinct desks. */
+export type DeskMode = "spx" | "vendor" | "silva";
+
+export function getDeskMode(role: CropfortRole | string): DeskMode {
+  if (isSpxDesk(role)) return "spx";
+  if (isSilvaDesk(role) || role === "farm_owner_viewer") return "silva";
+  if (isBagroDesk(role)) return "vendor";
+  return "spx";
+}
+
 export function deskLabel(role: CropfortRole | string): string {
   if (isSpxDesk(role)) return "SPX";
   if (role === "bagro_office") return "B-Agro";
   if (role === "field_supervisor") return "B-Agro (field)";
-  if (isSilvaDesk(role)) return "Silva / asset owner";
+  if (isSilvaDesk(role) || role === "farm_owner_viewer") return "Silva / asset owner";
   return String(role);
 }

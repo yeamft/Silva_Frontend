@@ -21,6 +21,7 @@ import {
 } from "@/components/cropfort/ops-desk";
 import { StatCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
+import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -202,6 +203,8 @@ function TicketLane({ status }: { status: TicketStatus }) {
 export default function FieldExecutionView() {
   const area = getCropfortArea("field_execution");
   const { user, activeProgram } = useCropfortAuth();
+  const desk = useDeskMode();
+  const isDeskApp = desk === "vendor" || desk === "silva";
   const party = execPartyForRole(user.role);
   const params = useSearchParams();
   const woQuery = useWorkOrders(Boolean(activeProgram?.id));
@@ -418,49 +421,84 @@ export default function FieldExecutionView() {
   };
 
   return (
-    <OpsDeskPage className="max-w-none">
-      <OpsDeskHeader
-        eyebrow={activeProgram?.name || "Execution"}
-        title="Field execution"
-        breadcrumbs={[
-          { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
-          { label: area.label },
-        ]}
-        actions={
-          canAssign ? (
+    <OpsDeskPage className={cn(isDeskApp && "gap-5")}>
+      {isDeskApp ? (
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+              {desk === "vendor" ? "My tickets" : "Field tickets"}
+            </h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {desk === "vendor" ? "Work waiting on your crew" : "Sign-off and review"}
+            </p>
+          </div>
+          {canAssign ? (
             <Button size="sm" onClick={() => setAssignOpen(true)}>
               <Plus className="h-3.5 w-3.5" />
-              Assign ticket
+              Assign
             </Button>
-          ) : (
-            <StatusBadge status="issued" label={CROPFORT_ROLE_LABELS[user.role]} />
-          )
-        }
-      />
+          ) : null}
+        </header>
+      ) : (
+        <OpsDeskHeader
+          eyebrow={activeProgram?.name || "Execution"}
+          title="Field execution"
+          breadcrumbs={[
+            { label: "Home", href: CROPFORT_ROUTES.dashboard },
+            { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
+            { label: area.label },
+          ]}
+          actions={
+            canAssign ? (
+              <Button size="sm" onClick={() => setAssignOpen(true)}>
+                <Plus className="h-3.5 w-3.5" />
+                Assign ticket
+              </Button>
+            ) : (
+              <StatusBadge status="issued" label={CROPFORT_ROLE_LABELS[user.role]} />
+            )
+          }
+        />
+      )}
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard
-          label="Waiting on vendor"
-          value={String(waitingCounts.vendor)}
-          footnote="Accept / do the work"
-        />
-        <StatCard
-          label="Waiting on site"
-          value={String(waitingCounts.site)}
-          emphasis
-          footnote="Field check"
-        />
-        <StatCard
-          label="Waiting on asset owner"
-          value={String(waitingCounts.asset)}
-          footnote="Close or return"
-        />
-        <StatCard
-          label="Closed"
-          value={String(tickets.filter((t) => t.status === "validated").length)}
-        />
-      </div>
+      {desk === "spx" ? (
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatCard
+            label="Waiting on vendor"
+            value={String(waitingCounts.vendor)}
+            footnote="Accept / do the work"
+          />
+          <StatCard
+            label="Waiting on site"
+            value={String(waitingCounts.site)}
+            emphasis
+            footnote="Field check"
+          />
+          <StatCard
+            label="Waiting on asset owner"
+            value={String(waitingCounts.asset)}
+            footnote="Close or return"
+          />
+          <StatCard
+            label="Closed"
+            value={String(tickets.filter((t) => t.status === "validated").length)}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            label={desk === "vendor" ? "Needs you" : "Asset queue"}
+            value={String(
+              desk === "vendor" ? waitingCounts.vendor : waitingCounts.asset,
+            )}
+            emphasis
+          />
+          <StatCard
+            label="Closed"
+            value={String(tickets.filter((t) => t.status === "validated").length)}
+          />
+        </div>
+      )}
 
       <OpsDeskControlPanel
         search={query}
@@ -484,14 +522,19 @@ export default function FieldExecutionView() {
       />
 
       {view === "board" ? (
-        <div className="cf-scroll -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+        <div
+          className={cn(
+            "cf-scroll -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0",
+            "lg:grid lg:snap-none lg:grid-cols-4 lg:overflow-visible lg:pb-0",
+          )}
+        >
           {COLUMNS.map((col) => {
             const items = visible.filter((t) => col.statuses.includes(t.status));
             return (
               <section
                 key={col.id}
                 className={cn(
-                  "flex w-[min(100%,18.5rem)] shrink-0 snap-start flex-col rounded-xl border border-border/80 p-2 sm:w-[18.5rem]",
+                  "flex w-[min(100%,18.5rem)] shrink-0 snap-start flex-col rounded-xl border border-border/80 p-2 sm:w-[18.5rem] lg:w-auto lg:min-w-0",
                   col.wash,
                 )}
               >
