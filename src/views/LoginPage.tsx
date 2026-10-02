@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -22,6 +22,85 @@ import { FormField } from "@/components/cropfort/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+const DEMO_ACCOUNTS = [
+  {
+    email: "admin@spx.example",
+    label: "System Admin",
+    org: "SPX",
+    hint: "admin@spx.example",
+  },
+  {
+    email: "principal@spx.example",
+    label: "SPX Principal",
+    org: "SPX",
+    hint: "principal@spx.example",
+  },
+  {
+    email: "handler@spx.example",
+    label: "SPX Account Handler",
+    org: "SPX",
+    hint: "handler@spx.example",
+  },
+  {
+    email: "supervisor@spx.example",
+    label: "SPX Field Supervisor",
+    org: "SPX",
+    hint: "supervisor@spx.example",
+  },
+  {
+    email: "owner@silva.example",
+    label: "Silva Owner",
+    org: "Silva",
+    hint: "owner@silva.example",
+  },
+  {
+    email: "cm@silva.example",
+    label: "Silva Country Manager",
+    org: "Silva",
+    hint: "cm@silva.example",
+  },
+  {
+    email: "finance@silva.example",
+    label: "Silva Finance",
+    org: "Silva",
+    hint: "finance@silva.example",
+  },
+  {
+    email: "admin@bagro.example",
+    label: "Vendor Admin",
+    org: "Vendor",
+    hint: "admin@bagro.example",
+  },
+  {
+    email: "manager@bagro.example",
+    label: "Vendor Manager",
+    org: "Vendor",
+    hint: "manager@bagro.example",
+  },
+  {
+    email: "supervisor@bagro.example",
+    label: "Vendor Supervisor",
+    org: "Vendor",
+    hint: "supervisor@bagro.example",
+  },
+  {
+    email: "lead@bagro.example",
+    label: "Vendor Field Lead",
+    org: "Vendor",
+    hint: "lead@bagro.example",
+  },
+  {
+    email: "worker@bagro.example",
+    label: "Vendor Worker",
+    org: "Vendor",
+    hint: "worker@bagro.example",
+  },
+] as const;
+
+const DEMO_ORGS = ["SPX", "Silva", "Vendor"] as const;
+const DEMO_PASSWORD = "Password123!";
 
 interface FieldErrors {
   email?: string;
@@ -45,9 +124,11 @@ const LoginPage = () => {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedDemo, setSelectedDemo] = useState<string | null>(null);
   /** Unlock fields only after focus — stops Chrome/Edge from injecting saved values. */
   const [emailLocked, setEmailLocked] = useState(true);
   const [passwordLocked, setPasswordLocked] = useState(true);
+  const allowClearRef = useRef(true);
 
   const login = useAuthStore((s) => s.login);
   const completeOtp = useAuthStore((s) => s.completeOtp);
@@ -69,9 +150,10 @@ const LoginPage = () => {
     };
   }, [isAuthenticated, isHydrated, router]);
 
-  // Strip values browsers may inject after paint despite autocomplete=off.
+  // Strip values browsers may inject after paint; skip once the user picks a demo or types.
   useEffect(() => {
     const clear = () => {
+      if (!allowClearRef.current) return;
       setEmail("");
       setPassword("");
       setOtpCode("");
@@ -102,6 +184,17 @@ const LoginPage = () => {
     toast.success(t(locale, "login_welcomeBack"));
     const path = await continueAfterAuth();
     router.replace(path);
+  };
+
+  const pickDemo = (accountEmail: string) => {
+    allowClearRef.current = false;
+    setEmailLocked(false);
+    setPasswordLocked(false);
+    setEmail(accountEmail);
+    setPassword(DEMO_PASSWORD);
+    setSelectedDemo(accountEmail);
+    setShowPassword(false);
+    clearErrors();
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -264,9 +357,14 @@ const LoginPage = () => {
                         data-form-type="other"
                         placeholder="you@company.com"
                         value={email}
-                        onFocus={() => setEmailLocked(false)}
+                        onFocus={() => {
+                          allowClearRef.current = false;
+                          setEmailLocked(false);
+                        }}
                         onChange={(e) => {
+                          allowClearRef.current = false;
                           setEmail(e.target.value);
+                          setSelectedDemo(null);
                           clearErrors();
                         }}
                         className="h-11 border-border/80 bg-background/80 pl-10 focus-visible:ring-primary/40"
@@ -298,9 +396,14 @@ const LoginPage = () => {
                         data-form-type="other"
                         placeholder="Password"
                         value={password}
-                        onFocus={() => setPasswordLocked(false)}
+                        onFocus={() => {
+                          allowClearRef.current = false;
+                          setPasswordLocked(false);
+                        }}
                         onChange={(e) => {
+                          allowClearRef.current = false;
                           setPassword(e.target.value);
+                          setSelectedDemo(null);
                           clearErrors();
                         }}
                         className="h-11 border-border/80 bg-background/80 pl-10 pr-11 focus-visible:ring-primary/40"
@@ -396,6 +499,50 @@ const LoginPage = () => {
             ) : null}
           </form>
         </div>
+
+        {!mfaStep ? (
+          <div className="space-y-3">
+            <p className="text-center text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Quick demo access · Password123!
+            </p>
+            {DEMO_ORGS.map((org) => {
+              const accounts = DEMO_ACCOUNTS.filter((a) => a.org === org);
+              return (
+                <div key={org} className="space-y-1.5">
+                  <p className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary/80">
+                    {org}
+                    {org === "Vendor" ? " · B-Agro / RFSP" : ""}
+                  </p>
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {accounts.map((account) => {
+                      const active = selectedDemo === account.email;
+                      return (
+                        <button
+                          key={account.email}
+                          type="button"
+                          onClick={() => pickDemo(account.email)}
+                          className={cn(
+                            "cf-focus rounded-xl border px-3 py-2 text-left text-sm transition-all",
+                            active
+                              ? "border-primary/50 bg-accent shadow-sm"
+                              : "border-border/80 bg-card/70 hover:border-primary/35 hover:bg-accent/60",
+                          )}
+                        >
+                          <span className="block truncate font-medium text-foreground">
+                            {account.label}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                            {account.hint}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
 
         <div className="flex justify-center">
           <Button
