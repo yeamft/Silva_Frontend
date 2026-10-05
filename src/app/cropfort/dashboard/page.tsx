@@ -1,9 +1,8 @@
-﻿import dynamic from "next/dynamic";
-import { PageSkeleton } from "@/components/cropfort/page-skeleton";
+﻿"use client";
 
-const DashboardView = dynamic(() => import("./dashboard-view"), {
-  loading: () => <PageSkeleton cards={0} />,
-});
+import { lazyClient } from "@/lib/lazy-client";
+
+const DashboardView = lazyClient(() => import("./dashboard-view"), { skeleton: "page" });
 
 export default function DashboardPage() {
   return <DashboardView />;

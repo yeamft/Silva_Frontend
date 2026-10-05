@@ -205,7 +205,10 @@ export default function WorkOrdersView() {
     [woQuery.data],
   );
   const tickets = useMemo(
-    () => (woQuery.data || []).flatMap((wo) => (wo.tickets || []).map(mapTicketDto)),
+    () =>
+      (woQuery.data || []).flatMap((wo) =>
+        (wo.tickets || []).map((dto) => mapTicketDto(dto, wo)),
+      ),
     [woQuery.data],
   );
 

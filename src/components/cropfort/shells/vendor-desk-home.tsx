@@ -91,7 +91,7 @@ export function VendorDeskHome() {
               href={`${CROPFORT_ROUTES.fieldTickets}?ticket=${t.id}`}
               eyebrow="Ticket"
               title={t.code}
-              meta={[t.title || t.activity || "Field ticket", t.block]
+              meta={[t.title || t.description || "Field ticket", t.block]
                 .filter(Boolean)
                 .join(" · ")}
               cta="Open"
