@@ -129,6 +129,7 @@ function WorkspaceCard({
             <StatusBadge status={program.status || "active"} />
           </p>
         </div>
+        {/* dfd */}
         <button
           type="button"
           aria-label={pinned ? `Unpin ${program.name}` : `Pin ${program.name}`}
