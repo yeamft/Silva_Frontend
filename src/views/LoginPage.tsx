@@ -38,64 +38,16 @@ const DEMO_ACCOUNTS = [
     hint: "principal@spx.example",
   },
   {
-    email: "handler@spx.example",
-    label: "SPX Account Handler",
-    org: "SPX",
-    hint: "handler@spx.example",
-  },
-  {
-    email: "supervisor@spx.example",
-    label: "SPX Field Supervisor",
-    org: "SPX",
-    hint: "supervisor@spx.example",
-  },
-  {
     email: "owner@silva.example",
     label: "Silva Owner",
     org: "Silva",
     hint: "owner@silva.example",
   },
   {
-    email: "cm@silva.example",
-    label: "Silva Country Manager",
-    org: "Silva",
-    hint: "cm@silva.example",
-  },
-  {
-    email: "finance@silva.example",
-    label: "Silva Finance",
-    org: "Silva",
-    hint: "finance@silva.example",
-  },
-  {
     email: "admin@bagro.example",
     label: "Vendor Admin",
     org: "Vendor",
     hint: "admin@bagro.example",
-  },
-  {
-    email: "manager@bagro.example",
-    label: "Vendor Manager",
-    org: "Vendor",
-    hint: "manager@bagro.example",
-  },
-  {
-    email: "supervisor@bagro.example",
-    label: "Vendor Supervisor",
-    org: "Vendor",
-    hint: "supervisor@bagro.example",
-  },
-  {
-    email: "lead@bagro.example",
-    label: "Vendor Field Lead",
-    org: "Vendor",
-    hint: "lead@bagro.example",
-  },
-  {
-    email: "worker@bagro.example",
-    label: "Vendor Worker",
-    org: "Vendor",
-    hint: "worker@bagro.example",
   },
 ] as const;
 
