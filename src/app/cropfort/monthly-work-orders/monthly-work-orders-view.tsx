@@ -74,13 +74,9 @@ export default function MonthlyWorkOrdersView() {
     const fromReport = params.get("fromReport");
     const fromKpi = params.get("fromKpi");
     if (fromReport) {
-      setSeedHint(
-        "Released monthly report linked — create a draft MWO to apply Loop G adjustments.",
-      );
+      setSeedHint("Report linked · create MWO for adjustments");
     } else if (fromKpi) {
-      setSeedHint(
-        "KPI / miss causes feed the next monthly WO when you create from plan (Loop G).",
-      );
+      setSeedHint("KPI linked · create MWO from plan");
     }
   }, [params]);
 
@@ -101,23 +97,22 @@ export default function MonthlyWorkOrdersView() {
 
   const canEdit = canEditPlanScope(user.role);
   const canApprove = canApproveOutOfPlan(user.role);
-  const hasOutOfPlan = selected?.lines.some((l) => !l.inPlan) ?? false;
   /** In-plan-only MWOs: SPX may activate; out-of-plan needs Silva approve first. */
   const canActivateScope = canEdit || canApprove;
 
   const onCreate = async () => {
     if (!canEdit) {
-      toast.error("Only SPX can create monthly work orders from the plan");
+      toast.error("SPX only");
       return;
     }
     if (!plan) {
-      toast.error("Open Core Operations and create a plan first");
+      toast.error("No plan");
       return;
     }
     try {
       const lines = deriveMonthlyLinesFromPlan(plan.id, month);
       if (!lines.length) {
-        toast.error("No included activities scheduled for this month");
+        toast.error("No activities this month");
         return;
       }
       const row = await createMut.mutateAsync({
@@ -128,7 +123,7 @@ export default function MonthlyWorkOrdersView() {
         lines,
       });
       setSelectedId(row.id);
-      toast.success(`Created ${row.code} from ${PLAN_MONTH_LABELS[month]} calendar`);
+      toast.success(`Created ${row.code}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not create monthly WO");
     }
@@ -136,7 +131,7 @@ export default function MonthlyWorkOrdersView() {
 
   const onAddOutOfPlan = async () => {
     if (!canEdit) {
-      toast.error("Only SPX can add out-of-plan lines");
+      toast.error("SPX only");
       return;
     }
     if (!selected) return;
@@ -159,7 +154,7 @@ export default function MonthlyWorkOrdersView() {
       });
       setOutName("");
       setOutReason("");
-      toast.success("Out-of-plan line added — Silva approval required on submit");
+      toast.success("Line added");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add out-of-plan line");
     }
@@ -193,14 +188,14 @@ export default function MonthlyWorkOrdersView() {
           </Select>
         </div>
         <Button onClick={onCreate} disabled={!canEdit}>
-          Create from Core Ops
+          Create
         </Button>
         {plan ? (
           <p className="text-xs text-muted-foreground">
-            Source: {plan.farmName} · {plan.budgetYearLabel} · {plan.status}
+            {plan.farmName} · {plan.budgetYearLabel} · {plan.status}
           </p>
         ) : (
-          <p className="text-xs text-muted-foreground">No Core Ops plan loaded</p>
+          <p className="text-xs text-muted-foreground">No plan</p>
         )}
       </div>
 
@@ -268,11 +263,7 @@ export default function MonthlyWorkOrdersView() {
                     }
                     try {
                       await submitMut.mutateAsync(selected.id);
-                      toast.success(
-                        hasOutOfPlan
-                          ? "Submitted to Silva (out-of-plan items)"
-                          : "Submitted — inform Silva",
-                      );
+                      toast.success("Submitted");
                     } catch (e) {
                       toast.error(e instanceof Error ? e.message : "Submit failed");
                     }
@@ -288,13 +279,13 @@ export default function MonthlyWorkOrdersView() {
                     onClick={async () => {
                       try {
                         await decideMut.mutateAsync({ id: selected.id, decision: "approve" });
-                        toast.success("Approved by Silva");
+                        toast.success("Approved");
                       } catch (e) {
                         toast.error(e instanceof Error ? e.message : "Approve failed");
                       }
                     }}
                   >
-                    Approve (Silva)
+                    Approve
                   </Button>
                   <Button
                     size="sm"
@@ -342,7 +333,7 @@ export default function MonthlyWorkOrdersView() {
               <div className="mb-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Last month insights
+                    Insights
                   </p>
                   {selected.loop === "G_monthly_feedback" ? (
                     <StatusBadge status="info" label="Loop G" />
@@ -367,7 +358,7 @@ export default function MonthlyWorkOrdersView() {
               <div className="mb-3 overflow-x-auto rounded-lg border border-border">
                 <div className="border-b border-border px-3 py-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Loop G recommended adjustments (±20% cap)
+                    Adjustments
                   </p>
                 </div>
                 <table className="w-full text-sm">
@@ -401,7 +392,7 @@ export default function MonthlyWorkOrdersView() {
                               variant={a.accepted ? "secondary" : "outline"}
                               className="h-7"
                               onClick={() =>
-                                toast.message("Adjustment accept/reject will ship with MWO patch API")
+                                toast.message("Coming soon")
                               }
                             >
                               {a.accepted ? "Accepted" : "Rejected"}
@@ -421,7 +412,7 @@ export default function MonthlyWorkOrdersView() {
 
             {selected.outOfPlanReason ? (
               <p className="mb-3 text-sm text-amber-700 dark:text-amber-400">
-                Out-of-plan (Silva): {selected.outOfPlanReason}
+                Out-of-plan: {selected.outOfPlanReason}
               </p>
             ) : null}
 
@@ -467,10 +458,10 @@ export default function MonthlyWorkOrdersView() {
 
             {(selected.status === "draft" || selected.status === "returned") && canEdit && (
               <div className="mt-4 grid gap-3 rounded-lg border border-dashed p-3 sm:grid-cols-2">
-                <p className="sm:col-span-2 text-sm font-medium">Add out-of-plan line (Silva approval)</p>
+                <p className="sm:col-span-2 text-sm font-medium">Out-of-plan line</p>
                 <div className="space-y-1">
-                  <Label>Activity name</Label>
-                  <Input value={outName} onChange={(e) => setOutName(e.target.value)} placeholder="e.g. Emergency drainage" />
+                  <Label>Activity</Label>
+                  <Input value={outName} onChange={(e) => setOutName(e.target.value)} placeholder="Activity" />
                 </div>
                 <div className="space-y-1">
                   <Label>Qty / ETB</Label>
@@ -484,16 +475,14 @@ export default function MonthlyWorkOrdersView() {
                   <Textarea value={outReason} onChange={(e) => setOutReason(e.target.value)} rows={2} />
                 </div>
                 <Button size="sm" variant="outline" onClick={onAddOutOfPlan}>
-                  Add out-of-plan line
+                  Add line
                 </Button>
               </div>
             )}
           </SectionCard>
         ) : (
-          <SectionCard title="No monthly WO">
-            <p className="text-sm text-muted-foreground">
-              Create one from the Core Operations calendar for a month with scheduled intensities.
-            </p>
+          <SectionCard title="Monthly WO">
+            <p className="text-sm text-muted-foreground">None</p>
           </SectionCard>
         )}
       </div>

@@ -94,7 +94,7 @@ export default function ScenariosView() {
             <>
               <StatusBadge status={plan.status} />
               <span className="text-xs tabular-nums">
-                Live · {completion.includedCount} lines · {fmtEtb(completion.budgetEtb)}
+                {completion.includedCount} lines · {fmtEtb(completion.budgetEtb)}
               </span>
             </>
           ) : null
@@ -106,11 +106,11 @@ export default function ScenariosView() {
         }
       />
 
-      <SectionCard title="Save current plan as scenario">
+      <SectionCard title="Snapshot">
         <div className="flex flex-wrap gap-2">
           <Input
             className="max-w-xs"
-            placeholder="e.g. Dry-season uplift"
+            placeholder="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -119,18 +119,16 @@ export default function ScenariosView() {
             disabled={!plan || createScenario.isPending}
             onClick={() => void onSave()}
           >
-            Save snapshot
+            Save
           </Button>
         </div>
       </SectionCard>
 
-      <SectionCard title="Saved scenarios" flush>
+      <SectionCard title="Scenarios" flush>
         {scenariosQuery.isLoading ? (
           <p className="px-5 py-8 text-center text-sm text-muted-foreground">Loading…</p>
         ) : scenarios.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-            No scenarios yet. Snapshot the live programme plan to compare options.
-          </p>
+          <p className="px-5 py-8 text-center text-sm text-muted-foreground">None</p>
         ) : (
           <Table>
             <TableHeader>

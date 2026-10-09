@@ -157,9 +157,7 @@ export default function WeeklyPlansView() {
     try {
       const row = await activatePlan.mutateAsync(selected.id);
       toast.success(
-        `Activated — bridged ${row.bridgedWorkOrderIds.length} work order(s)${
-          row.monthlyWoCode ? ` under ${row.monthlyWoCode}` : ""
-        }`,
+        `Activated · ${row.bridgedWorkOrderIds.length} WO${row.bridgedWorkOrderIds.length === 1 ? "" : "s"}`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Activate failed");
@@ -170,17 +168,17 @@ export default function WeeklyPlansView() {
     <OpsDeskPage>
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Execution"}
-        title="Weekly Implementation Plans"
+        title="Weekly plans"
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
-          { label: "Weekly Plans" },
+          { label: "Weekly plans" },
         ]}
         meta={
           <OpsDeskMeta
             items={[
-              { label: "plans", value: String(plans.length) },
-              { label: "active MWO", value: String(activeMonthly.length) },
+              { label: "Plans", value: String(plans.length) },
+              { label: "MWO", value: String(activeMonthly.length) },
             ]}
           />
         }
@@ -193,13 +191,13 @@ export default function WeeklyPlansView() {
             onClick={() => void onCreate()}
             disabled={!monthlyId || !canEdit || createPlan.isPending}
           >
-            Create weekly plan
+            New
           </Button>
         }
       >
         <div className="flex flex-wrap items-center gap-2">
           {activeMonthly.length === 0 ? (
-            <span className="text-sm text-muted-foreground">No active monthly WO</span>
+            <span className="text-sm text-muted-foreground">No MWO</span>
           ) : (
             <Select value={monthlyId} onValueChange={setMonthlyId}>
               <SelectTrigger className="h-8 w-44">
@@ -230,9 +228,7 @@ export default function WeeklyPlansView() {
           plansQuery.isLoading ? (
             <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">Loading…</p>
           ) : plans.length === 0 ? (
-            <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">
-              No weekly plans yet.
-            </p>
+            <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">None</p>
           ) : (
             plans.map((p) => (
               <OpsDeskRegisterItem
@@ -251,8 +247,7 @@ export default function WeeklyPlansView() {
             <OpsDeskDetail
               empty={{
                 icon: CalendarRange,
-                title: "Select a weekly plan",
-                description: "Create a plan from an active monthly WO, then open it here.",
+                title: "None",
               }}
             />
           ) : (
@@ -272,7 +267,7 @@ export default function WeeklyPlansView() {
                       onClick={async () => {
                         try {
                           await submitPlan.mutateAsync(selected.id);
-                          toast.success("Submitted for review");
+                          toast.success("Submitted");
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : "Submit failed");
                         }
@@ -342,7 +337,7 @@ export default function WeeklyPlansView() {
                             id: selected.id,
                             loop: "C_budget_overrun",
                           });
-                          toast.message("Spend overrun flagged for review");
+                          toast.message("Spend overrun");
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : "Flag failed");
                         }
@@ -353,7 +348,7 @@ export default function WeeklyPlansView() {
                   ) : null}
                   {selected.bridgedWorkOrderIds.length > 0 && (
                     <Button size="sm" variant="outline" asChild>
-                      <Link href={CROPFORT_ROUTES.workOrders}>Open WOs</Link>
+                      <Link href={CROPFORT_ROUTES.workOrders}>WOs</Link>
                     </Button>
                   )}
                 </>

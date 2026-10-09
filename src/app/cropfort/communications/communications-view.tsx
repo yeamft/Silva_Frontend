@@ -203,7 +203,7 @@ export default function CommunicationsView() {
       />
 
       <StatusSummaryCards
-        label="Communications summary"
+        label="Communications"
         columns={3}
         items={[
           {
@@ -211,7 +211,6 @@ export default function CommunicationsView() {
             label: "Threads",
             value: String(visible.length),
             icon: MessageSquare,
-            footnote: "Visible in this desk",
             emphasis: true,
           },
           {
@@ -219,14 +218,12 @@ export default function CommunicationsView() {
             label: "Open",
             value: String(openCount),
             icon: Inbox,
-            footnote: "Still active",
           },
           {
             id: "desk",
-            label: "Your desk",
+            label: "Desk",
             value: COMM_PARTY_LABEL[party],
             icon: UserRound,
-            footnote: "Current party view",
           },
         ]}
       />
@@ -237,7 +234,7 @@ export default function CommunicationsView() {
             <TableToolbar
               search={search}
               onSearchChange={setSearch}
-              searchPlaceholder="Search subject, code, channel"
+              searchPlaceholder="Search…"
             />
           </div>
           <Table>
@@ -257,7 +254,7 @@ export default function CommunicationsView() {
                 <TableMessageRow
                   colSpan={5}
                   icon={MessageSquare}
-                  title="No threads yet"
+                  title="None"
                 />
               ) : (
                 paged.map((t) => (
@@ -299,20 +296,9 @@ export default function CommunicationsView() {
           />
         </SectionCard>
 
-        <SectionCard
-          title={selected ? selected.subject : "Select a thread"}
-          description={
-            selected
-              ? `SPX ↔ ${COMM_PARTY_LABEL[selected.counterparty]}${
-                  selected.relatedCode ? ` · ${selected.relatedCode}` : ""
-                }`
-              : undefined
-          }
-        >
+        <SectionCard title={selected ? selected.subject : "Thread"}>
           {!selected ? (
-            <p className="text-sm text-muted-foreground">
-              Open a thread from the list or start a new one.
-            </p>
+            <p className="text-sm text-muted-foreground">None</p>
           ) : (
             <div className="flex h-[min(28rem,60vh)] flex-col">
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
@@ -374,7 +360,7 @@ export default function CommunicationsView() {
                   </>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-xs text-muted-foreground">This thread is closed.</p>
+                    <p className="text-xs text-muted-foreground">Closed</p>
                     {party === "spx" ? (
                       <Button
                         size="sm"
@@ -474,7 +460,7 @@ export default function CommunicationsView() {
                 {...p}
                 value={form.relatedCode}
                 onChange={(e) => setForm((f) => ({ ...f, relatedCode: e.target.value }))}
-                placeholder="e.g. WO-2412"
+                placeholder="Code"
               />
             )}
           />
@@ -494,7 +480,7 @@ export default function CommunicationsView() {
             <Button variant="outline" onClick={() => setComposeOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={create}>Open thread</Button>
+            <Button onClick={create}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

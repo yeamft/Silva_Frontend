@@ -256,7 +256,7 @@ export default function ProjectsView() {
       />
 
       <StatusSummaryCards
-        label="Project status summary"
+        label="Projects"
         columns={3}
         items={[
           {
@@ -264,7 +264,6 @@ export default function ProjectsView() {
             label: "Projects",
             value: String(stats.total),
             icon: FolderKanban,
-            footnote: "All projects in scope",
             emphasis: true,
           },
           {
@@ -272,25 +271,22 @@ export default function ProjectsView() {
             label: "Open",
             value: String(stats.open),
             icon: FolderOpen,
-            footnote: "Not yet complete",
           },
           {
             id: "waiting",
-            label: "Awaiting approval",
+            label: "Pending",
             value: String(stats.waiting),
             icon: Clock3,
-            footnote: "Submitted for review",
           },
         ]}
       />
 
       {!blocks.length ? (
         <p className="mb-3 rounded-lg border px-3 py-2 text-sm text-muted-foreground">
-          No blocks available. Add blocks under{" "}
+          No blocks.{" "}
           <Link className="underline" href={CROPFORT_ROUTES.blocks}>
-            Administration → Blocks
+            Blocks
           </Link>
-          .
         </p>
       ) : null}
 

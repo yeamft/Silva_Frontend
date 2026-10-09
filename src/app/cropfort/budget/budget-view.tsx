@@ -175,11 +175,10 @@ export default function BudgetForecastView() {
       {!plan && !loading ? (
         <SectionCard>
           <p className="text-sm text-muted-foreground">
-            No programme plan yet.{" "}
+            No plan.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Open Programme
+              Programme
             </Link>
-            .
           </p>
         </SectionCard>
       ) : (
@@ -209,7 +208,7 @@ export default function BudgetForecastView() {
           <SectionCard title="Budget vs Actual">
             <div className="mb-3 space-y-2">
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Spend vs budget</span>
+                <span>Spend</span>
                 <span className="tabular-nums">{snap.spendPct}%</span>
               </div>
               <div className="h-3 overflow-hidden rounded-full bg-muted">
@@ -221,19 +220,19 @@ export default function BudgetForecastView() {
             </div>
             <div className="grid gap-3 sm:grid-cols-3 text-sm">
               <div className="rounded-lg border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Remaining vs budget</p>
+                <p className="text-xs text-muted-foreground">Remaining</p>
                 <p className="font-semibold tabular-nums">
                   {fmtEtb(Math.max(0, snap.planEtb - snap.actualEtb))}
                 </p>
               </div>
               <div className="rounded-lg border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Uncommitted headroom</p>
+                <p className="text-xs text-muted-foreground">Uncommitted</p>
                 <p className="font-semibold tabular-nums">
                   {fmtEtb(Math.max(0, snap.planEtb - snap.committedEtb))}
                 </p>
               </div>
               <div className="rounded-lg border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Forecast vs budget</p>
+                <p className="text-xs text-muted-foreground">Forecast Δ</p>
                 <p className="font-semibold tabular-nums">
                   {fmtEtb(snap.forecastEtb - snap.planEtb)}
                 </p>
@@ -243,7 +242,7 @@ export default function BudgetForecastView() {
 
           <SectionCard title="By category" flush>
             {budgetVsActualCategories.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">No cost lines yet.</p>
+              <p className="p-4 text-sm text-muted-foreground">None</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -283,7 +282,7 @@ export default function BudgetForecastView() {
 
           <SectionCard title="By activity (work orders)" flush>
             {activityRows.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">No work-order actuals yet.</p>
+              <p className="p-4 text-sm text-muted-foreground">None</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -376,7 +375,7 @@ export default function BudgetForecastView() {
 
           <SectionCard title="Plan activity lines" flush>
             {acts.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">No included activities.</p>
+              <p className="p-4 text-sm text-muted-foreground">None</p>
             ) : (
               <Table>
                 <TableHeader>

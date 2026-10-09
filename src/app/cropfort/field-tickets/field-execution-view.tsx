@@ -92,18 +92,18 @@ import {
 /** API-aligned next actions (maps through UI statuses). */
 const API_TICKET_NEXT: typeof TICKET_NEXT = {
   vendor: {
-    assigned: { status: "submitted", label: "Submit work" },
+    assigned: { status: "submitted", label: "Submit" },
     returned: { status: "submitted", label: "Resubmit" },
   },
   site_owner: {
-    submitted: { status: "site_reviewed", label: "Site check OK" },
+    submitted: { status: "site_reviewed", label: "Site OK" },
   },
   asset_owner: {
-    site_reviewed: { status: "validated", label: "Close ticket" },
+    site_reviewed: { status: "validated", label: "Close" },
   },
   spx: {
-    site_reviewed: { status: "validated", label: "Close ticket" },
-    submitted: { status: "site_reviewed", label: "Site check OK" },
+    site_reviewed: { status: "validated", label: "Close" },
+    submitted: { status: "site_reviewed", label: "Site OK" },
   },
 };
 
@@ -410,7 +410,7 @@ export default function FieldExecutionView() {
   };
 
   const doReassign = () => {
-    toast.message("Crew reassignment is recorded on new tickets; create a follow-up ticket for changes.");
+    toast.message("Create a follow-up ticket for crew changes.");
     setReassignOpen(false);
   };
 
@@ -423,15 +423,10 @@ export default function FieldExecutionView() {
   return (
     <OpsDeskPage className={cn(isDeskApp && "gap-5")}>
       {isDeskApp ? (
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-              {desk === "vendor" ? "My tickets" : "Field tickets"}
-            </h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {desk === "vendor" ? "Work waiting on your crew" : "Sign-off and review"}
-            </p>
-          </div>
+        <header className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            {desk === "vendor" ? "Tickets" : "Field tickets"}
+          </h1>
           {canAssign ? (
             <Button size="sm" onClick={() => setAssignOpen(true)}>
               <Plus className="h-3.5 w-3.5" />
@@ -442,7 +437,7 @@ export default function FieldExecutionView() {
       ) : (
         <OpsDeskHeader
           eyebrow={activeProgram?.name || "Execution"}
-          title="Field execution"
+          title="Field tickets"
           breadcrumbs={[
             { label: "Home", href: CROPFORT_ROUTES.dashboard },
             { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
@@ -452,7 +447,7 @@ export default function FieldExecutionView() {
             canAssign ? (
               <Button size="sm" onClick={() => setAssignOpen(true)}>
                 <Plus className="h-3.5 w-3.5" />
-                Assign ticket
+                Assign
               </Button>
             ) : (
               <StatusBadge status="issued" label={CROPFORT_ROLE_LABELS[user.role]} />
@@ -463,22 +458,9 @@ export default function FieldExecutionView() {
 
       {desk === "spx" ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard
-            label="Waiting on vendor"
-            value={String(waitingCounts.vendor)}
-            footnote="Accept / do the work"
-          />
-          <StatCard
-            label="Waiting on site"
-            value={String(waitingCounts.site)}
-            emphasis
-            footnote="Field check"
-          />
-          <StatCard
-            label="Waiting on asset owner"
-            value={String(waitingCounts.asset)}
-            footnote="Close or return"
-          />
+          <StatCard label="Vendor" value={String(waitingCounts.vendor)} />
+          <StatCard label="Site" value={String(waitingCounts.site)} emphasis />
+          <StatCard label="Asset" value={String(waitingCounts.asset)} />
           <StatCard
             label="Closed"
             value={String(tickets.filter((t) => t.status === "validated").length)}
@@ -487,7 +469,7 @@ export default function FieldExecutionView() {
       ) : (
         <div className="grid grid-cols-2 gap-3">
           <StatCard
-            label={desk === "vendor" ? "Needs you" : "Asset queue"}
+            label="Queue"
             value={String(
               desk === "vendor" ? waitingCounts.vendor : waitingCounts.asset,
             )}
@@ -503,7 +485,7 @@ export default function FieldExecutionView() {
       <OpsDeskControlPanel
         search={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search ticket, block, crew…"
+        searchPlaceholder="Search…"
         view={view === "table" ? "list" : "board"}
         onViewChange={(v) => setView(v === "list" ? "table" : "board")}
         filters={
@@ -513,9 +495,9 @@ export default function FieldExecutionView() {
             options={[
               {
                 id: "mine",
-                label: party === "spx" ? "Open queue" : `Needs ${PARTY_LABEL[party]}`,
+                label: party === "spx" ? "Queue" : PARTY_LABEL[party],
               },
-              { id: "all", label: "All tickets" },
+              { id: "all", label: "All" },
             ]}
           />
         }
@@ -625,7 +607,7 @@ export default function FieldExecutionView() {
                       colSpan={8}
                       className="py-10 text-center text-sm text-muted-foreground"
                     >
-                      No tickets in this queue
+                      None
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -772,8 +754,8 @@ export default function FieldExecutionView() {
                         rows={2}
                         placeholder={
                           canReturn && !next
-                            ? "Reason for return (required)"
-                            : "Optional note for the trail"
+                            ? "Return reason"
+                            : "Note"
                         }
                         value={actionNote}
                         onChange={(e) => setActionNote(e.target.value)}
@@ -828,7 +810,7 @@ export default function FieldExecutionView() {
                       (p) => p.fieldTicketId === selected.id && p.status !== "returned",
                     ) ? (
                       <Button variant="outline" asChild>
-                        <Link href={CROPFORT_ROUTES.paymentRequests}>Open payment request</Link>
+                        <Link href={CROPFORT_ROUTES.paymentRequests}>Payments</Link>
                       </Button>
                     ) : (
                       <Button
@@ -868,16 +850,14 @@ export default function FieldExecutionView() {
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Assign a task ticket</DialogTitle>
+            <DialogTitle>Assign ticket</DialogTitle>
           </DialogHeader>
           <FormField
             label="Work order"
             required
             render={() =>
               openWos.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No open work orders. Issue one under Work Orders first.
-                </p>
+                <p className="text-sm text-muted-foreground">No open WOs</p>
               ) : (
                 <Select
                   value={

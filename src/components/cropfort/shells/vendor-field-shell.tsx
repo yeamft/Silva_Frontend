@@ -156,8 +156,8 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
               <p className="truncate text-[11px] text-muted-foreground">Field desk</p>
             </div>
             <div className="hidden min-w-0 flex-1 md:block">
-              <p className="truncate text-sm text-muted-foreground">
-                My work, payments, and messages
+              <p className="truncate text-sm font-medium">
+                {activeProgram?.name || "Cropfort"}
               </p>
             </div>
             <ThemeToggle />

@@ -162,8 +162,8 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
               <p className="truncate text-[11px] text-muted-foreground">Asset owner</p>
             </div>
             <div className="hidden min-w-0 flex-1 md:block">
-              <p className="truncate text-sm text-muted-foreground">
-                Decide plans, AFEs, and field sign-off
+              <p className="truncate text-sm font-medium">
+                {activeProgram?.name || "Cropfort"}
               </p>
             </div>
             <ThemeToggle />

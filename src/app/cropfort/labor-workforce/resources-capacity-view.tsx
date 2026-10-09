@@ -106,16 +106,15 @@ export default function ResourcesCapacityView() {
       {!plan && !loading ? (
         <SectionCard>
           <p className="text-sm text-muted-foreground">
-            No programme plan yet.{" "}
+            No plan.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Open Programme
+              Programme
             </Link>
-            .
           </p>
         </SectionCard>
       ) : (
         <>
-          <SectionCard title="Labor capacity (man-days)">
+          <SectionCard title="Labor (MD)">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
@@ -157,10 +156,6 @@ export default function ResourcesCapacityView() {
                 </tbody>
               </table>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Demand = planned qty × labor norm, weighted by Peak/Active/Light months. Red =
-              over capacity ({CREW_MD_PER_MONTH} MD/month demo crew).
-            </p>
           </SectionCard>
 
           <div className="mb-3 flex flex-wrap gap-2">
@@ -178,9 +173,7 @@ export default function ResourcesCapacityView() {
 
           <SectionCard title={tabs.find((t) => t.id === tab)?.label || "Resources"} flush>
             {list.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">
-                No {tab} activities included in the programme.
-              </p>
+              <p className="p-4 text-sm text-muted-foreground">None</p>
             ) : (
               <Table>
                 <TableHeader>

@@ -227,18 +227,18 @@ export default function ProgrammePlansRegisterView({
     <PageContainer>
       <PageHeader
         eyebrow={activeProgram?.name || "Workspace"}
-        title={archiveMode ? "Programme plan archive" : "Programme Plans"}
+        title={archiveMode ? "Archive" : "Programme plans"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Planning" },
-          { label: "Programme Plans", href: CROPFORT_ROUTES.programmePlans },
+          { label: "Programme plans", href: CROPFORT_ROUTES.programmePlans },
           ...(archiveMode ? [{ label: "Archive" }] : []),
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {archiveMode ? (
               <Button size="sm" variant="outline" asChild>
-                <Link href={CROPFORT_ROUTES.programmePlans}>Back to register</Link>
+                <Link href={CROPFORT_ROUTES.programmePlans}>Register</Link>
               </Button>
             ) : (
               <Button size="sm" variant="outline" asChild>
@@ -251,21 +251,16 @@ export default function ProgrammePlansRegisterView({
             {canCreate ? (
               <Button size="sm" onClick={openCreate}>
                 <Plus className="h-3.5 w-3.5" />
-                New programme plan
+                New
               </Button>
             ) : null}
           </div>
         }
       />
 
-      {archiveMode ? (
-        <p className="text-sm text-muted-foreground">
-          Closed and archived programme plans for this workspace. Open a plan to review history, or
-          duplicate it into a new draft.
-        </p>
-      ) : (
+      {!archiveMode ? (
       <StatusSummaryCards
-        label="Programme plan status summary"
+        label="Programme plans"
         columns={5}
         items={[
           {
@@ -273,7 +268,6 @@ export default function ProgrammePlansRegisterView({
             label: "Total",
             value: String(stats.total),
             icon: ClipboardList,
-            footnote: "All programme plans",
             emphasis: true,
             active: statusFilter === "all",
             onClick: () => {
@@ -286,7 +280,6 @@ export default function ProgrammePlansRegisterView({
             label: "Draft",
             value: String(stats.draft),
             icon: FileEdit,
-            footnote: "Still being prepared",
             active: statusFilter === "draft",
             onClick: () => {
               setStatusFilter("draft");
@@ -298,7 +291,6 @@ export default function ProgrammePlansRegisterView({
             label: "Submitted",
             value: String(stats.submitted),
             icon: Send,
-            footnote: "Awaiting Silva review",
             active: statusFilter === "submitted",
             onClick: () => {
               setStatusFilter("submitted");
@@ -310,7 +302,6 @@ export default function ProgrammePlansRegisterView({
             label: "Approved",
             value: String(stats.approved),
             icon: CheckCircle2,
-            footnote: "Ready to execute",
             intent: "positive",
             active: statusFilter === "approved",
             onClick: () => {
@@ -323,7 +314,6 @@ export default function ProgrammePlansRegisterView({
             label: "Returned",
             value: String(stats.returned),
             icon: RotateCcw,
-            footnote: "Needs revision",
             intent: "negative",
             active: statusFilter === "returned",
             onClick: () => {
@@ -333,7 +323,7 @@ export default function ProgrammePlansRegisterView({
           },
         ]}
       />
-      )}
+      ) : null}
 
       <SectionCard title={archiveMode ? "Archived plans" : "Register"} flush>
         <div className="space-y-2 border-b border-border px-4 py-2.5 sm:px-5">
@@ -439,16 +429,9 @@ export default function ProgrammePlansRegisterView({
                   title={
                     plans.length === 0
                       ? archiveMode
-                        ? "No archived programme plans"
-                        : "No programme plans yet"
-                      : "No matching programme plans"
-                  }
-                  description={
-                    plans.length === 0
-                      ? archiveMode
-                        ? "Archived plans will appear here."
-                        : "Create one to start scope → activities → schedule."
-                      : "Try a different search or filter."
+                        ? "No archived plans"
+                        : "No plans"
+                      : "No results"
                   }
                 />
               ) : (

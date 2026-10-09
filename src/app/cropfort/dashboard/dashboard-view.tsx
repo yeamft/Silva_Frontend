@@ -33,7 +33,6 @@ import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { VendorDeskHome } from "@/components/cropfort/shells/vendor-desk-home";
 import { SilvaDeskHome } from "@/components/cropfort/shells/silva-desk-home";
 import { PageContainer } from "@/components/cropfort/page-shell";
-import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
@@ -157,18 +156,8 @@ function ModuleTile({ area }: { area: CropfortAreaDef }) {
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground">
         <Icon className="h-4 w-4" />
       </span>
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-semibold tracking-tight text-foreground">{area.label}</p>
-          <StatusBadge
-            status={area.readiness === "ready" ? "approved" : "draft"}
-            label={area.readiness === "ready" ? "Live" : "Soon"}
-          />
-        </div>
-        <span className="inline-flex items-center gap-1 pt-1 text-xs font-medium text-muted-foreground group-hover:text-foreground">
-          Open
-          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-        </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold tracking-tight text-foreground">{area.label}</p>
       </div>
     </Link>
   );
@@ -194,13 +183,7 @@ function AttentionCard({ item }: { item: QuickLink }) {
           <span className="cf-numeric text-2xl font-semibold tabular-nums">{item.count}</span>
         ) : null}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">{item.title}</p>
-      </div>
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground">
-        Continue
-        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-      </span>
+      <p className="text-sm font-semibold">{item.title}</p>
     </Link>
   );
 }
@@ -213,8 +196,7 @@ export default function DashboardPage() {
 }
 
 function SpxDashboardView() {
-  const { user, activeProgram, tenant, programs } = useCropfortAuth();
-  const firstName = user.name.split(" ")[0];
+  const { user, activeProgram, programs } = useCropfortAuth();
   const canRates = canViewRateCard(user.role);
   const isOwner = canApproveAsAssetOwner(user.role);
 
@@ -340,14 +322,13 @@ function SpxDashboardView() {
   const activityHasMore = activityFeed.length > ACTIVITY_PREVIEW;
 
   const workspaceName = activeProgram?.name || "Workspace";
-  const orgName = tenant?.displayName || tenant?.name || user.tenantName;
 
   const attention: QuickLink[] = useMemo(() => {
     if (isVendorRole(user.role)) {
       return [
         {
           href: CROPFORT_ROUTES.fieldTickets,
-          title: "My tickets",
+          title: "Tickets",
           icon: CalendarRange,
           emphasis: true,
           count: queues.vendor,
@@ -358,7 +339,7 @@ function SpxDashboardView() {
       return [
         {
           href: CROPFORT_ROUTES.fieldTickets,
-          title: "My tickets",
+          title: "Tickets",
           icon: CalendarRange,
           emphasis: true,
           count: queues.vendor + queues.site,
@@ -380,25 +361,25 @@ function SpxDashboardView() {
       return [
         {
           href: CROPFORT_ROUTES.approvals,
-          title: "Approvals queue",
+          title: "Approvals",
           icon: ClipboardCheck,
           emphasis: true,
           count: queues.afesPending || undefined,
         },
         {
           href: `${CROPFORT_ROUTES.rateCardProposals}?status=submitted`,
-          title: "Rates to review",
+          title: "Rates",
           icon: WalletCards,
         },
         {
           href: CROPFORT_ROUTES.fieldTickets,
-          title: "Close tickets",
+          title: "Tickets",
           icon: FolderKanban,
           count: queues.asset,
         },
         {
           href: CROPFORT_ROUTES.budget,
-          title: "Cost Management",
+          title: "Costs",
           icon: TrendingUp,
         },
       ];
@@ -406,13 +387,13 @@ function SpxDashboardView() {
     return [
       {
         href: CROPFORT_ROUTES.coreOperations,
-        title: "Continue Core Ops",
+        title: "Programme",
         icon: Briefcase,
         emphasis: true,
       },
       {
         href: CROPFORT_ROUTES.fieldTickets,
-        title: "Assign tickets",
+        title: "Tickets",
         icon: ClipboardCheck,
         count: queues.vendor + queues.site + queues.asset,
       },
@@ -424,7 +405,7 @@ function SpxDashboardView() {
       },
       {
         href: CROPFORT_ROUTES.afe,
-        title: "AFEs pending",
+        title: "AFEs",
         icon: WalletCards,
         count: queues.afesPending,
       },
@@ -485,33 +466,33 @@ function SpxDashboardView() {
 
   const kpiStrip = useMemo(() => {
     if (isVendorRole(user.role)) {
-      return [{ label: "My queue", value: queues.vendor }];
+      return [{ label: "Queue", value: queues.vendor }];
     }
     if (isAssetOwnerRole(user.role)) {
       return [
-        { label: "Asset queue", value: queues.asset },
-        { label: "Open WOs", value: queues.openWo },
+        { label: "Asset", value: queues.asset },
+        { label: "WOs", value: queues.openWo },
       ];
     }
     return [
-      { label: "Vendor queue", value: queues.vendor },
-      { label: "Site queue", value: queues.site },
-      { label: "Asset queue", value: queues.asset },
-      { label: "Open WOs", value: queues.openWo },
+      { label: "Vendor", value: queues.vendor },
+      { label: "Site", value: queues.site },
+      { label: "Asset", value: queues.asset },
+      { label: "WOs", value: queues.openWo },
     ];
   }, [user.role, queues]);
 
   const browseTabs = useMemo(() => {
     if (limitedDesk) {
-      return [
-        { id: "attention" as const, label: "Needs you" },
-        { id: "workspace" as const, label: "My modules" },
-      ];
+    return [
+      { id: "attention" as const, label: "Queue" },
+      { id: "workspace" as const, label: "Modules" },
+    ];
     }
     return [
-      { id: "attention" as const, label: "Needs you" },
+      { id: "attention" as const, label: "Queue" },
       { id: "workspace" as const, label: "Workspace" },
-      { id: "modules" as const, label: "All modules" },
+      { id: "modules" as const, label: "All" },
     ];
   }, [limitedDesk]);
 
@@ -523,27 +504,20 @@ function SpxDashboardView() {
 
   return (
     <PageContainer className="max-w-none gap-6 xl:max-w-[90rem]">
-      <section className="space-y-3 border-b border-border pb-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <p className="cf-eyebrow">Action center</p>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.65rem]">
-              {workspaceName}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Hi {firstName} · what needs attention, then where things stand
-              {orgName ? ` · ${orgName}` : ""}
-            </p>
-          </div>
+      <section className="border-b border-border pb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">
+            {workspaceName}
+          </h1>
           <div className="flex shrink-0 flex-wrap gap-2">
             {canChooseWorkspace(user.role, programs.length) ? (
               <Button size="sm" variant="outline" asChild>
-                <Link href={SELECT_WORKSPACE_PATH}>Switch workspace</Link>
+                <Link href={SELECT_WORKSPACE_PATH}>Workspace</Link>
               </Button>
             ) : null}
             <Button size="sm" asChild>
               <Link href={attention[0]?.href || CROPFORT_ROUTES.fieldTickets}>
-                {attention[0]?.title || "Open queue"}
+                {attention[0]?.title || "Queue"}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -553,7 +527,7 @@ function SpxDashboardView() {
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold tracking-tight">Needs your attention</h2>
+          <h2 className="text-sm font-semibold tracking-tight">Queue</h2>
           <div className="flex gap-1 rounded-lg border border-border p-0.5">
             {browseTabs.map((t) => (
               <button
@@ -578,7 +552,7 @@ function SpxDashboardView() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search modules…"
+              placeholder="Search…"
               className="h-9 pl-9"
               aria-label="Search modules"
             />
@@ -593,10 +567,10 @@ function SpxDashboardView() {
             ))}
           </ul>
         ) : (
-          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {filteredModules.length === 0 ? (
-              <li className="col-span-full rounded-xl border border-dashed border-border px-6 py-14 text-center text-sm text-muted-foreground">
-                No modules match “{query}”.
+              <li className="col-span-full rounded-xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
+                No results
               </li>
             ) : (
               filteredModules.map((area) => (
@@ -610,7 +584,7 @@ function SpxDashboardView() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold tracking-tight">Current position</h2>
+        <h2 className="text-sm font-semibold tracking-tight">Position</h2>
         <div
           className={cn(
             "grid gap-3",
@@ -635,26 +609,19 @@ function SpxDashboardView() {
 
       <section className="grid items-start gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-          <div className="mb-4 flex items-start justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-semibold">Operational progress</h2>
-              <p className="text-xs text-muted-foreground">Live work orders and ticket queues</p>
-            </div>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Execution</h2>
             {isLoading ? (
               <span className="text-[11px] text-muted-foreground">Loading…</span>
             ) : null}
           </div>
 
           {!hasChartData ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              No execution data yet for this workspace.
-            </p>
+            <p className="py-10 text-center text-sm text-muted-foreground">No data</p>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Work orders by status
-                </p>
+                <p className="mb-2 text-[11px] font-medium text-muted-foreground">Work orders</p>
                 <ChartContainer config={WO_CHART_CONFIG} className="aspect-[4/3] w-full">
                   <BarChart data={woStatusChart} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -679,11 +646,9 @@ function SpxDashboardView() {
               </div>
 
               <div>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Ticket queue mix
-                </p>
+                <p className="mb-2 text-[11px] font-medium text-muted-foreground">Tickets</p>
                 {ticketQueueChart.length === 0 ? (
-                  <p className="py-10 text-center text-sm text-muted-foreground">No open tickets</p>
+                  <p className="py-10 text-center text-sm text-muted-foreground">None</p>
                 ) : (
                   <ChartContainer config={QUEUE_CHART_CONFIG} className="aspect-[4/3] w-full">
                     <PieChart>
@@ -710,17 +675,14 @@ function SpxDashboardView() {
 
         <div className="flex max-h-[28rem] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs">
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-5">
-            <div>
-              <h2 className="text-sm font-semibold">Recent activity</h2>
-              <p className="text-xs text-muted-foreground">Tickets, AFEs, plans, and DFRs</p>
-            </div>
+            <h2 className="text-sm font-semibold">Activity</h2>
             <Button size="sm" variant="ghost" className="h-8 text-xs" asChild>
               <Link href={CROPFORT_ROUTES.auditTrail}>Audit</Link>
             </Button>
           </div>
           {activityFeed.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-muted-foreground">
-              {isLoading ? "Loading activity…" : "No recent activity yet."}
+              {isLoading ? "Loading…" : "None"}
             </p>
           ) : (
             <>
@@ -761,8 +723,8 @@ function SpxDashboardView() {
                     onClick={() => setActivityExpanded((v) => !v)}
                   >
                     {activityExpanded
-                      ? "Show less"
-                      : `See more (${activityFeed.length - ACTIVITY_PREVIEW} more)`}
+                      ? "Less"
+                      : `More (${activityFeed.length - ACTIVITY_PREVIEW})`}
                   </Button>
                 </div>
               ) : null}

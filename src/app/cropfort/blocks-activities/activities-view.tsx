@@ -93,7 +93,7 @@ export default function ActivitiesView() {
         }
         actions={
           <Button size="sm" asChild>
-            <Link href={CROPFORT_ROUTES.coreOperations}>Edit in Programme</Link>
+            <Link href={CROPFORT_ROUTES.coreOperations}>Programme</Link>
           </Button>
         }
       />
@@ -101,7 +101,7 @@ export default function ActivitiesView() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           className="h-9 max-w-xs"
-          placeholder="Search activity or block…"
+          placeholder="Search…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -120,21 +120,18 @@ export default function ActivitiesView() {
         </Select>
       </div>
 
-      <SectionCard title="Planned activities" flush>
+      <SectionCard title="Activities" flush>
         {loading && !plan ? (
-          <p className="p-4 text-sm text-muted-foreground">Loading plan…</p>
+          <p className="p-4 text-sm text-muted-foreground">Loading…</p>
         ) : !plan ? (
           <p className="p-4 text-sm text-muted-foreground">
-            No programme plan yet.{" "}
+            No plan.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Open Programme
-            </Link>{" "}
-            to create one.
+              Programme
+            </Link>
           </p>
         ) : rows.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">
-            No included activities match. Include activities in Programme first.
-          </p>
+          <p className="p-4 text-sm text-muted-foreground">None</p>
         ) : (
           <div className="overflow-x-auto">
             <Table>

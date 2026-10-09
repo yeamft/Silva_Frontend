@@ -137,22 +137,18 @@ export default function DailyFieldRecordsView() {
     <PageContainer>
       <PageHeader
         eyebrow={activeProgram?.name || "Execute"}
-        title="Daily Field Records"
+        title="Daily records"
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Daily Field Records" },
+          { label: "Daily records" },
         ]}
       />
-
-    
 
       <div className="mb-4 grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-1 lg:col-span-2">
           <Label>Weekly plan</Label>
           {plans.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No active weekly plan. Activate one under Weekly Plans first.
-            </p>
+            <p className="text-sm text-muted-foreground">No weekly plan</p>
           ) : (
             <Select
               value={planId}
@@ -178,7 +174,7 @@ export default function DailyFieldRecordsView() {
         <div className="space-y-1 lg:col-span-2">
           <Label>Plan line</Label>
           {!(plan?.lines?.length) ? (
-            <p className="text-sm text-muted-foreground">No lines on this plan.</p>
+            <p className="text-sm text-muted-foreground">No lines</p>
           ) : (
             <Select value={lineId} onValueChange={setLineId}>
               <SelectTrigger>
@@ -212,8 +208,8 @@ export default function DailyFieldRecordsView() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="bagro_platform">B-Agro on Platform</SelectItem>
-              <SelectItem value="import_from_chaka">Import from Chaka (paper/digital)</SelectItem>
+              <SelectItem value="bagro_platform">Platform</SelectItem>
+              <SelectItem value="import_from_chaka">Chaka import</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -231,7 +227,7 @@ export default function DailyFieldRecordsView() {
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         <SectionCard title="Records">
           {records.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No daily field records yet.</p>
+            <p className="text-sm text-muted-foreground">None</p>
           ) : (
             <ul className="space-y-1">
               {records.map((r) => (
@@ -262,7 +258,7 @@ export default function DailyFieldRecordsView() {
             <div className="mb-3 flex flex-wrap gap-2">
               <StatusBadge status={selected.status} />
               {selected.loop !== "none" ? (
-                <StatusBadge status="returned" label="Needs correction" />
+                <StatusBadge status="returned" label="Correction" />
               ) : null}
               {(selected.status === "draft" || selected.status === "returned") && canEnter && (
                 <>
@@ -302,13 +298,13 @@ export default function DailyFieldRecordsView() {
                             },
                           });
                           setSelectedId(next.id);
-                          toast.success(`New version ${next.code} (original kept)`);
+                          toast.success(`New version ${next.code}`);
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : "Failed");
                         }
                       }}
                     >
-                      Correct as new version
+                      New version
                     </Button>
                   ) : null}
                   <Button
@@ -316,7 +312,7 @@ export default function DailyFieldRecordsView() {
                     onClick={async () => {
                       try {
                         await submitMut.mutateAsync(selected.id);
-                        toast.success("Submitted for site check");
+                        toast.success("Submitted");
                       } catch (e) {
                         toast.error(e instanceof Error ? e.message : "Submit failed");
                       }
@@ -347,7 +343,7 @@ export default function DailyFieldRecordsView() {
               )}
               {(selected.status === "submitted" || selected.status === "site_checked") && (
                 <Button size="sm" variant="outline" asChild>
-                  <a href={CROPFORT_ROUTES.validationQueue}>Open validation queue</a>
+                  <a href={CROPFORT_ROUTES.validationQueue}>Validation</a>
                 </Button>
               )}
             </div>
@@ -390,7 +386,7 @@ export default function DailyFieldRecordsView() {
                 <dd className="cf-numeric font-medium">{selected.laborHours} h</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Sch. 5 preview</dt>
+                <dt className="text-xs text-muted-foreground">Schedule 5</dt>
                 <dd>
                   {previewIssues.length === 0 ? (
                     <StatusBadge status="approved" label="Pass" />
@@ -418,20 +414,15 @@ export default function DailyFieldRecordsView() {
             )}
 
             {selected.notes ? (
-              <p className="text-sm text-muted-foreground">Notes: {selected.notes}</p>
+              <p className="text-sm text-muted-foreground">{selected.notes}</p>
             ) : null}
             {selected.validationNotes ? (
-              <p className="mt-1 text-sm">Validation: {selected.validationNotes}</p>
-            ) : null}
-            {selected.supersedesId ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Supersedes prior version (id {selected.supersedesId.slice(0, 12)}…)
-              </p>
+              <p className="mt-1 text-sm">{selected.validationNotes}</p>
             ) : null}
           </SectionCard>
         ) : (
-          <SectionCard title="Record detail">
-            <p className="text-sm text-muted-foreground">Select or create a DFR to review.</p>
+          <SectionCard title="Detail">
+            <p className="text-sm text-muted-foreground">None</p>
           </SectionCard>
         )}
       </div>

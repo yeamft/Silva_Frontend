@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useMemo } from "react";
 import {
   AttentionItem,
@@ -9,7 +8,6 @@ import {
   DeskMetric,
 } from "@/components/cropfort/attention-panel";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
-import { Button } from "@/components/ui/button";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 import { useAfes } from "@/lib/query/hooks/use-afes";
 import { useInterventions } from "@/lib/query/hooks/use-interventions";
@@ -31,7 +29,7 @@ type Decision = {
 
 /** Asset owner home — short header, clear position, attention only when needed. */
 export function SilvaDeskHome() {
-  const { user, activeProgram } = useCropfortAuth();
+  const { activeProgram } = useCropfortAuth();
   const enabled = Boolean(activeProgram?.id);
 
   const woQuery = useWorkOrders(enabled);
@@ -132,8 +130,7 @@ export function SilvaDeskHome() {
     };
   }, [settlementsQuery.data]);
 
-  const firstName = user.name.split(" ")[0] || user.name;
-  const estate = activeProgram?.name || "Your estate";
+  const estate = activeProgram?.name || "Estate";
   const approvalsAwaiting = decisions.length;
   const loading =
     afesQuery.isLoading ||
@@ -146,39 +143,33 @@ export function SilvaDeskHome() {
 
   const attentionCount = approvalsAwaiting + signOffs.length;
   const hasAttention = !loading && attentionCount > 0;
-  const hour = new Date().getHours();
-  const hello =
-    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="cf-page space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <p className="text-sm text-muted-foreground">{estate}</p>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            {hello}, {firstName}
-          </h1>
-        </div>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{estate}</h1>
         {!loading ? (
-          hasAttention ? (
-            <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              {attentionCount} to review
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-              All clear
-            </span>
-          )
+          <span
+            className={
+              hasAttention
+                ? "inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tabular-nums text-primary"
+                : "inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium tabular-nums text-muted-foreground"
+            }
+          >
+            {hasAttention ? (
+              attentionCount
+            ) : (
+              <>
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                0
+              </>
+            )}
+          </span>
         ) : null}
       </header>
 
       {hasAttention ? (
-        <AttentionPanel
-          title="Needs review"
-          actionHref={CROPFORT_ROUTES.approvals}
-          actionLabel="View all"
-        >
+        <AttentionPanel title="Queue" actionHref={CROPFORT_ROUTES.approvals} actionLabel="All">
           {decisions.slice(0, 5).map((row) => (
             <AttentionItem
               key={row.id}
@@ -187,19 +178,16 @@ export function SilvaDeskHome() {
               title={row.title}
               meta={row.meta}
               detail={row.detail}
-              cta="Review"
+              cta="Open"
             />
           ))}
           {signOffs.slice(0, 4).map((t) => (
             <AttentionItem
               key={t.id}
               href={`${CROPFORT_ROUTES.fieldTickets}?ticket=${t.id}`}
-              eyebrow="Field sign-off"
               title={t.code}
-              meta={[t.title || t.description || "Field ticket", t.block]
-                .filter(Boolean)
-                .join(" · ")}
-              cta="Review"
+              meta={[t.block, t.title].filter(Boolean).join(" · ") || undefined}
+              cta="Open"
             />
           ))}
         </AttentionPanel>
@@ -222,45 +210,14 @@ export function SilvaDeskHome() {
           href={CROPFORT_ROUTES.settlements}
           label="To settle"
           value={loading ? "—" : fmtEtb(settlementSnap.readyValue)}
-          hint={
-            settlementSnap.readyCount > 0
-              ? `${settlementSnap.readyCount} ready`
-              : undefined
-          }
           emphasis={!loading && settlementSnap.readyCount > 0}
         />
         <DeskMetric
           href={CROPFORT_ROUTES.settlements}
           label="Settled"
           value={loading ? "—" : fmtEtb(settlementSnap.settledValue)}
-          hint={
-            settlementSnap.settledCount > 0
-              ? `${settlementSnap.settledCount} paid`
-              : undefined
-          }
         />
       </section>
-
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" asChild>
-          <Link href={CROPFORT_ROUTES.approvals}>
-            Approvals
-            <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden />
-          </Link>
-        </Button>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={CROPFORT_ROUTES.settlements}>
-            Settlements
-            <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden />
-          </Link>
-        </Button>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={CROPFORT_ROUTES.reports}>
-            Reports
-            <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden />
-          </Link>
-        </Button>
-      </div>
     </div>
   );
 }

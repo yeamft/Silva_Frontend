@@ -73,26 +73,23 @@ export default function TimelineView() {
         }
         actions={
           <Button size="sm" asChild>
-            <Link href={CROPFORT_ROUTES.coreOperations}>Open Programme calendar</Link>
+            <Link href={CROPFORT_ROUTES.coreOperations}>Programme</Link>
           </Button>
         }
       />
 
-      <SectionCard title="Programme schedule">
+      <SectionCard title="Schedule">
         {loading && !plan ? (
-          <p className="text-sm text-muted-foreground">Loading plan…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : !plan ? (
           <p className="text-sm text-muted-foreground">
-            No programme plan yet.{" "}
+            No plan.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Open Programme
+              Programme
             </Link>
-            .
           </p>
         ) : acts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Include activities in Programme to see the schedule.
-          </p>
+          <p className="text-sm text-muted-foreground">No activities</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] border-collapse text-sm">
@@ -144,9 +141,7 @@ export default function TimelineView() {
                 </tr>
               </tbody>
             </table>
-            <p className="mt-3 text-xs text-muted-foreground">
-              P = Peak · A = Active · L = Light · click a cell to cycle intensity
-            </p>
+            <p className="mt-3 text-xs text-muted-foreground">P · A · L</p>
           </div>
         )}
       </SectionCard>

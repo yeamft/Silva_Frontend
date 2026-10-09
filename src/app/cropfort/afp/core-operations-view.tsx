@@ -508,14 +508,12 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
           plan ? (
             <>
               <StatusBadge status={plan.status} label={(plan.statusRaw || plan.status).replace(/_/g, " ")} />
-              <span className="text-xs text-muted-foreground">
-                Farm area: {plan.farmName}
-              </span>
+              <span className="text-xs text-muted-foreground">{plan.farmName}</span>
               <span className="text-xs text-muted-foreground">
                 {plan.planningCycleLabel || plan.budgetYearLabel}
               </span>
               <span className="text-xs font-medium tabular-nums">
-                Budget: {fmtEtb(completion.budgetEtb)}
+                {fmtEtb(completion.budgetEtb)}
               </span>
             </>
           ) : null
@@ -799,7 +797,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
             ) : (
               <ChevronRight className="h-4 w-4" />
             )}
-            More details
+            More
           </button>
 
           {moreSetup && plan ? (
@@ -890,7 +888,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
           action={
             canEdit && filteredActivities.length > 0 ? (
               <Button size="sm" variant="outline" onClick={selectFiltered}>
-                Select all filtered
+                Select filtered
               </Button>
             ) : null
           }
@@ -1589,39 +1587,36 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
       {/* ——— REVIEW ——— */}
       {step === "review" && plan ? (
         <div className="space-y-4">
-          <SectionCard title="Review & submit">
+          <SectionCard title="Review">
             <div className="mb-4 grid gap-2 sm:grid-cols-2">
               <div className="rounded-md bg-muted/40 px-3 py-2 text-sm">
-                <p className="text-xs text-muted-foreground">Total budget</p>
+                <p className="text-xs text-muted-foreground">Budget</p>
                 <p className="text-lg font-medium tabular-nums">
                   {fmtEtb(completion.budgetEtb)}
                 </p>
               </div>
               <div className="rounded-md bg-muted/40 px-3 py-2 text-sm">
-                <p className="text-xs text-muted-foreground">Approval route</p>
+                <p className="text-xs text-muted-foreground">Band</p>
                 <p className="font-medium">
-                  Band {band}
-                  {bandAutoApproves(band)
-                    ? " — auto-approve into AFPs"
-                    : " — Silva approval required"}
+                  {band}
+                  {bandAutoApproves(band) ? " · auto" : " · approval"}
                 </p>
               </div>
             </div>
 
             {canApprovePlan ? (
               <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-                This programme plan is awaiting your decision. Open{" "}
+                Pending decision —{" "}
                 <Link href={CROPFORT_ROUTES.approvals} className="font-medium underline-offset-4 hover:underline">
                   Approvals
-                </Link>{" "}
-                to approve or return it. Silva / asset owners cannot edit plan lines.
+                </Link>
               </div>
             ) : null}
 
             {issues.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
-                Ready to finalize and submit.
+                Ready
               </div>
             ) : (
               <ul className="space-y-2">
@@ -1877,10 +1872,8 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
             <DialogTitle>Submit to AFPs</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Plan total {fmtEtb(completion.budgetEtb)}. Band {band}
-            {bandAutoApproves(band)
-              ? " will auto-approve."
-              : " will go to Silva for approval."}
+            {fmtEtb(completion.budgetEtb)} · Band {band}
+            {bandAutoApproves(band) ? " · auto" : " · approval"}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitOpen(false)}>

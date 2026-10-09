@@ -79,10 +79,10 @@ function weekNums(week: string): number[] {
 }
 
 const COLUMNS: { id: WoStatus; label: string; hint: string; dot: string; wash: string }[] = [
-  { id: "draft", label: "Queued", hint: "Ready to issue", dot: "bg-muted-foreground", wash: "bg-muted/50" },
-  { id: "issued", label: "Ready", hint: "Issued to crew", dot: "bg-info", wash: "bg-info/[0.06]" },
-  { id: "in_progress", label: "In field", hint: "Work underway", dot: "bg-primary", wash: "bg-primary/[0.05]" },
-  { id: "complete", label: "Done", hint: "Tickets in", dot: "bg-success", wash: "bg-success/[0.06]" },
+  { id: "draft", label: "Queued", hint: "", dot: "bg-muted-foreground", wash: "bg-muted/50" },
+  { id: "issued", label: "Ready", hint: "", dot: "bg-info", wash: "bg-info/[0.06]" },
+  { id: "in_progress", label: "In field", hint: "", dot: "bg-primary", wash: "bg-primary/[0.05]" },
+  { id: "complete", label: "Done", hint: "", dot: "bg-success", wash: "bg-success/[0.06]" },
 ];
 
 function attentionLabel(flag: Attention) {
@@ -93,25 +93,25 @@ function attentionLabel(flag: Attention) {
 
 function waitingOnLabel(tickets: FieldTicket[]) {
   const open = tickets.filter((t) => ticketWaitingOn(t.status));
-  if (!tickets.length) return "No tickets yet";
-  if (!open.length) return "All tickets closed";
+  if (!tickets.length) return "No tickets";
+  if (!open.length) return "Closed";
   const vendor = open.filter((t) => ticketWaitingOn(t.status) === "vendor").length;
   const site = open.filter((t) => ticketWaitingOn(t.status) === "site_owner").length;
   const asset = open.filter((t) => ticketWaitingOn(t.status) === "asset_owner").length;
   return [
     vendor ? `${vendor} vendor` : null,
-    site ? `${site} site owner` : null,
-    asset ? `${asset} asset owner` : null,
+    site ? `${site} site` : null,
+    asset ? `${asset} asset` : null,
   ]
     .filter(Boolean)
     .join(" · ");
 }
 
 function waitingOnSentence(tickets: FieldTicket[]) {
-  if (!tickets.length) return "No tickets yet";
+  if (!tickets.length) return "No tickets";
   const hold = waitingOnLabel(tickets);
-  if (hold === "All tickets closed" || hold.startsWith("No")) return hold;
-  return hold ? `Waiting on ${hold}` : "All tickets closed";
+  if (hold === "Closed" || hold.startsWith("No")) return hold;
+  return hold || "Closed";
 }
 
 function WorkOrderCard({
@@ -302,9 +302,9 @@ export default function WorkOrdersView() {
 
   const filters: { id: QuickFilter; label: string }[] = [
     { id: "all", label: "All" },
-    { id: "attention", label: "Needs me" },
-    { id: "week", label: "This week" },
-    { id: "crew", label: "My crew" },
+    { id: "attention", label: "Attention" },
+    { id: "week", label: "Week" },
+    { id: "crew", label: "Crew" },
   ];
 
   return (
@@ -315,7 +315,7 @@ export default function WorkOrdersView() {
         </p>
       ) : null}
       {woQuery.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading work orders…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       ) : null}
       <OpsDeskHeader
         eyebrow={activeProgram?.name || "Execution"}
@@ -328,28 +328,27 @@ export default function WorkOrdersView() {
         actions={
           <Button size="sm" onClick={() => setIssueOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
-            Issue WO
+            Issue
           </Button>
         }
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard label="Open" value={String(orders.filter((o) => o.status !== "complete").length)} icon={ClipboardList} footnote="Not yet done" />
-        <StatCard label="In field" value={String(orders.filter((o) => o.status === "in_progress").length)} icon={Sparkles} emphasis footnote="Crews working now" />
+        <StatCard label="Open" value={String(orders.filter((o) => o.status !== "complete").length)} icon={ClipboardList} />
+        <StatCard label="In field" value={String(orders.filter((o) => o.status === "in_progress").length)} icon={Sparkles} emphasis />
         <StatCard
-          label="Needs attention"
+          label="Attention"
           value={String(orders.filter((o) => o.attention !== "none").length)}
           icon={AlertTriangle}
           intent={orders.some((o) => o.attention !== "none") ? "negative" : "positive"}
-          footnote="Overdue or insurance"
         />
-        <StatCard label="Done" value={String(orders.filter((o) => o.status === "complete").length)} icon={CheckCircle2} footnote="Closed this season" />
+        <StatCard label="Done" value={String(orders.filter((o) => o.status === "complete").length)} icon={CheckCircle2} />
       </div>
 
       <OpsDeskControlPanel
         search={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search activity, block, crew…"
+        searchPlaceholder="Search…"
         view={view === "list" ? "list" : "board"}
         onViewChange={(v) => setView(v === "list" ? "list" : "board")}
         filters={
@@ -371,13 +370,15 @@ export default function WorkOrdersView() {
                   <span className={cn("h-2 w-2 rounded-full", col.dot)} aria-hidden />
                   <div className="min-w-0">
                     <h2 className="text-sm font-semibold leading-none">{col.label}</h2>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{col.hint}</p>
+                    {col.hint ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">{col.hint}</p>
+                    ) : null}
                   </div>
                   <span className="cf-numeric ml-auto rounded-md bg-background/80 px-1.5 py-0.5 text-xs font-semibold tabular-nums">{items.length}</span>
                 </header>
                 <ul className="flex min-h-[12rem] flex-1 flex-col gap-2 p-1">
                   {items.length === 0 ? (
-                    <li className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border/80 px-3 py-8 text-center text-xs text-muted-foreground">Nothing here</li>
+                    <li className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border/80 px-3 py-8 text-center text-xs text-muted-foreground">None</li>
                   ) : (
                     items.map((wo) => (
                       <li key={wo.id}>
@@ -400,7 +401,7 @@ export default function WorkOrdersView() {
         <OpsDeskList>
           <ul>
             {filtered.length === 0 ? (
-              <li className="px-4 py-10 text-center text-sm text-muted-foreground">No work orders match.</li>
+              <li className="px-4 py-10 text-center text-sm text-muted-foreground">None</li>
             ) : (
               filtered.map((wo) => (
                 <li key={wo.id} className="border-b border-border last:border-b-0">
@@ -465,7 +466,7 @@ export default function WorkOrdersView() {
                   <ul className="space-y-2">
                     {tickets.filter((t) => t.workOrderId === selected.id).length === 0 ? (
                       <li className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-                        No tickets yet — assign a specific task to a vendor.
+                        No tickets
                       </li>
                     ) : (
                       tickets
@@ -492,23 +493,23 @@ export default function WorkOrdersView() {
                 <div className="flex flex-col gap-2">
                   {WO_NEXT[selected.status] ? <Button onClick={() => advance(selected.id)}>{WO_NEXT[selected.status]?.label}</Button> : null}
                   <Button variant="outline" asChild>
-                    <Link href={`${CROPFORT_ROUTES.fieldTickets}?wo=${selected.id}`}>Assign task ticket</Link>
+                    <Link href={`${CROPFORT_ROUTES.fieldTickets}?wo=${selected.id}`}>Assign ticket</Link>
                   </Button>
                 </div>
                 <OpsDeskChatter
-                  title="Status trail"
+                  title="History"
                   events={[
                     {
                       id: `${selected.id}-created`,
-                      title: "Work order issued",
+                      title: "Issued",
                       subtitle: `${selected.assignee} · ${selected.vendor}`,
                       at: selected.week,
                     },
                     {
                       id: `${selected.id}-status`,
-                      title: `Status: ${selected.status.replace(/_/g, " ")}`,
+                      title: selected.status.replace(/_/g, " "),
                       subtitle: attentionLabel(selected.attention) || undefined,
-                      at: `${selected.progress}% complete`,
+                      at: `${selected.progress}%`,
                     },
                     ...tickets
                       .filter((t) => t.workOrderId === selected.id)
@@ -529,19 +530,16 @@ export default function WorkOrdersView() {
       <Dialog open={issueOpen} onOpenChange={setIssueOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Issue a work order</DialogTitle>
+            <DialogTitle>Issue WO</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Creates a draft work order in the active programme, then issues it to the field.
-          </p>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="wo-title">Activity / title</Label>
+              <Label htmlFor="wo-title">Title</Label>
               <Input
                 id="wo-title"
                 value={issueTitle}
                 onChange={(e) => setIssueTitle(e.target.value)}
-                placeholder="e.g. Selective pruning — SH-01"
+                placeholder="Title"
               />
             </div>
             <div className="space-y-1.5">
