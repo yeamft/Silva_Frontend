@@ -6,6 +6,7 @@ import {
   Libre_Franklin,
   Manrope,
   Nunito_Sans,
+  Plus_Jakarta_Sans,
   Source_Sans_3,
   Space_Grotesk,
 } from "next/font/google";
@@ -17,6 +18,13 @@ const dmSans = DM_Sans({
   display: "swap",
   variable: "--font-dm-sans",
   weight: ["400", "500", "600", "700"],
+});
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-plus-jakarta",
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 const sourceSans = Source_Sans_3({
@@ -70,6 +78,7 @@ const fraunces = Fraunces({
 
 const fontVariables = [
   dmSans.variable,
+  plusJakartaSans.variable,
   sourceSans.variable,
   ibmPlex.variable,
   nunitoSans.variable,

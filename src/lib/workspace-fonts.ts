@@ -4,6 +4,7 @@
  */
 
 export type WorkspaceFontId =
+  | "plus-jakarta"
   | "dm-sans"
   | "source-sans"
   | "ibm-plex"
@@ -24,6 +25,12 @@ export type WorkspaceFontDef = {
 };
 
 export const WORKSPACE_FONTS: WorkspaceFontDef[] = [
+  {
+    id: "plus-jakarta",
+    label: "Plus Jakarta Sans",
+    description: "Default — modern, clear operational UI",
+    cssVar: "--font-plus-jakarta",
+  },
   {
     id: "dm-sans",
     label: "DM Sans",
@@ -74,7 +81,7 @@ export const WORKSPACE_FONTS: WorkspaceFontDef[] = [
   },
 ];
 
-export const DEFAULT_WORKSPACE_FONT: WorkspaceFontId = "dm-sans";
+export const DEFAULT_WORKSPACE_FONT: WorkspaceFontId = "plus-jakarta";
 
 export function getWorkspaceFont(id: WorkspaceFontId | string | undefined | null): WorkspaceFontDef {
   return WORKSPACE_FONTS.find((f) => f.id === id) ?? WORKSPACE_FONTS[0];

@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["var(--font-sans)", "var(--font-dm-sans)", "ui-sans-serif", "sans-serif"],
-        display: ["var(--font-fraunces)", "Georgia", "serif"],
+        sans: ["var(--font-sans)", "var(--font-plus-jakarta)", "ui-sans-serif", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-plus-jakarta)", "ui-sans-serif", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
