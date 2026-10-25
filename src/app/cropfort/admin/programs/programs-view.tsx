@@ -7,7 +7,7 @@ import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
-import { PageContainer, PageHeader, SectionCard, StatusSummaryCards } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards, PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -142,9 +142,8 @@ export default function ProgramsPage() {
         }
       />
 
-      <StatusSummaryCards
+      <CompactSummaryCards
         label="Programs summary"
-        columns={3}
         items={[
           {
             id: "total",
@@ -152,7 +151,6 @@ export default function ProgramsPage() {
             value: String(rows.length),
             icon: Layers3,
             footnote: "All programs",
-            emphasis: true,
           },
           {
             id: "active",
@@ -160,7 +158,6 @@ export default function ProgramsPage() {
             value: String(rows.filter((p) => p.status === "active").length),
             icon: CheckCircle2,
             footnote: "Currently available",
-            intent: "positive",
           },
         ]}
       />

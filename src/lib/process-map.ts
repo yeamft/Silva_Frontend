@@ -45,7 +45,7 @@ export const PROCESS_MAP_STEPS: ProcessMapStep[] = [
     id: "0",
     phase: "0",
     desk: "spx",
-    title: "Establishment programme build",
+    title: "Establishment Core Operations plan",
     summary:
       "SPX builds baseline, first annual plan/budget, standards annex, KPIs, approval thresholds and dependency register. Silva approves each deliverable (deemed approved if silent). Interim: every spend to Silva; no KPI effect until close.",
     output: "Approved establishment pack · interim rules",
@@ -58,9 +58,9 @@ export const PROCESS_MAP_STEPS: ProcessMapStep[] = [
     desk: "spx",
     title: "Farm assessment",
     summary:
-      "Full assessment of agronomic condition, infrastructure, labour and inputs. Full assessment in establishment; update before each later programme year.",
+      "Full assessment of agronomic condition, infrastructure, labour and inputs. Full assessment in establishment; update before each later Core Operations year.",
     output: "Farm status report",
-    timing: "Establishment; update before each programme year",
+    timing: "Establishment; update before each Core Operations year",
     href: CROPFORT_ROUTES.agreementLifecycle,
   },
   {
@@ -89,7 +89,7 @@ export const PROCESS_MAP_STEPS: ProcessMapStep[] = [
     id: 4,
     phase: "A",
     desk: "spx",
-    title: "Programme standards annex (Schedule 5)",
+    title: "Core Operations standards annex (Schedule 5)",
     summary:
       "Validation criteria (±10% qty, quality per manual, labour vs attendance, inputs within issued). Platform access & escalation / mandate-exclusion rules. Acknowledged by Provider and Chaka Buna.",
     output: "Standards annex",
@@ -263,7 +263,7 @@ export const PROCESS_MAP_LOOPS: {
 ];
 
 export const PROCESS_MAP_DESK_LABELS: Record<ProcessMapDesk, string> = {
-  spx: "SPX — programme manager",
+  spx: "SPX — Core Operations manager",
   silva: "Silva — owner / approver",
   chaka_buna: "Chaka Buna — farm company / employer",
   rfsp: "Resident Field Supervision Provider",

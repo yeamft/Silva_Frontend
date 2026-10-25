@@ -12,7 +12,7 @@ export default function LegacyAfpRedirect() {
   }, [router]);
   return (
     <div className="cf-page">
-      <p className="text-sm text-muted-foreground">Opening Programme Plans…</p>
+      <p className="text-sm text-muted-foreground">Opening Core Operations plans…</p>
     </div>
   );
 }

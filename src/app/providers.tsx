@@ -56,22 +56,18 @@ function applyDocumentTheme(
 
 const ThemeApplier = () => {
   const pathname = usePathname();
-  const dark = useThemeStore((s) => s.dark);
-  const workspaceColor = useThemeStore((s) => s.workspaceColor);
   const workspaceFont = useThemeStore((s) => s.workspaceFont);
   const syncForUser = useThemeStore((s) => s.syncForUser);
   const clearActiveUser = useThemeStore((s) => s.clearActiveUser);
   const authUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const locked = isPublicThemeLockedPath(pathname);
-
   useEffect(() => {
     if (isAuthenticated && authUser) {
       syncForUser(authUser);
     } else if (!isAuthenticated) {
       clearActiveUser();
     }
-  }, [isAuthenticated, authUser?.id, authUser?.role, authUser?.backendRole, syncForUser, clearActiveUser]);
+  }, [isAuthenticated, authUser, syncForUser, clearActiveUser]);
 
   useEffect(() => {
     const apply = () => {
@@ -81,8 +77,8 @@ const ThemeApplier = () => {
       }
       const s = useThemeStore.getState();
       applyDocumentTheme(
-        Boolean(s.dark),
-        s.workspaceColor ?? DEFAULT_WORKSPACE_COLOR,
+        false,
+        DEFAULT_WORKSPACE_COLOR,
         s.workspaceFont ?? DEFAULT_WORKSPACE_FONT,
       );
     };
@@ -97,7 +93,7 @@ const ThemeApplier = () => {
     }
 
     return unsub;
-  }, [dark, workspaceColor, workspaceFont, pathname, locked, authUser?.id]);
+  }, [workspaceFont, pathname]);
 
   return null;
 };

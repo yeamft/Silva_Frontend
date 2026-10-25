@@ -74,7 +74,7 @@ export default function ScenariosView() {
   const onApply = (id: string) => {
     const row = scenarios.find((s) => s.id === id);
     if (!row) return;
-    if (!window.confirm(`Replace the live programme plan with “${row.name}”?`)) return;
+    if (!window.confirm(`Replace the live Core Operations plan with “${row.name}”?`)) return;
     replacePlan(structuredClone(row.snapshot));
     toast.success(`Applied “${row.name}”`);
   };
@@ -101,7 +101,7 @@ export default function ScenariosView() {
         }
         actions={
           <Button size="sm" variant="outline" asChild>
-            <Link href={CROPFORT_ROUTES.coreOperations}>Programme plan</Link>
+            <Link href={CROPFORT_ROUTES.coreOperations}>Core Operations plan</Link>
           </Button>
         }
       />

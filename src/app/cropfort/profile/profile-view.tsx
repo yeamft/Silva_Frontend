@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Check, KeyRound, Languages, MonitorSmartphone, Moon, Save, ShieldCheck, Sun, Type } from "lucide-react";
+import { Bell, Check, KeyRound, Languages, MonitorSmartphone, Save, ShieldCheck, Type } from "lucide-react";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { CROPFORT_ROLE_LABELS } from "@/types/cropfort";
 import { useThemeStore } from "@/store/themeStore";
-import { WORKSPACE_COLORS } from "@/lib/workspace-themes";
 import { WORKSPACE_FONTS } from "@/lib/workspace-fonts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,10 +18,6 @@ import { cn } from "@/lib/utils";
 
 export default function ProfilePage() {
   const { user } = useCropfortAuth();
-  const dark = useThemeStore((s) => s.dark);
-  const toggleTheme = useThemeStore((s) => s.toggle);
-  const workspaceColor = useThemeStore((s) => s.workspaceColor);
-  const setWorkspaceColor = useThemeStore((s) => s.setWorkspaceColor);
   const workspaceFont = useThemeStore((s) => s.workspaceFont);
   const setWorkspaceFont = useThemeStore((s) => s.setWorkspaceFont);
 
@@ -147,63 +142,12 @@ export default function ProfilePage() {
 
           <SectionCard title="Preferences">
             <div className="space-y-5">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2.5">
-                  {dark ? (
-                    <Moon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  ) : (
-                    <Sun className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  )}
-                  <span className="text-sm">Dark mode</span>
-                </div>
-                <Switch
-                  id="pref-theme"
-                  checked={dark}
-                  onCheckedChange={() => toggleTheme()}
-                  aria-label="Toggle dark mode"
-                />
-              </div>
-
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm">Workspace color</span>
-                  <span className="text-xs text-muted-foreground">
-                    {WORKSPACE_COLORS.find((c) => c.id === workspaceColor)?.label}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {WORKSPACE_COLORS.map((color) => {
-                    const selected = color.id === workspaceColor;
-                    return (
-                      <button
-                        key={color.id}
-                        type="button"
-                        onClick={() => setWorkspaceColor(color.id)}
-                        className={cn(
-                          "flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs font-medium transition-colors",
-                          selected
-                            ? "border-primary bg-accent text-accent-foreground"
-                            : "border-border text-muted-foreground hover:bg-muted",
-                        )}
-                        aria-pressed={selected}
-                        title={color.description}
-                      >
-                        <span
-                          className="h-3 w-3 rounded-full"
-                          style={{
-                            backgroundColor: dark ? color.dark.swatch : color.light.swatch,
-                          }}
-                          aria-hidden
-                        />
-                        {color.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {WORKSPACE_COLORS.find((c) => c.id === workspaceColor)?.description ??
-                    "Changes primary actions, navigation, and the workspace background."}
-                </p>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm">Workspace theme</span>
+                <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="h-3 w-3 rounded-full bg-[#14A800]" aria-hidden />
+                  Light Green
+                </span>
               </div>
 
               <div className="space-y-2.5">

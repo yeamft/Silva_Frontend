@@ -113,18 +113,27 @@ export function CatalogModuleView({
       col.accessor("name", {
         header: "Name",
         cell: (info) => (
-          <div>
-            <p className="font-medium">{info.getValue()}</p>
+          <div className="min-w-0 max-w-[32rem]">
+            <p className="truncate font-medium" title={info.getValue()}>
+              {info.getValue()}
+            </p>
             {info.row.original.description ? (
-              <p className="text-xs text-muted-foreground">{info.row.original.description}</p>
+              <p
+                className="line-clamp-1 text-xs leading-5 text-muted-foreground"
+                title={info.row.original.description}
+              >
+                {info.row.original.description}
+              </p>
             ) : null}
           </div>
         ),
+        size: 320,
         filterFn: "includesString",
       }),
       col.accessor("defaultUnit", {
         header: "Default unit",
         cell: (info) => <span className="text-muted-foreground">{info.getValue()}</span>,
+        size: 140,
         enableSorting: true,
       }),
       ...(showStock
@@ -132,6 +141,7 @@ export function CatalogModuleView({
             col.accessor((r) => r.stockQuantity ?? 0, {
               id: "stockQuantity",
               header: "Stock",
+              size: 110,
               meta: { align: "right" as const },
               cell: (info) => (
                 <span className="cf-numeric">{info.getValue()}</span>
@@ -144,6 +154,7 @@ export function CatalogModuleView({
         cell: (info) => (
           <StatusBadge status={info.getValue() ? "active" : "inactive"} />
         ),
+        size: 120,
         filterFn: (row, _id, value) => row.original.isActive === value,
         enableSorting: true,
       }),
@@ -237,6 +248,9 @@ export function CatalogModuleView({
 
   const activeCount = rows.filter((r) => r.isActive).length;
   const filteredCount = table.getFilteredRowModel().rows.length;
+  const exportIsActive =
+    activeFilter === "active" ? true : activeFilter === "inactive" ? false : undefined;
+  const activeFilterCount = Number(Boolean(search.trim())) + Number(activeFilter !== "all");
 
   if (!canView) return <NotAuthorized title={title} />;
 
@@ -276,19 +290,13 @@ export function CatalogModuleView({
     <PageContainer>
       <PageHeader
         title={title}
+        description={description}
         actions={
           canEdit ? (
-            <>
-              <CatalogExportButton resource={resource} search={debounced} />
-              <Button size="sm" variant="ghost" onClick={() => setImportOpen(true)}>
-                <Upload className="h-4 w-4" aria-hidden />
-                Import
-              </Button>
-              <Button size="sm" onClick={openCreate}>
-                <Plus className="h-4 w-4" aria-hidden />
-                {newLabel}
-              </Button>
-            </>
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4" aria-hidden />
+              {newLabel}
+            </Button>
           ) : null
         }
       />
@@ -304,7 +312,27 @@ export function CatalogModuleView({
           <TableToolbar
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search name or unit"
+            searchPlaceholder="Search name, unit, or description"
+            activeFilterCount={activeFilterCount}
+            onClearFilters={() => {
+              setSearch("");
+              setActiveFilter("all");
+            }}
+            actions={
+              canEdit ? (
+                <div className="flex items-center gap-2">
+                  <CatalogExportButton
+                    resource={resource}
+                    search={debounced}
+                    isActive={exportIsActive}
+                  />
+                  <Button size="sm" variant="ghost" onClick={() => setImportOpen(true)}>
+                    <Upload className="h-4 w-4" aria-hidden />
+                    Import
+                  </Button>
+                </div>
+              ) : null
+            }
             filters={
               <Select
                 value={activeFilter}
@@ -325,8 +353,12 @@ export function CatalogModuleView({
         <DataTable
           table={table}
           loading={loading}
-          emptyTitle="No records yet"
-          emptyDescription="Create a record or import a spreadsheet."
+          emptyTitle={rows.length === 0 ? "No records yet" : "No matching records"}
+          emptyDescription={
+            rows.length === 0
+              ? "Create a record or import a spreadsheet."
+              : "Try changing or clearing the search or status filter."
+          }
         />
       </SectionCard>
 

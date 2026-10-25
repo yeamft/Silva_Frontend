@@ -296,7 +296,7 @@ const PROJECTS: Project[] = [
   {
     id: "prj-3",
     code: "PRJ-03",
-    title: "Shade thinning programme",
+    title: "Shade thinning — Core Operations",
     blockId: "blk-sh07",
     vendor: "RFSP",
     budgetEtb: 28400,

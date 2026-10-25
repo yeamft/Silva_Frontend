@@ -25,6 +25,7 @@ export function CatalogExportButton({
       size="sm"
       variant="ghost"
       disabled={busy}
+      aria-busy={busy}
       onClick={async () => {
         setBusy(true);
         try {

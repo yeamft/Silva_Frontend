@@ -178,7 +178,7 @@ export function buildWorkspaceInbox(input: WorkspaceInboxInput): WorkspaceInboxI
     push(items, {
       id: "wo-attention",
       title: "Work orders at risk",
-      detail: overdueWos.slice(0, 2).map((w) => w.code).join(" · ") || "Programme attention",
+      detail: overdueWos.slice(0, 2).map((w) => w.code).join(" · ") || "Core Operations attention",
       href: CROPFORT_ROUTES.workOrders,
       tone: "overdue",
       count: overdueWos.length,

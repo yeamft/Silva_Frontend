@@ -73,7 +73,7 @@ export default function TimelineView() {
         }
         actions={
           <Button size="sm" asChild>
-            <Link href={CROPFORT_ROUTES.coreOperations}>Programme</Link>
+            <Link href={CROPFORT_ROUTES.coreOperations}>Core Operations</Link>
           </Button>
         }
       />
@@ -85,7 +85,7 @@ export default function TimelineView() {
           <p className="text-sm text-muted-foreground">
             No plan.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Programme
+              Core Operations
             </Link>
           </p>
         ) : acts.length === 0 ? (

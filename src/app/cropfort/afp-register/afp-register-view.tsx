@@ -78,7 +78,7 @@ export default function AfpRegisterView() {
         ]}
         actions={
           <Button size="sm" asChild>
-            <Link href={CROPFORT_ROUTES.programmePlans}>Programme Plans</Link>
+            <Link href={CROPFORT_ROUTES.programmePlans}>Core Operations plans</Link>
           </Button>
         }
       />
@@ -90,11 +90,11 @@ export default function AfpRegisterView() {
           </div>
         ) : plansQuery.isError ? (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-            Could not load programme plans.
+            Could not load Core Operations plans.
           </div>
         ) : rows.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-            No AFPs yet. Submit a programme plan to promote here.
+            No AFPs yet. Submit a Core Operations plan to promote here.
           </div>
         ) : (
           <ul className="divide-y divide-border">

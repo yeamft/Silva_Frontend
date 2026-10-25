@@ -10,7 +10,6 @@ import {
   Wrench,
   WalletCards,
 } from "lucide-react";
-import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 import { NotificationBell } from "@/components/navigation/notification-bell";
 import { UserMenu } from "@/components/navigation/user-menu";
@@ -20,10 +19,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 import { cn } from "@/lib/utils";
-
-const ThemeToggle = dynamic(() => import("@/components/ThemeToggle"), {
-  ssr: false,
-});
 
 type NavItem = {
   href: string;
@@ -100,7 +95,7 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
         Skip to main content
       </a>
 
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+      <aside className="relative z-20 hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[4px_0_16px_-6px_rgba(15,23,20,0.16)] md:flex">
         <div className="border-b border-sidebar-border px-4 py-4">
           <p className="flex items-center gap-2 text-sm font-semibold tracking-tight text-sidebar-foreground">
             <Wrench className="h-4 w-4 text-sidebar-primary" aria-hidden />
@@ -119,7 +114,7 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "relative flex min-h-10 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-[color,background-color,transform] duration-150 ease-out hover:translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:transform-none motion-reduce:transition-none",
                   active
                     ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
                     : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
@@ -147,7 +142,7 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-border bg-card supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
+        <header className="sticky top-0 z-30 border-b border-border bg-card shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
           <div className="flex h-14 items-center gap-2 px-3 sm:px-5">
             <div className="min-w-0 flex-1 md:hidden">
               <p className="truncate text-sm font-semibold tracking-tight">
@@ -160,7 +155,6 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
                 {activeProgram?.name || "Cropfort"}
               </p>
             </div>
-            <ThemeToggle />
             <NotificationBell />
             <UserMenu />
           </div>
@@ -188,7 +182,7 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex flex-col items-center gap-0.5 px-1 py-2.5 text-[11px] font-medium transition-colors",
+                      "flex flex-col items-center gap-0.5 px-1 py-2.5 text-[11px] font-medium transition-[color,background-color] duration-150 ease-out hover:bg-sidebar-accent/40 motion-reduce:transition-none",
                       active
                         ? "text-sidebar-primary"
                         : "text-sidebar-foreground/60 hover:text-sidebar-foreground",

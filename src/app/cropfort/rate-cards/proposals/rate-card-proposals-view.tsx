@@ -250,33 +250,34 @@ export default function RateCardProposalsListView({
         }
         flush
       >
-        <div className="overflow-x-auto">
-          <Table>
+        <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
+          <Table aria-label={archiveMode ? "Archived rate cards" : "Rate cards"} className="min-w-[1240px]">
             <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Activity</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead>UoM</TableHead>
-                <TableHead className="text-right">Norm</TableHead>
-                <TableHead className="text-right">Approved</TableHead>
-                <TableHead className="text-right">Fallback</TableHead>
-                <TableHead>Source / basis</TableHead>
-                <TableHead>Effective</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Code</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Activity</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Scope</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Unit</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-right text-[10px] font-semibold uppercase tracking-wide">Norm</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-right text-[10px] font-semibold uppercase tracking-wide">Proposed rate</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-right text-[10px] font-semibold uppercase tracking-wide">Fallback</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Source / basis</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Effective</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Status</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-right text-[10px] font-semibold uppercase tracking-wide">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {listLoading && rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-sm text-muted-foreground">
-                    Loading…
+                  <TableCell colSpan={11} className="h-24 text-center text-sm text-muted-foreground">
+                    Loading rate cards…
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={11} className="py-12 text-center">
+                    <p className="text-sm font-medium text-foreground">
                     {pendingReview
                       ? "No rate cards pending review"
                       : approvedRegister
@@ -284,45 +285,85 @@ export default function RateCardProposalsListView({
                         : isAssetOwner
                           ? "No rate cards for this filter"
                           : "No rate cards — create one from a locked benchmark"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">Adjust the filters or open a benchmark survey to create a rate card.</p>
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-mono text-xs">
-                      {row.activity?.code ?? "—"}
+                  <TableRow
+                    key={row.id}
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`Open rate card for ${row.activity?.name || "activity"}`}
+                    className="cursor-pointer odd:bg-background even:bg-muted/20 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+                      router.push(`${CROPFORT_ROUTES.rateCardProposals}/${row.id}`);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(`${CROPFORT_ROUTES.rateCardProposals}/${row.id}`);
+                      }
+                    }}
+                  >
+                    <TableCell className="min-w-[115px] py-3.5">
+                      <span className="inline-flex rounded-md border border-border bg-muted/50 px-2 py-1 font-mono text-[11px] font-medium text-muted-foreground">
+                        {row.activity?.code ?? "—"}
+                      </span>
                     </TableCell>
-                    <TableCell className="font-medium">
-                      {row.activity?.name ?? row.activityId}
-                      {row.flagged ? (
-                        <div className="mt-0.5">
+                    <TableCell className="h-auto min-w-[190px] py-3.5">
+                      <p className="font-semibold leading-snug text-foreground">
+                        {row.activity?.name ?? row.activityId}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+                          {row.kind}
+                        </span>
+                        {row.flagged ? (
                           <StatusBadge status="flagged" label="Flagged" />
-                        </div>
-                      ) : null}
+                        ) : null}
+                        {row.activity?.code ? (
+                          <span className="font-mono text-[10px] text-muted-foreground">{row.activity.code}</span>
+                        ) : null}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="min-w-[130px] text-sm text-muted-foreground">
                       {row.block?.name || row.farmArea?.name || "Program"}
                     </TableCell>
-                    <TableCell className="text-sm">{row.activity?.uom ?? "—"}</TableCell>
-                    <TableCell className="cf-numeric text-right tabular-nums">
+                    <TableCell className="min-w-[70px]">
+                      <span className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium">
+                        {row.activity?.uom ?? "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="cf-numeric min-w-[85px] text-right tabular-nums">
                       {row.norm ?? "—"}
                     </TableCell>
-                    <TableCell className="cf-numeric text-right tabular-nums font-medium">
-                      {fmtEtb(row.proposedRate)}
+                    <TableCell className="cf-numeric min-w-[150px] text-right tabular-nums">
+                      <span className="font-semibold text-foreground">{fmtEtb(row.proposedRate)}</span>
+                      {row.recommendedRate != null ? (
+                        <span className="mt-1 block text-[10px] text-muted-foreground">
+                          Benchmark {fmtEtb(row.recommendedRate)}
+                        </span>
+                      ) : null}
                     </TableCell>
-                    <TableCell className="cf-numeric text-right tabular-nums">
+                    <TableCell className="cf-numeric min-w-[135px] text-right tabular-nums text-muted-foreground">
                       {fmtEtb(row.fallbackRate)}
                     </TableCell>
-                    <TableCell className="max-w-[180px] truncate text-xs text-muted-foreground">
-                      {row.sourceBasis || "—"}
+                    <TableCell className="max-w-[220px] py-3 text-xs text-muted-foreground">
+                      <span className="line-clamp-2" title={row.sourceBasis || undefined}>
+                        {row.sourceBasis || "No source recorded"}
+                      </span>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    <TableCell className="min-w-[140px] whitespace-nowrap text-xs text-muted-foreground">
                       {fmtAvail(row.availableFrom, row.availableTo)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="min-w-[110px]">
                       <StatusBadge status={row.status} />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="min-w-[110px] text-right">
                       <div className="inline-flex items-center gap-1">
                         <Button
                           variant={row.status === "submitted" && isAssetOwner ? "default" : "ghost"}
@@ -337,7 +378,7 @@ export default function RateCardProposalsListView({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          aria-label="Audit history"
+                          aria-label={`Audit history for ${row.activity?.name || "rate card"}`}
                           onClick={() => {
                             setAuditId(row.id);
                             setAuditLabel(row.activity?.name || row.id);

@@ -193,7 +193,7 @@ export const ROLE_DASHBOARD_COPY: Record<CropfortRole, RoleDashboardCopy> = {
   farm_owner: {
     eyebrow: "Ownership",
     title: "Estate performance",
-    description: "Budget, actuals, and variance across the programme — released and approved records only.",
+    description: "Budget, actuals, and variance across Core Operations — released and approved records only.",
     primaryAction: "Download report",
   },
   spx_platform_admin: {
@@ -235,7 +235,7 @@ export interface AttentionItem {
 
 export const PROGRAMME_SUMMARY = {
   code: "AFP-2026-SHECHA",
-  name: "Shecha Estate · Annual Farm Programme 2026",
+  name: "Shecha Estate · Core Operations 2026",
   hectares: 212,
   budgetUsd: 1_480_000,
   actualUsd: 1_048_300,

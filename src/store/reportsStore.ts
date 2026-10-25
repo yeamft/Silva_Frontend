@@ -98,7 +98,7 @@ function codeFor(cadence: ReportCadence, n: number) {
 function titleFor(cadence: ReportCadence, period: string) {
   if (cadence === "monthly") return `Monthly operations report — ${period}`;
   if (cadence === "six_month") return `Six-month review — ${period}`;
-  return `Annual programme report — ${period}`;
+  return `Annual Core Operations report — ${period}`;
 }
 
 function pushEvent(

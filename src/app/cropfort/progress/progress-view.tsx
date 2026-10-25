@@ -117,7 +117,7 @@ export default function ProgressView() {
         actions={
           <>
             <Button size="sm" variant="outline" asChild>
-              <Link href="/cropfort/performance/programme">Programme</Link>
+              <Link href="/cropfort/performance/programme">Core Operations</Link>
             </Button>
             <Button size="sm" variant="outline" asChild>
               <Link href={CROPFORT_ROUTES.fieldTickets}>Open tickets</Link>

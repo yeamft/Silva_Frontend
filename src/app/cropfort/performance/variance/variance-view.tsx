@@ -169,9 +169,9 @@ export default function VarianceAnalysisView() {
       <SectionCard title="Plan categories" flush>
         {categories.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">
-            No programme plan categories.{" "}
+            No Core Operations plan categories.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Open Programme
+              Open Core Operations
             </Link>
             .
           </p>

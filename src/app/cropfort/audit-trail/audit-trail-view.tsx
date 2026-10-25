@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
-import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { Layers3, Search, ScrollText, Users } from "lucide-react";
+import { CompactSummaryCards, PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -112,6 +112,15 @@ export default function AuditTrailView() {
             {user.name ? ` · viewed as ${user.name}` : ""}
           </span>
         }
+      />
+
+      <CompactSummaryCards
+        label="Governance summary"
+        items={[
+          { id: "events", label: "Audit events", value: auditQuery.isLoading ? "—" : String(feed.length), footnote: "Recent activity", icon: ScrollText },
+          { id: "actors", label: "Actors", value: auditQuery.isLoading ? "—" : String(new Set(feed.map((row) => row.actor)).size), footnote: "Unique users and systems", icon: Users },
+          { id: "sources", label: "Areas", value: auditQuery.isLoading ? "—" : String(Object.keys(counts).filter((key) => key !== "all" && counts[key] > 0).length), footnote: "With recorded activity", icon: Layers3 },
+        ]}
       />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

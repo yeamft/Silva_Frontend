@@ -45,78 +45,6 @@ const VENDORS: VendorProfile[] = [
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function seedAfp(): AnnualFarmPlan {
-  return {
-    id: "afp-2026",
-    programId: PROGRAM.id,
-    year: 2026,
-    title: "Shecha AFP 2026",
-    status: "submitted",
-    authoredByOrgId: "org-spx",
-    lines: [
-      { id: "line-prune", code: "PRN", description: "Pruning & canopy", budgetUsd: 42000, actualUsd: 8500 },
-      { id: "line-fert", code: "FRT", description: "Fertilizer program", budgetUsd: 28000, actualUsd: 12000 },
-      { id: "line-harv", code: "HRV", description: "Harvest labor", budgetUsd: 65000, actualUsd: 0 },
-      { id: "line-infra", code: "INF", description: "Block infrastructure", budgetUsd: 18000, actualUsd: 4500 },
-    ],
-  };
-}
-
-function seedAfes(afp: AnnualFarmPlan): AuthorizationForExpenditure[] {
-  return [
-    {
-      id: "afe-a1",
-      programId: PROGRAM.id,
-      afpId: afp.id,
-      afpLineId: "line-infra",
-      title: "Block road repair — Band A",
-      amountUsd: 4200,
-      band: "A",
-      status: "issued",
-      vendorOrgId: "org-bagro",
-      recommendedByOrgId: "org-spx",
-      issuedAt: "2026-02-10",
-    },
-    {
-      id: "afe-b1",
-      programId: PROGRAM.id,
-      afpId: afp.id,
-      afpLineId: "line-fert",
-      title: "Organic fertilizer tranche — Band B",
-      amountUsd: 12500,
-      band: "B",
-      status: "issued",
-      vendorOrgId: "org-bagro",
-      recommendedByOrgId: "org-spx",
-      issuedAt: "2026-03-01",
-    },
-    {
-      id: "afe-c1",
-      programId: PROGRAM.id,
-      afpId: afp.id,
-      afpLineId: "line-prune",
-      title: "Season pruning campaign — Band C",
-      amountUsd: 32000,
-      band: "C",
-      status: "pending_owner",
-      vendorOrgId: "org-bagro",
-      recommendedByOrgId: "org-spx",
-    },
-    {
-      id: "afe-d1",
-      programId: PROGRAM.id,
-      afpId: afp.id,
-      afpLineId: "line-harv",
-      title: "Main harvest labor — Band D",
-      amountUsd: 58000,
-      band: "D",
-      status: "recommended",
-      vendorOrgId: "org-bagro",
-      recommendedByOrgId: "org-spx",
-    },
-  ];
-}
-
 interface FieldOsState {
   organizations: Organization[];
   program: Program;
@@ -150,11 +78,8 @@ interface FieldOsState {
     title: string;
     amountUsd: number;
     vendorOrgId: string;
-  }) => AuthorizationForExpenditure;
+  }) => AuthorizationForExpenditure | null;
 }
-
-const seedAfpDoc = seedAfp();
-const seedAfeDocs = seedAfes(seedAfpDoc);
 
 export const useFieldOsStore = create<FieldOsState>()(
   persist(
@@ -162,90 +87,13 @@ export const useFieldOsStore = create<FieldOsState>()(
       organizations: ORGS,
       program: PROGRAM,
       vendors: VENDORS,
-      afps: [seedAfpDoc],
-      afes: seedAfeDocs,
-      workOrders: [
-        {
-          id: "wo-001",
-          programId: PROGRAM.id,
-          afeId: "afe-a1",
-          vendorOrgId: "org-bagro",
-          title: "Block road repair — WO",
-          status: "completed",
-          issuedAt: "2026-02-12",
-          insuranceGatePassed: true,
-        },
-        {
-          id: "wo-002",
-          programId: PROGRAM.id,
-          afeId: "afe-b1",
-          vendorOrgId: "org-bagro",
-          title: "Fertilizer application — WO",
-          status: "in_progress",
-          issuedAt: "2026-03-02",
-          insuranceGatePassed: true,
-        },
-      ],
-      fieldTickets: [
-        {
-          id: "ft-001",
-          programId: PROGRAM.id,
-          workOrderId: "wo-001",
-          vendorOrgId: "org-bagro",
-          date: "2026-02-20",
-          description: "Road grading complete — south access",
-          laborHours: 48,
-          amountUsd: 4100,
-          status: "validated",
-          submittedBy: "lead@bagro.example",
-          validatedAt: "2026-02-21",
-          validatedBy: "principal@spx.example",
-        },
-      ],
-      paymentRequests: [
-        {
-          id: "pr-001",
-          programId: PROGRAM.id,
-          fieldTicketId: "ft-001",
-          vendorOrgId: "org-bagro",
-          amountUsd: 4100,
-          status: "approved",
-          submittedBy: "lead@bagro.example",
-          approvedAt: "2026-02-22",
-          approvedBy: "principal@spx.example",
-        },
-      ],
-      settlements: [
-        {
-          id: "stl-001",
-          programId: PROGRAM.id,
-          paymentRequestId: "pr-001",
-          amountUsd: 4100,
-          status: "released",
-          releasedAt: "2026-02-25",
-          narrative: "Road repair settled under AFP INF line.",
-        },
-      ],
-      revenueLedger: [
-        {
-          id: "rev-001",
-          programId: PROGRAM.id,
-          afeId: "afe-a1",
-          principalAmountUsd: 4200,
-          feeAmountUsd: 630,
-          note: "SPX principal fee — Band A infrastructure",
-          createdAt: "2026-02-12",
-        },
-        {
-          id: "rev-002",
-          programId: PROGRAM.id,
-          afeId: "afe-b1",
-          principalAmountUsd: 12500,
-          feeAmountUsd: 1875,
-          note: "SPX principal fee — Band B fertilizer",
-          createdAt: "2026-03-02",
-        },
-      ],
+      afps: [],
+      afes: [],
+      workOrders: [],
+      fieldTickets: [],
+      paymentRequests: [],
+      settlements: [],
+      revenueLedger: [],
       seasonEvents: [
         {
           id: "cal-1",
@@ -464,11 +312,15 @@ export const useFieldOsStore = create<FieldOsState>()(
       },
 
       createAfe: ({ afpLineId, title, amountUsd, vendorOrgId }) => {
+        const afp = get().afps.find((plan) =>
+          plan.lines.some((line) => line.id === afpLineId)
+        );
+        if (!afp) return null;
         const band = schedule3Band(amountUsd);
         const afe: AuthorizationForExpenditure = {
           id: `afe-${Date.now()}`,
           programId: PROGRAM.id,
-          afpId: get().afps[0]?.id ?? "afp-2026",
+          afpId: afp.id,
           afpLineId,
           title,
           amountUsd,
@@ -481,6 +333,27 @@ export const useFieldOsStore = create<FieldOsState>()(
         return afe;
       },
     }),
-    { name: "coffee-field-os-v1" }
+    {
+      name: "coffee-field-os-v1",
+      version: 2,
+      migrate: (persistedState, version) => {
+        if (
+          version < 2 &&
+          persistedState !== null &&
+          typeof persistedState === "object"
+        ) {
+          return Object.assign({}, persistedState, {
+            afps: [],
+            afes: [],
+            workOrders: [],
+            fieldTickets: [],
+            paymentRequests: [],
+            settlements: [],
+            revenueLedger: [],
+          });
+        }
+        return persistedState;
+      },
+    }
   )
 );

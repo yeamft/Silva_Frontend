@@ -195,63 +195,97 @@ export default function BenchmarkSurveysListView() {
       />
 
       <OpsDeskList>
-        <div className="overflow-x-auto">
-          <Table>
+        <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
+          <Table aria-label="Benchmark surveys" className="min-w-[980px]">
             <TableHeader>
-              <TableRow>
-                <TableHead>Kind</TableHead>
-                <TableHead>Activity</TableHead>
-                <TableHead>Farm area</TableHead>
-                <TableHead>Neighbors</TableHead>
-                <TableHead className="text-right">Recommended</TableHead>
-                <TableHead>Locked</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Type</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Activity</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Farm area</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Neighbor benchmarks</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-right text-[10px] font-semibold uppercase tracking-wide">Recommended rate</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Lock</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Status</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-right text-[10px] font-semibold uppercase tracking-wide">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {listLoading && rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-sm text-muted-foreground">
-                    Loading…
+                  <TableCell colSpan={8} className="h-24 text-center text-sm text-muted-foreground">
+                    Loading benchmark surveys…
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
-                    No benchmarks for this program
+                  <TableCell colSpan={8} className="py-12 text-center">
+                    <p className="text-sm font-medium text-foreground">No benchmark surveys found</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Try changing your filters or create a new survey.</p>
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-sm capitalize">{row.kind}</TableCell>
-                    <TableCell>
-                      <div className="font-medium">{row.activity?.name ?? row.activityId}</div>
-                      <div className="font-mono text-xs text-muted-foreground">
-                        {row.activity?.code}
+                  <TableRow
+                    key={row.id}
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`Open benchmark survey for ${row.activity?.name || "activity"}`}
+                    className="cursor-pointer odd:bg-background even:bg-muted/20 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+                      router.push(`${CROPFORT_ROUTES.benchmarkSurveys}/${row.id}`);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(`${CROPFORT_ROUTES.benchmarkSurveys}/${row.id}`);
+                      }
+                    }}
+                  >
+                    <TableCell className="h-auto py-3.5">
+                      <span className="inline-flex rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-[11px] font-semibold capitalize text-primary">
+                        {row.kind}
+                      </span>
+                    </TableCell>
+                    <TableCell className="h-auto min-w-[190px] py-3.5">
+                      <div className="font-semibold leading-snug text-foreground">{row.activity?.name ?? row.activityId}</div>
+                      {row.activity?.code ? (
+                        <div className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                          {row.activity.code}
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="min-w-[130px] text-sm font-medium">{row.farmArea?.name ?? "—"}</TableCell>
+                    <TableCell className="min-w-[190px] py-3.5 text-sm">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="max-w-[145px] truncate text-xs font-medium" title={row.neighbor1Name}>{row.neighbor1Name}</p>
+                          <span className="cf-numeric shrink-0 text-xs tabular-nums text-muted-foreground">{fmtEtb(row.neighbor1Rate)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="max-w-[145px] truncate text-xs text-muted-foreground" title={row.neighbor2Name}>{row.neighbor2Name}</p>
+                          <span className="cf-numeric shrink-0 text-xs tabular-nums text-muted-foreground">{fmtEtb(row.neighbor2Rate)}</span>
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{row.farmArea?.name ?? "—"}</TableCell>
-                    <TableCell className="text-sm">
-                      <div className="truncate max-w-[140px]">
-                        {row.neighbor1Name} / {row.neighbor2Name}
-                      </div>
+                    <TableCell className="cf-numeric min-w-[155px] text-right tabular-nums">
+                      <span className="font-semibold text-foreground">{fmtEtb(row.recommendedRate)}</span>
+                      <span className="mt-1 block text-[10px] text-muted-foreground">Average benchmark</span>
                     </TableCell>
-                    <TableCell className="cf-numeric text-right tabular-nums">
-                      {fmtEtb(row.recommendedRate)}
-                    </TableCell>
-                    <TableCell>
+                    <TableCell className="min-w-[90px]">
                       {row.lockedAt ? (
                         <StatusBadge status="approved" label="Locked" />
                       ) : (
-                        <span className="text-xs text-muted-foreground">Open</span>
+                        <span className="inline-flex rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                          Unlocked
+                        </span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="min-w-[110px]">
                       <StatusBadge status={row.status} />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="min-w-[105px] text-right">
                       <div className="inline-flex items-center gap-1">
                         <Button variant="ghost" size="sm" asChild>
                           <Link href={`${CROPFORT_ROUTES.benchmarkSurveys}/${row.id}`}>Open</Link>
@@ -260,7 +294,7 @@ export default function BenchmarkSurveysListView() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          aria-label="Audit history"
+                          aria-label={`Audit history for ${row.activity?.name || "survey"}`}
                           onClick={() => {
                             setAuditId(row.id);
                             setAuditLabel(row.activity?.name || row.id);

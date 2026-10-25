@@ -98,7 +98,7 @@ export default function ResourcesCapacityView() {
         }
         actions={
           <Button size="sm" variant="outline" asChild>
-            <Link href={CROPFORT_ROUTES.coreOperations}>Programme</Link>
+            <Link href={CROPFORT_ROUTES.coreOperations}>Core Operations</Link>
           </Button>
         }
       />
@@ -108,7 +108,7 @@ export default function ResourcesCapacityView() {
           <p className="text-sm text-muted-foreground">
             No plan.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Programme
+              Core Operations
             </Link>
           </p>
         </SectionCard>

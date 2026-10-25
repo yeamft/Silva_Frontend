@@ -4,14 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
-  CheckCircle2,
   ClipboardCheck,
-  ClipboardList,
   FileText,
+  Files,
   Home,
-  Wallet,
+  Archive,
+  Leaf,
 } from "lucide-react";
-import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 import { NotificationBell } from "@/components/navigation/notification-bell";
 import { UserMenu } from "@/components/navigation/user-menu";
@@ -21,10 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 import { cn } from "@/lib/utils";
-
-const ThemeToggle = dynamic(() => import("@/components/ThemeToggle"), {
-  ssr: false,
-});
 
 type NavItem = {
   href: string;
@@ -47,16 +42,16 @@ const SILVA_NAV: NavItem[] = [
     match: (p) => p.startsWith(CROPFORT_ROUTES.approvals),
   },
   {
-    href: CROPFORT_ROUTES.fieldTickets,
-    label: "Field sign-offs",
-    icon: ClipboardList,
-    match: (p) => p.startsWith(CROPFORT_ROUTES.fieldTickets),
+    href: CROPFORT_ROUTES.farmAssessments,
+    label: "Farm assessments",
+    icon: Files,
+    match: (p) => p.startsWith(CROPFORT_ROUTES.farmAssessments),
   },
   {
-    href: CROPFORT_ROUTES.settlements,
-    label: "Settlements",
-    icon: Wallet,
-    match: (p) => p.startsWith(CROPFORT_ROUTES.settlements),
+    href: CROPFORT_ROUTES.programmePlansArchive,
+    label: "Archived plans",
+    icon: Archive,
+    match: (p) => p.startsWith(CROPFORT_ROUTES.programmePlansArchive),
   },
   {
     href: CROPFORT_ROUTES.reports,
@@ -65,6 +60,11 @@ const SILVA_NAV: NavItem[] = [
     match: (p) => p.startsWith(CROPFORT_ROUTES.reports),
   },
 ];
+
+// Keep assessment notifications available through their direct links on mobile.
+const SILVA_MOBILE_NAV = SILVA_NAV.filter(
+  (item) => item.href !== CROPFORT_ROUTES.farmAssessments,
+);
 
 function SessionBanner() {
   const { sessionWarning, minutesRemaining, extendSession } = useCropfortAuth();
@@ -90,6 +90,9 @@ function SessionBanner() {
 export function SilvaApprovalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { activeProgram } = useCropfortAuth();
+  const currentPage = SILVA_NAV.find((item) =>
+    item.match ? item.match(pathname) : pathname.startsWith(item.href),
+  );
 
   return (
     <div
@@ -103,18 +106,25 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
         Skip to main content
       </a>
 
-      {/* Desktop slim rail — same sidebar tokens as SPX so theme toggle updates it */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-        <div className="border-b border-sidebar-border px-4 py-4">
-          <p className="flex items-center gap-2 text-sm font-semibold tracking-tight text-sidebar-foreground">
-            <CheckCircle2 className="h-4 w-4 text-sidebar-primary" aria-hidden />
-            Asset owner desk
-          </p>
-          <p className="mt-1 truncate text-xs text-sidebar-foreground/50">
-            {activeProgram?.name || "Approvals"}
-          </p>
+      {/* Desktop slim rail — shared sidebar tokens keep the desks visually consistent. */}
+      <aside className="relative z-20 hidden w-60 shrink-0 flex-col border-r border-emerald-900/10 bg-gradient-to-b from-emerald-50 to-sidebar text-sidebar-foreground shadow-[4px_0_20px_-8px_rgba(15,23,20,0.18)] md:flex">
+        <div className="border-b border-emerald-900/10 px-4 pb-5 pt-5">
+          <Link href={CROPFORT_ROUTES.dashboard} className="group flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
+              <Leaf className="size-5" aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold tracking-tight text-sidebar-foreground">Cropfort</span>
+              <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
+                Asset owner
+              </span>
+            </span>
+          </Link>
         </div>
-        <nav aria-label="Asset owner desk" className="flex flex-1 flex-col gap-0.5 p-2">
+        <nav aria-label="Asset owner desk" className="flex flex-1 flex-col p-3">
+          <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/45">
+            Workspace
+          </p>
           {SILVA_NAV.map((item) => {
             const Icon = item.icon;
             const active = item.match
@@ -125,22 +135,22 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[color,background-color,box-shadow,transform] duration-150 ease-out hover:translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:transform-none motion-reduce:transition-none",
                   active
-                    ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                    ? "bg-white font-semibold text-sidebar-accent-foreground shadow-sm ring-1 ring-emerald-900/10"
+                    : "text-sidebar-foreground/70 hover:bg-white/70 hover:text-sidebar-foreground",
                 )}
                 aria-current={active ? "page" : undefined}
               >
                 {active ? (
                   <span
-                    className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-sm bg-sidebar-primary"
+                    className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-sm bg-sidebar-primary"
                     aria-hidden
                   />
                 ) : null}
                 <Icon
                   className={cn(
-                    "h-4 w-4 shrink-0",
+                    "size-[18px] shrink-0",
                     active ? "text-sidebar-primary" : "text-sidebar-foreground/50",
                   )}
                   aria-hidden
@@ -153,20 +163,21 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-border bg-card supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
-          <div className="flex h-14 items-center gap-2 px-3 sm:px-5">
-            <div className="min-w-0 flex-1 md:hidden">
-              <p className="truncate text-sm font-semibold">
-                {activeProgram?.name || "Cropfort"}
-              </p>
-              <p className="truncate text-[11px] text-muted-foreground">Asset owner</p>
+        <header className="sticky top-0 z-30 border-b border-border bg-card shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
+          <div className="flex h-14 items-center gap-3 px-3 sm:px-5">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex">
+                <Leaf className="size-4" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold tracking-tight text-foreground">
+                  {currentPage?.label || "Home"}
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {activeProgram?.name || "Cropfort"}
+                </p>
+              </div>
             </div>
-            <div className="hidden min-w-0 flex-1 md:block">
-              <p className="truncate text-sm font-medium">
-                {activeProgram?.name || "Cropfort"}
-              </p>
-            </div>
-            <ThemeToggle />
             <NotificationBell />
             <UserMenu />
           </div>
@@ -186,8 +197,11 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
           aria-label="Asset owner desk"
           className="fixed inset-x-0 bottom-0 z-40 border-t border-sidebar-border bg-sidebar/95 text-sidebar-foreground backdrop-blur md:hidden supports-[padding:max(0px)]:pb-[env(safe-area-inset-bottom)]"
         >
-          <ul className="grid grid-cols-5">
-            {SILVA_NAV.map((item) => {
+          <ul
+            className="grid"
+            style={{ gridTemplateColumns: `repeat(${SILVA_MOBILE_NAV.length}, minmax(0, 1fr))` }}
+          >
+            {SILVA_MOBILE_NAV.map((item) => {
               const Icon = item.icon;
               const active = item.match
                 ? item.match(pathname)
@@ -200,7 +214,7 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
                       "flex flex-col items-center gap-0.5 px-0.5 py-2.5 text-[10px] font-medium transition-colors",
                       active
                         ? "text-sidebar-primary"
-                        : "text-sidebar-foreground/60 hover:text-sidebar-foreground",
+                        :                         "text-sidebar-foreground/60 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground motion-reduce:transition-none",
                     )}
                     aria-current={active ? "page" : undefined}
                   >

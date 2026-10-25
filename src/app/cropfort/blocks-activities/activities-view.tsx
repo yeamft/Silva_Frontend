@@ -93,7 +93,7 @@ export default function ActivitiesView() {
         }
         actions={
           <Button size="sm" asChild>
-            <Link href={CROPFORT_ROUTES.coreOperations}>Programme</Link>
+            <Link href={CROPFORT_ROUTES.coreOperations}>Core Operations</Link>
           </Button>
         }
       />
@@ -127,7 +127,7 @@ export default function ActivitiesView() {
           <p className="p-4 text-sm text-muted-foreground">
             No plan.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Programme
+              Core Operations
             </Link>
           </p>
         ) : rows.length === 0 ? (

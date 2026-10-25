@@ -3,15 +3,13 @@
 import { useAuthStore } from "@/store/authStore";
 import {
   clearWorkspaceSelectionRequired,
-  markWorkspaceSelectionRequired,
   planWorkspaceEntry,
-  SELECT_WORKSPACE_PATH,
   WORKSPACE_HOME_PATH,
 } from "@/lib/workspace-gate";
+import { toast } from "sonner";
 
 /**
- * After login / MFA: a single assigned workspace goes straight in;
- * otherwise open the workspace picker.
+ * After login / MFA, enter the current workspace or choose a default.
  */
 export async function continueAfterAuth(): Promise<string> {
   const state = useAuthStore.getState();
@@ -29,12 +27,11 @@ export async function continueAfterAuth(): Promise<string> {
 
   if (plan.action === "auto") {
     const result = await state.switchProgram(plan.programId);
-    if (result.ok) {
-      clearWorkspaceSelectionRequired();
-      return WORKSPACE_HOME_PATH;
+    if (result.ok === false) {
+      toast.error(result.error || "Could not open your workspace");
     }
   }
 
-  markWorkspaceSelectionRequired();
-  return SELECT_WORKSPACE_PATH;
+  clearWorkspaceSelectionRequired();
+  return WORKSPACE_HOME_PATH;
 }

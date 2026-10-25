@@ -45,7 +45,7 @@ describe("workspace gate", () => {
     ).toEqual({ action: "home" });
   });
 
-  it("plans picker when multiple workspaces", () => {
+  it("keeps the active workspace when multiple workspaces are available", () => {
     expect(
       planWorkspaceEntry({
         programs: [
@@ -54,7 +54,25 @@ describe("workspace gate", () => {
         ],
         activeProgramId: "p1",
       }),
-    ).toEqual({ action: "pick" });
+    ).toEqual({ action: "home" });
+  });
+
+  it("chooses the first workspace when none is active", () => {
+    expect(
+      planWorkspaceEntry({
+        programs: [
+          { id: "p1", status: "active" },
+          { id: "p2", status: "active" },
+        ],
+        activeProgramId: null,
+      }),
+    ).toEqual({ action: "auto", programId: "p1" });
+  });
+
+  it("opens home when no workspace is assigned", () => {
+    expect(planWorkspaceEntry({ programs: [], activeProgramId: null })).toEqual({
+      action: "home",
+    });
   });
 
   it("ignores archived programmes when planning entry", () => {

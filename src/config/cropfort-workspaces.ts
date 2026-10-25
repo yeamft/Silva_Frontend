@@ -1,6 +1,6 @@
 /**
  * CropFort enterprise navigation — workspace architecture.
- * Sidebar = where am I?  Workspace nav = what function?  Context bar = which estate/programme?
+ * Sidebar = where am I?  Workspace nav = what function?  Context bar = which estate/Core Operations?
  */
 
 import type { LucideIcon } from "lucide-react";
@@ -98,15 +98,21 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
     modules: [
       {
         id: "programme",
-        label: "Programme",
+        label: "Core Operations",
         href: CROPFORT_ROUTES.programmePlans,
-        description: "Programme plans register — multiple plans per workspace",
+        description: "Core Operations plans register — multiple plans per workspace",
+      },
+      {
+        id: "farm-assessments",
+        label: "Farm Assessments",
+        href: CROPFORT_ROUTES.farmAssessments,
+        description: "Farm condition reports and asset owner review",
       },
       {
         id: "programme-archive",
-        label: "Plan archive",
+        label: "Archived plans",
         href: CROPFORT_ROUTES.programmePlansArchive,
-        description: "Archived and closed programme plans",
+        description: "Archived and closed Core Operations plans",
       },
       {
         id: "projects",
@@ -124,13 +130,13 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         id: "timeline",
         label: "Timeline",
         href: "/cropfort/planning/timeline",
-        description: "Programme schedule",
+        description: "Core Operations schedule",
       },
       {
         id: "resources",
         label: "Resources & Capacity",
         href: CROPFORT_ROUTES.laborWorkforce,
-        description: "Labour / materials / services demand from the active programme plan",
+        description: "Labour / materials / services demand from the active Core Operations plan",
       },
       {
         id: "budget",
@@ -210,7 +216,7 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         label: "AFP Register",
         href: CROPFORT_ROUTES.afpRegister,
         roles: ALL_PLAN,
-        description: "Approved programme plans ready to raise AFE",
+        description: "Approved Core Operations plans ready to raise AFE",
       },
       {
         id: "afe",
@@ -277,7 +283,7 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
       },
       {
         id: "programme-performance",
-        label: "Programme Performance",
+        label: "Core Operations Performance",
         href: "/cropfort/performance/programme",
         description: "Management performance overview",
       },
@@ -297,7 +303,7 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         id: "kpis",
         label: "KPIs",
         href: "/cropfort/performance/kpis",
-        description: "Process and programme indicators",
+        description: "Process and Core Operations indicators",
       },
       {
         id: "reports",
@@ -370,7 +376,7 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         id: "programme-setup",
         label: "Programs",
         href: CROPFORT_ROUTES.programs,
-        description: "Programme register",
+        description: "Core Operations register",
       },
       {
         id: "spend-bands",

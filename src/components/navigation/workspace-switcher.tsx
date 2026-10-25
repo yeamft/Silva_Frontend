@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Check, ChevronsUpDown, Layers3, Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCropfortAuth, CROPFORT_ROLE_LABELS } from "@/components/navigation/auth-context";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { canChooseWorkspace, SELECT_WORKSPACE_PATH } from "@/lib/workspace-gate";
+import { canChooseWorkspace } from "@/lib/workspace-gate";
 import { cn } from "@/lib/utils";
 
 const ORG_TYPE_LABELS: Record<string, string> = {
@@ -50,7 +49,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
     setSwitchingId(programId);
     const result = await switchProgram(programId);
     setSwitchingId(null);
-    if (result.ok) {
+    if (result.ok === true) {
       const next = programs.find((p) => p.id === programId);
       toast.success(next ? `Switched to ${next.name}` : "Workspace updated");
     } else {
@@ -172,13 +171,6 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
         )}
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href={SELECT_WORKSPACE_PATH} className="gap-2">
-            <Layers3 className="h-4 w-4 shrink-0" aria-hidden />
-            All workspaces
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <div className="px-2 py-1.5">
           <p className="truncate text-xs font-medium">{orgName}</p>
           <p className="truncate text-[11px] text-muted-foreground">
@@ -204,7 +196,7 @@ export function WorkspaceChip() {
     setSwitchingId(programId);
     const result = await switchProgram(programId);
     setSwitchingId(null);
-    if (result.ok) {
+    if (result.ok === true) {
       const next = programs.find((p) => p.id === programId);
       toast.success(next ? `Switched to ${next.name}` : "Workspace updated");
     } else {
@@ -282,13 +274,6 @@ export function WorkspaceChip() {
             </DropdownMenuItem>
           );
         })}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href={SELECT_WORKSPACE_PATH} className="gap-2">
-            <Layers3 className="h-4 w-4 shrink-0" aria-hidden />
-            All workspaces
-          </Link>
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

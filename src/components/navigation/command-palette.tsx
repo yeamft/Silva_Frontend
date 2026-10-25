@@ -97,7 +97,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search programmes, work orders, modules…"
+              placeholder="Search Core Operations, work orders, modules…"
               className="border-0 pl-8 shadow-none focus-visible:ring-0"
             />
           </div>

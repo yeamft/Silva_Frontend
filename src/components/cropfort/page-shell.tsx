@@ -53,11 +53,9 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
  */
 export function PageHeader({
   title,
-  description,
   actions,
   breadcrumbs,
   meta,
-  eyebrow,
 }: {
   title: string;
   description?: string;
@@ -72,13 +70,10 @@ export function PageHeader({
       {breadcrumbs?.length ? <Breadcrumbs items={breadcrumbs} /> : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1.5">
-          {eyebrow ? <p className="cf-eyebrow">{eyebrow}</p> : null}
+          <p className="cf-eyebrow">State Program</p>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.65rem]">
             {title}
           </h1>
-          {description ? (
-            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>
-          ) : null}
           {meta ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-sm text-muted-foreground">
               {meta}
@@ -256,6 +251,76 @@ export type StatusSummaryItem = {
   active?: boolean;
   onClick?: () => void;
 };
+
+export type CompactSummaryItem = {
+  id: string;
+  label: string;
+  value: string;
+  footnote?: string;
+  icon?: LucideIcon;
+  active?: boolean;
+  onClick?: () => void;
+};
+
+export function CompactSummaryCards({
+  items,
+  label = "Summary",
+}: {
+  items: CompactSummaryItem[];
+  label?: string;
+}) {
+  return (
+    <div
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+      role="group"
+      aria-label={label}
+    >
+      {items.map((item) => {
+        const Icon = item.icon;
+        const card = (
+          <Card
+            className="border-border/80 shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none"
+          >
+            <CardContent className="flex items-center gap-3 p-3.5 sm:p-4">
+              {Icon ? (
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Icon className="h-4 w-4" aria-hidden />
+                </span>
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground">{item.label}</p>
+                {item.footnote ? (
+                  <p className="truncate text-xs text-muted-foreground">{item.footnote}</p>
+                ) : null}
+              </div>
+              <span className="cf-numeric text-xl font-semibold tabular-nums text-foreground">
+                {item.value}
+              </span>
+            </CardContent>
+          </Card>
+        );
+        return item.onClick ? (
+          <button
+            key={item.id}
+            type="button"
+            onClick={item.onClick}
+            aria-pressed={Boolean(item.active)}
+            className={cn(
+              "min-w-0 rounded-xl text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              item.active && "ring-2 ring-primary/35",
+            )}
+          >
+            {card}
+          </button>
+        ) : (
+          <div key={item.id} className="min-w-0">
+            {card}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Workflow / status KPI row used on registers (AFE, programme plans, etc.). */
 export function StatusSummaryCards({

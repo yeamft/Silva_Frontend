@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { MainNav, MobileNavTrigger } from "@/components/navigation/main-nav";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { MainNav } from "@/components/navigation/main-nav";
 import { CropfortMobileNav } from "@/components/navigation/mobile-nav";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { ActivePlanSync } from "@/components/navigation/active-plan-sync";
@@ -16,10 +16,17 @@ import {
 } from "@/components/navigation/needs-attention";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+
+const SIDEBAR_COLLAPSE_KEY = "cropfort.sidebar.collapsed";
 
 /** Current dense OpsDesk chrome — SPX / platform admin only. */
 export function SpxPlatformShell({ children }: { children: ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const attentionCount = useAttentionCount();
@@ -27,6 +34,7 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
+      setSidebarOpen(localStorage.getItem(SIDEBAR_COLLAPSE_KEY) !== "1");
       if (localStorage.getItem("cropfort.ui.density") === "compact") {
         document.documentElement.classList.add("cf-density-compact");
       }
@@ -36,7 +44,24 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="flex min-h-[100dvh] items-stretch overflow-x-hidden bg-background text-foreground">
+    <SidebarProvider
+      open={sidebarOpen}
+      onOpenChange={(open) => {
+        setSidebarOpen(open);
+        try {
+          localStorage.setItem(SIDEBAR_COLLAPSE_KEY, open ? "0" : "1");
+        } catch {
+          /* keep the current session usable when storage is unavailable */
+        }
+      }}
+      style={
+        {
+          "--sidebar-width": "14.5rem",
+          "--sidebar-width-icon": "4.25rem",
+        } as CSSProperties
+      }
+      className="min-h-[100dvh] items-stretch overflow-x-hidden bg-background text-foreground"
+    >
       <a
         href="#cropfort-main"
         className="cf-focus sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:border focus:border-border focus:bg-card focus:px-3 focus:py-2 focus:text-sm"
@@ -44,13 +69,17 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
         Skip to main content
       </a>
 
-      <MainNav mobileOpen={mobileOpen} onMobileOpenChange={setMobileOpen} />
+      <MainNav />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="sticky top-0 z-30 supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
+      <SidebarInset
+        id="cropfort-main"
+        tabIndex={-1}
+        className="min-w-0 overflow-x-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0"
+      >
+        <header className="sticky top-0 z-30 bg-card shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
           <div className="flex h-14 items-stretch border-b border-border bg-card">
             <div className="flex shrink-0 items-center pl-2 md:hidden">
-              <MobileNavTrigger open={mobileOpen} onOpenChange={setMobileOpen} />
+              <SidebarTrigger className="cf-focus flex h-9 w-9 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent/70 text-sidebar-foreground hover:bg-sidebar-accent" />
             </div>
             <div className="min-w-0 flex-1">
               <GlobalContextBar
@@ -84,16 +113,10 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
           ) : null}
 
           <WorkspaceNav />
-        </div>
+        </header>
 
-        <main
-          id="cropfort-main"
-          className="flex-1 pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0"
-          tabIndex={-1}
-        >
-          {children}
-        </main>
-      </div>
+        {children}
+      </SidebarInset>
 
       <ActivePlanSync />
       <ActiveSpendBandSync />
@@ -102,6 +125,6 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <NeedsAttentionDrawer open={attentionOpen} onOpenChange={setAttentionOpen} />
       <div id="cropfort-route-announcer" className="sr-only" aria-live="polite" aria-atomic="true" />
-    </div>
+    </SidebarProvider>
   );
 }

@@ -3,18 +3,16 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardList, FileEdit, Library, MoreHorizontal, Plus, RotateCcw, Send } from "lucide-react";
+import { ClipboardList, MoreHorizontal, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
   TablePagination,
-  TableToolbar,
 } from "@/components/cropfort/data-table";
 import {
   PageContainer,
   PageHeader,
   SectionCard,
-  StatusSummaryCards,
 } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -108,7 +106,7 @@ export default function ProgrammePlansRegisterView({
   const [farmEstateId, setFarmEstateId] = useState("");
   const [planYear, setPlanYear] = useState(String(new Date().getFullYear()));
   const [planningCycle, setPlanningCycle] = useState(
-    `${new Date().getFullYear()} Programme`,
+    `${new Date().getFullYear()} Core Operations`,
   );
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
@@ -141,16 +139,6 @@ export default function ProgrammePlansRegisterView({
     return [...set].sort((a, b) => b - a);
   }, [allPlans]);
 
-  const stats = useMemo(() => {
-    return {
-      total: allPlans.length,
-      draft: allPlans.filter((p) => p.statusRaw === "draft" || p.statusRaw === "ready_for_review").length,
-      submitted: allPlans.filter((p) => p.statusRaw === "submitted").length,
-      approved: allPlans.filter((p) => p.statusRaw === "approved" || p.statusRaw === "active").length,
-      returned: allPlans.filter((p) => p.statusRaw === "returned").length,
-    };
-  }, [allPlans]);
-
   const plans = useMemo(() => {
     if (archiveMode) return allPlans;
     if (statusFilter === "all") return allPlans;
@@ -177,13 +165,18 @@ export default function ProgrammePlansRegisterView({
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const paged = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const hasActiveFilters =
+    Boolean(query.trim()) ||
+    farmFilter !== "all" ||
+    yearFilter !== "all" ||
+    (!archiveMode && statusFilter !== "all");
 
   const openCreate = () => {
     setName("");
     setFarmEstateId(farms[0]?.id || "");
     const y = new Date().getFullYear();
     setPlanYear(String(y));
-    setPlanningCycle(`${y} Programme`);
+    setPlanningCycle(`${y} Core Operations`);
     setDescription("");
     setNotes("");
     setCreateOpen(true);
@@ -191,7 +184,7 @@ export default function ProgrammePlansRegisterView({
 
   const onCreate = async () => {
     if (!canCreate) {
-      toast.error("Only SPX can create programme plans");
+      toast.error("Only SPX can create Core Operations plans");
       return;
     }
     if (!name.trim() || !farmEstateId) {
@@ -204,7 +197,7 @@ export default function ProgrammePlansRegisterView({
         name: name.trim(),
         farmEstateId,
         planYear: year,
-        planningCycleLabel: planningCycle.trim() || `${year} Programme`,
+        planningCycleLabel: planningCycle.trim() || `${year} Core Operations`,
         budgetYearLabel: budgetYearLabel(year).label,
         description: description.trim(),
         notes: notes.trim(),
@@ -226,12 +219,12 @@ export default function ProgrammePlansRegisterView({
   return (
     <PageContainer>
       <PageHeader
-        eyebrow={activeProgram?.name || "Workspace"}
-        title={archiveMode ? "Archive" : "Programme plans"}
+        eyebrow="State Program"
+        title={archiveMode ? "Archive" : "Core Operations plans"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Planning" },
-          { label: "Programme plans", href: CROPFORT_ROUTES.programmePlans },
+          { label: "Core Operations plans", href: CROPFORT_ROUTES.programmePlans },
           ...(archiveMode ? [{ label: "Archive" }] : []),
         ]}
         actions={
@@ -240,14 +233,7 @@ export default function ProgrammePlansRegisterView({
               <Button size="sm" variant="outline" asChild>
                 <Link href={CROPFORT_ROUTES.programmePlans}>Register</Link>
               </Button>
-            ) : (
-              <Button size="sm" variant="outline" asChild>
-                <Link href={CROPFORT_ROUTES.programmePlansArchive}>
-                  <Library className="h-3.5 w-3.5" />
-                  Archive
-                </Link>
-              </Button>
-            )}
+            ) : null}
             {canCreate ? (
               <Button size="sm" onClick={openCreate}>
                 <Plus className="h-3.5 w-3.5" />
@@ -258,93 +244,37 @@ export default function ProgrammePlansRegisterView({
         }
       />
 
-      {!archiveMode ? (
-      <StatusSummaryCards
-        label="Programme plans"
-        columns={5}
-        items={[
-          {
-            id: "all",
-            label: "Total",
-            value: String(stats.total),
-            icon: ClipboardList,
-            emphasis: true,
-            active: statusFilter === "all",
-            onClick: () => {
-              setStatusFilter("all");
-              setPage(1);
-            },
-          },
-          {
-            id: "draft",
-            label: "Draft",
-            value: String(stats.draft),
-            icon: FileEdit,
-            active: statusFilter === "draft",
-            onClick: () => {
-              setStatusFilter("draft");
-              setPage(1);
-            },
-          },
-          {
-            id: "submitted",
-            label: "Submitted",
-            value: String(stats.submitted),
-            icon: Send,
-            active: statusFilter === "submitted",
-            onClick: () => {
-              setStatusFilter("submitted");
-              setPage(1);
-            },
-          },
-          {
-            id: "approved",
-            label: "Approved",
-            value: String(stats.approved),
-            icon: CheckCircle2,
-            intent: "positive",
-            active: statusFilter === "approved",
-            onClick: () => {
-              setStatusFilter("approved");
-              setPage(1);
-            },
-          },
-          {
-            id: "returned",
-            label: "Returned",
-            value: String(stats.returned),
-            icon: RotateCcw,
-            intent: "negative",
-            active: statusFilter === "returned",
-            onClick: () => {
-              setStatusFilter("returned");
-              setPage(1);
-            },
-          },
-        ]}
-      />
-      ) : null}
-
-      <SectionCard title={archiveMode ? "Archived plans" : "Register"} flush>
-        <div className="space-y-2 border-b border-border px-4 py-2.5 sm:px-5">
-          <TableToolbar
-            search={query}
-            onSearchChange={(v) => {
-              setQuery(v);
-              setPage(1);
-            }}
-            searchPlaceholder="Search programme, farm area, cycle…"
-            filters={
-              <div className="flex flex-wrap gap-2">
-                {archiveMode ? null : (
+      <SectionCard title={archiveMode ? "Archived plans" : "All Core Operations plans"} flush>
+        <div className="border-b border-border bg-muted/15 px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="relative min-w-0 flex-1 xl:max-w-md">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                type="search"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by plan, code, farm area, or cycle"
+                aria-label="Search Core Operations plans"
+                className="h-10 bg-background pl-9"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+              {!archiveMode ? (
                 <Select
                   value={statusFilter}
+                  aria-label="Filter by status"
                   onValueChange={(v) => {
                     setStatusFilter(v as StatusFilter);
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-9 w-[140px]">
+                  <SelectTrigger className="h-10 w-full bg-background sm:w-[150px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -357,15 +287,16 @@ export default function ProgrammePlansRegisterView({
                     <SelectItem value="active">Active</SelectItem>
                   </SelectContent>
                 </Select>
-                )}
+              ) : null}
                 <Select
                   value={farmFilter}
+                  aria-label="Filter by farm area"
                   onValueChange={(v) => {
                     setFarmFilter(v);
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-9 w-[160px]">
+                  <SelectTrigger className="h-10 w-full bg-background sm:w-[170px]">
                     <SelectValue placeholder="Farm area" />
                   </SelectTrigger>
                   <SelectContent>
@@ -379,12 +310,13 @@ export default function ProgrammePlansRegisterView({
                 </Select>
                 <Select
                   value={yearFilter}
+                  aria-label="Filter by budget year"
                   onValueChange={(v) => {
                     setYearFilter(v);
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-9 w-[140px]">
+                  <SelectTrigger className="h-10 w-full bg-background sm:w-[140px]">
                     <SelectValue placeholder="Budget year" />
                   </SelectTrigger>
                   <SelectContent>
@@ -396,23 +328,38 @@ export default function ProgrammePlansRegisterView({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            }
-          />
+              {hasActiveFilters ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="col-span-2 h-10 sm:col-span-1 sm:h-9"
+                  onClick={() => {
+                    setQuery("");
+                    setStatusFilter("all");
+                    setFarmFilter("all");
+                    setYearFilter("all");
+                    setPage(1);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <div className="cf-table-scroll">
-          <Table>
+          <Table aria-label={archiveMode ? "Archived Core Operations plans" : "Core Operations plans"}>
             <TableHeader>
               <TableRow>
-                <TableHead>Programme plan</TableHead>
-                <TableHead>Farm area</TableHead>
-                <TableHead>Budget year</TableHead>
-                <TableHead className="text-right">Activities</TableHead>
-                <TableHead className="text-right">Scheduled</TableHead>
-                <TableHead className="text-right">Budget</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-12" />
+                <TableHead className="h-12 w-14 bg-muted/50 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">#</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Core Operations plan</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Farm area</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Budget year</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity plan</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Budget</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</TableHead>
+                <TableHead className="h-11 w-12 bg-muted/40" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -420,54 +367,123 @@ export default function ProgrammePlansRegisterView({
                 <TableMessageRow
                   colSpan={8}
                   icon={ClipboardList}
-                  title="Loading programme plans…"
+                  title="Loading Core Operations plans…"
                 />
               ) : paged.length === 0 ? (
                 <TableMessageRow
                   colSpan={8}
                   icon={ClipboardList}
                   title={
-                    plans.length === 0
+                    !hasActiveFilters
                       ? archiveMode
                         ? "No archived plans"
                         : "No plans"
                       : "No results"
                   }
+                  description={
+                    !hasActiveFilters
+                      ? archiveMode
+                        ? "Archived plans will appear here."
+                        : "Create a Core Operations plan to start planning work for a farm area."
+                      : "Try changing your search or filters."
+                  }
+                  action={
+                    !hasActiveFilters && canCreate ? (
+                      <Button size="sm" onClick={openCreate}>
+                        <Plus className="h-3.5 w-3.5" />
+                        New Core Operations plan
+                      </Button>
+                    ) : hasActiveFilters ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setQuery("");
+                          setStatusFilter("all");
+                          setFarmFilter("all");
+                          setYearFilter("all");
+                          setPage(1);
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    ) : null
+                  }
                 />
               ) : (
-                paged.map((row) => {
+                paged.map((row, index) => {
                   const included = row.includedCount ?? 0;
                   const scheduled = row.scheduledCount ?? 0;
                   return (
-                    <TableRow key={row.id} className="cursor-pointer hover:bg-muted/40">
-                      <TableCell>
+                    <TableRow
+                      key={row.id}
+                      className="cursor-pointer border-b-border/70 odd:bg-background even:bg-muted/15 transition-colors hover:bg-primary/5"
+                      onClick={(event) => {
+                        const target = event.target as HTMLElement;
+                        // Let links and menu actions handle their own navigation.
+                        if (
+                          event.defaultPrevented ||
+                          !event.currentTarget.contains(target) ||
+                          target.closest("a, button, [role='menuitem']")
+                        ) return;
+                        router.push(planHref(row.id));
+                      }}
+                    >
+                      <TableCell className="w-14 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                        {(safePage - 1) * pageSize + index + 1}
+                      </TableCell>
+                      <TableCell className="h-auto min-w-[250px] py-4">
                         <Link
                           href={planHref(row.id)}
-                          className="font-medium text-foreground hover:underline"
+                          aria-label={`Open ${row.name || "untitled Core Operations plan"}`}
+                          className="group/plan inline-flex items-center gap-1.5 rounded-sm font-semibold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          {row.name || "Untitled plan"}
+                          <span className="truncate">{row.name || "Untitled plan"}</span>
+                          <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/plan:opacity-100 group-focus-visible/plan:opacity-100" aria-hidden>
+                            Open
+                          </span>
                         </Link>
-                        {row.code ? (
-                          <p className="text-[11px] text-muted-foreground">{row.code}</p>
-                        ) : null}
-                        {row.planningCycleLabel ? (
-                          <p className="text-[11px] text-muted-foreground">
-                            Cycle: {row.planningCycleLabel}
+                        {row.code || row.planningCycleLabel ? (
+                          <p className="mt-0.5 max-w-[26rem] truncate text-xs text-muted-foreground">
+                            {[row.code, row.planningCycleLabel].filter(Boolean).join(" · ")}
                           </p>
                         ) : null}
                       </TableCell>
-                      <TableCell>{row.farmName || "—"}</TableCell>
-                      <TableCell className="text-sm">
-                        {row.budgetYearLabel || `${row.budgetYearGc} GC`}
+                      <TableCell className="min-w-[120px] font-medium text-foreground/85">
+                        {row.farmName || "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{included}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {scheduled}/{included || 0}
+                      <TableCell className="min-w-[140px] text-sm tabular-nums">
+                        <span className="whitespace-nowrap">
+                          {row.budgetYearLabel || `${row.budgetYearGc} GC`}
+                        </span>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="min-w-[150px]">
+                        <div className="ml-auto max-w-32">
+                          <p className="text-right text-xs tabular-nums">
+                            <span className="font-semibold text-foreground">{scheduled}</span>
+                            <span className="text-muted-foreground"> of {included} scheduled</span>
+                          </p>
+                          <div
+                            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+                            role="progressbar"
+                            aria-label={`${scheduled} of ${included} activities scheduled`}
+                            aria-valuemin={0}
+                            aria-valuemax={Math.max(included, 1)}
+                            aria-valuenow={Math.min(scheduled, included)}
+                          >
+                            <div
+                              className="h-full rounded-full bg-primary transition-[width]"
+                              style={{
+                                width: `${included > 0 ? Math.min(100, (scheduled / included) * 100) : 0}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="min-w-[130px] text-right font-semibold tabular-nums text-foreground">
                         {fmtEtb(row.plannedCostEtb || 0)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="min-w-[110px]">
                         <StatusBadge
                           status={
                             row.statusRaw === "archived"
@@ -481,12 +497,17 @@ export default function ProgrammePlansRegisterView({
                                   : "draft"
                           }
                           label={statusLabel(row.statusRaw)}
+                          className="whitespace-nowrap"
                         />
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button size="icon-sm" variant="ghost" aria-label="Actions">
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label={`Actions for ${row.name || "Core Operations plan"}`}
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -592,11 +613,11 @@ export default function ProgrammePlansRegisterView({
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>New programme plan</DialogTitle>
+            <DialogTitle>New Core Operations plan</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="space-y-1">
-              <Label>Programme plan name *</Label>
+              <Label>Core Operations plan name *</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -609,7 +630,7 @@ export default function ProgrammePlansRegisterView({
                 <Input
                   value={planningCycle}
                   onChange={(e) => setPlanningCycle(e.target.value)}
-                  placeholder="2027 Programme"
+                  placeholder="2027 Core Operations"
                 />
               </div>
               <div className="space-y-1">
@@ -620,7 +641,7 @@ export default function ProgrammePlansRegisterView({
                   onChange={(e) => {
                     setPlanYear(e.target.value);
                     const y = Number(e.target.value);
-                    if (Number.isFinite(y)) setPlanningCycle(`${y} Programme`);
+                    if (Number.isFinite(y)) setPlanningCycle(`${y} Core Operations`);
                   }}
                 />
               </div>
@@ -658,7 +679,7 @@ export default function ProgrammePlansRegisterView({
               Cancel
             </Button>
             <Button onClick={() => void onCreate()} disabled={createMut.isPending}>
-              Create programme
+              Create Core Operations plan
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Grid2x2, MoreHorizontal, Plus } from "lucide-react";
+import { CheckCircle2, Grid2x2, MapPinned, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
-import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards, PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -153,6 +153,15 @@ export default function BlocksPage() {
             </Button>
           ) : null
         }
+      />
+
+      <CompactSummaryCards
+        label="Blocks summary"
+        items={[
+          { id: "blocks", label: "Blocks", value: loading ? "—" : String(blocks.length), footnote: "Registered blocks", icon: Grid2x2 },
+          { id: "active", label: "Active", value: loading ? "—" : String(blocks.filter((block) => (block.status || "active") === "active").length), footnote: "Ready for operations", icon: CheckCircle2 },
+          { id: "areas", label: "Farm areas", value: loading ? "—" : String(areas.length), footnote: "Available locations", icon: MapPinned },
+        ]}
       />
 
       <SectionCard flush>

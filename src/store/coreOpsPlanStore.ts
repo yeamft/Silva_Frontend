@@ -366,7 +366,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             error:
               err instanceof Error
                 ? err.message
-                : "Failed to load programme planning context",
+                : "Failed to load Core Operations planning context",
           });
         }
       },
@@ -383,7 +383,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
           const bandSet = useSpendBandStore.getState().getActiveSet();
           const plan: CoreOpsPlan = {
             ...remote,
-            name: remote.name || remote.farmName || "Programme plan",
+            name: remote.name || remote.farmName || "Core Operations plan",
             farmName: remote.farmName || farm?.name || "",
             programBandSetId: remote.programBandSetId ?? bandSet?.id ?? null,
             promotions: remote.promotions ?? [],
@@ -393,7 +393,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
         } catch (err) {
           set({
             loading: false,
-            error: err instanceof Error ? err.message : "Failed to load programme plan",
+            error: err instanceof Error ? err.message : "Failed to load Core Operations plan",
           });
         }
       },

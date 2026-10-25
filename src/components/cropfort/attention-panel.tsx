@@ -105,14 +105,12 @@ export function AttentionPanel({
 
 export function AttentionItem({
   href,
-  eyebrow,
   title,
   meta,
   detail,
   cta = "Review",
 }: {
   href: string;
-  eyebrow?: string;
   title: string;
   meta?: string;
   detail?: ReactNode;
@@ -128,11 +126,6 @@ export function AttentionItem({
       )}
     >
       <div className="min-w-0 flex-1 space-y-1">
-        {eyebrow ? (
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {eyebrow}
-          </p>
-        ) : null}
         <p className="text-[15px] font-semibold leading-snug tracking-tight">{title}</p>
         {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
         {detail ? <div className="text-xs text-muted-foreground">{detail}</div> : null}

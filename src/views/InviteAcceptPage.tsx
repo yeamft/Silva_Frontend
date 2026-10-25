@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Sprout } from "lucide-react";
 import { toast } from "sonner";
 import { acceptInvite, getInvitePreview, type InvitePreview } from "@/lib/api/invite";
-import ThemeToggle from "@/components/ThemeToggle";
 import { FormField } from "@/components/cropfort/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -90,7 +89,6 @@ export default function InviteAcceptPage() {
           </span>
           <span className="font-display text-base font-semibold tracking-tight">Cropfort</span>
         </Link>
-        <ThemeToggle />
       </header>
 
       <main className="flex flex-1 items-center justify-center px-4 py-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">

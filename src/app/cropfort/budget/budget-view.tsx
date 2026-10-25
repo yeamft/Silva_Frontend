@@ -166,7 +166,7 @@ export default function BudgetForecastView() {
               <Link href="/cropfort/performance/variance">Variance</Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href={CROPFORT_ROUTES.coreOperations}>Programme plan</Link>
+              <Link href={CROPFORT_ROUTES.coreOperations}>Core Operations plan</Link>
             </Button>
           </>
         }
@@ -177,7 +177,7 @@ export default function BudgetForecastView() {
           <p className="text-sm text-muted-foreground">
             No plan.{" "}
             <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Programme
+              Core Operations
             </Link>
           </p>
         </SectionCard>

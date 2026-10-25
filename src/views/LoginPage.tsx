@@ -217,41 +217,35 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="cf-gold-marketing relative flex min-h-[100dvh] items-center justify-center cf-auth-shell px-4 py-10 text-foreground">
+    <div className="cf-gold-marketing cf-auth-shell relative flex min-h-[100dvh] items-center justify-center px-4 py-8 text-foreground sm:px-6 sm:py-10">
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div className="absolute -left-24 top-16 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -right-16 bottom-10 h-80 w-80 rounded-full bg-[hsl(120_30%_60%/0.12)] blur-3xl" />
+        <div className="absolute -right-16 bottom-10 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
       </div>
 
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease }}
-        className="relative z-10 w-full max-w-[420px] space-y-6"
+        className="relative z-10 w-full max-w-[440px] space-y-6"
       >
-        <div className="text-center">
+        <header className="text-center">
           <button
             type="button"
             onClick={() => router.push("/")}
             className="cf-focus mx-auto mb-5 inline-flex items-center gap-2.5 rounded-xl"
+            aria-label="Cropfort home"
           >
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_hsl(120_35%_28%/0.35)]">
               <Sprout className="h-5 w-5" aria-hidden />
             </span>
             <span className="text-left leading-tight">
-              <span className="block font-display text-xl font-semibold tracking-tight">
-                Cropfort
-              </span>
+              <span className="block font-display text-xl font-semibold tracking-tight">Cropfort</span>
             </span>
           </button>
-          {mfaStep ? (
-            <p className="mt-2 text-sm text-muted-foreground">
-              Open your authenticator app and enter the 6-digit code.
-            </p>
-          ) : null}
-        </div>
+        </header>
 
-        <div className="cf-auth-card rounded-2xl p-6 sm:p-7">
+        <div className="cf-auth-card rounded-2xl p-6 shadow-md transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transform-none motion-reduce:transition-none sm:p-7">
           <form
             onSubmit={handleSubmit}
             noValidate
@@ -270,7 +264,6 @@ const LoginPage = () => {
                   Scan this QR code, then enter the first code from your app.
                 </p>
                 <div className="flex justify-center rounded-xl border border-border/80 bg-background p-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={mfaStep.qrDataUrl}
                     alt="TOTP enrollment QR code"
@@ -319,7 +312,7 @@ const LoginPage = () => {
                           setSelectedDemo(null);
                           clearErrors();
                         }}
-                        className="h-11 border-border/80 bg-background/80 pl-10 focus-visible:ring-primary/40"
+                        className="h-12 border-border/80 bg-background/80 pl-10 transition-[border-color,box-shadow] duration-200 hover:border-primary/35 focus-visible:ring-primary/40"
                       />
                     </div>
                   )}
@@ -358,13 +351,13 @@ const LoginPage = () => {
                           setSelectedDemo(null);
                           clearErrors();
                         }}
-                        className="h-11 border-border/80 bg-background/80 pl-10 pr-11 focus-visible:ring-primary/40"
+                        className="h-12 border-border/80 bg-background/80 pl-10 pr-11 transition-[border-color,box-shadow] duration-200 hover:border-primary/35 focus-visible:ring-primary/40"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                         onClick={() => setShowPassword((v) => !v)}
                         aria-label={t(
                           locale,
@@ -407,7 +400,7 @@ const LoginPage = () => {
                         setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
                         clearErrors();
                       }}
-                      className="h-11 border-border/80 bg-background/80 pl-10 tracking-[0.35em] focus-visible:ring-primary/40"
+                      className="h-12 border-border/80 bg-background/80 pl-10 tracking-[0.35em] transition-[border-color,box-shadow] duration-200 hover:border-primary/35 focus-visible:ring-primary/40"
                       maxLength={6}
                     />
                   </div>
@@ -423,7 +416,7 @@ const LoginPage = () => {
 
             <Button
               type="submit"
-              className="h-11 w-full gap-2 text-[15px] font-semibold shadow-[0_12px_28px_-14px_hsl(120_35%_28%/0.4)] hover:bg-[hsl(var(--primary-hover))]"
+              className="h-12 w-full gap-2 text-[15px] font-semibold shadow-[0_12px_28px_-14px_hsl(120_35%_28%/0.4)] transition-[transform,box-shadow,background-color] duration-200 hover:-translate-y-0.5 hover:bg-[hsl(var(--primary-hover))] hover:shadow-lg active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
               disabled={isLoading}
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
@@ -438,7 +431,7 @@ const LoginPage = () => {
               <Button
                 type="button"
                 variant="ghost"
-                className="h-10 w-full gap-2"
+                className="h-10 w-full gap-2 transition-colors hover:bg-accent"
                 onClick={() => {
                   setMfaStep(null);
                   setOtpCode("");
@@ -454,14 +447,17 @@ const LoginPage = () => {
 
         {!mfaStep ? (
           <div className="space-y-3">
-            <p className="text-center text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Quick demo access · Password123!
-            </p>
+            <div>
+              <h3 className="text-sm font-semibold">Explore a demo workspace</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Choose a role to fill in the demo sign-in details.
+              </p>
+            </div>
             {DEMO_ORGS.map((org) => {
               const accounts = DEMO_ACCOUNTS.filter((a) => a.org === org);
               return (
                 <div key={org} className="space-y-1.5">
-                  <p className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary/80">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     {org}
                     {org === "Vendor" ? " · B-Agro / RFSP" : ""}
                   </p>
@@ -474,10 +470,10 @@ const LoginPage = () => {
                           type="button"
                           onClick={() => pickDemo(account.email)}
                           className={cn(
-                            "cf-focus rounded-xl border px-3 py-2 text-left text-sm transition-all",
+                            "cf-focus rounded-xl border px-3 py-2 text-left text-sm transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none",
                             active
                               ? "border-primary/50 bg-accent shadow-sm"
-                              : "border-border/80 bg-card/70 hover:border-primary/35 hover:bg-accent/60",
+                              : "border-border/80 bg-background hover:border-primary/35 hover:bg-accent/50",
                           )}
                         >
                           <span className="block truncate font-medium text-foreground">
@@ -496,7 +492,10 @@ const LoginPage = () => {
           </div>
         ) : null}
 
-        <div className="flex justify-center">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          {!mfaStep ? (
+            <p className="text-xs text-muted-foreground">Demo password: {DEMO_PASSWORD}</p>
+          ) : <span />}
           <Button
             variant="link"
             size="sm"

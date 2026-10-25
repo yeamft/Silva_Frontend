@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { MapPinned } from "lucide-react";
+import { Blocks, MapPinned, Store } from "lucide-react";
 import { toast } from "sonner";
 import {
   TableMessageRow,
@@ -11,7 +11,7 @@ import {
   TableSkeleton,
   TableToolbar,
 } from "@/components/cropfort/data-table";
-import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards, PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -158,6 +158,15 @@ export default function FarmMapPage() {
   return (
     <PageContainer>
       <PageHeader title="Farm map" />
+
+      <CompactSummaryCards
+        label="Farm map summary"
+        items={[
+          { id: "areas", label: "Farm areas", value: loading ? "—" : String(farmAreas.length), footnote: "Mapped estates", icon: MapPinned },
+          { id: "blocks", label: "Blocks", value: loading ? "—" : String(blocks.length), footnote: "Across farm areas", icon: Blocks },
+          { id: "vendors", label: "Vendors", value: loading ? "—" : String(vendors.length), footnote: "Delivery partners", icon: Store },
+        ]}
+      />
 
       <SectionCard title="Map view">
         {loading ? (

@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { MoreHorizontal, Plus, SearchX } from "lucide-react";
+import { MoreHorizontal, Plus, SearchX, UserCheck, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { MultiCheck } from "@/components/cropfort/multi-check";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
-import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards, PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { RoleBadge } from "@/components/cropfort/role-badge";
 import { SortableHead, type SortDir } from "@/components/cropfort/sortable-head";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -291,6 +291,15 @@ export default function UsersAdminPage() {
             </Button>
           </div>
         }
+      />
+
+      <CompactSummaryCards
+        label="Access and security summary"
+        items={[
+          { id: "users", label: "Users", value: loading ? "—" : String(rows.length), footnote: "Registered accounts", icon: Users },
+          { id: "active", label: "Active", value: loading ? "—" : String(rows.filter((row) => row.status === "active").length), footnote: "Access enabled", icon: UserCheck },
+          { id: "invited", label: "Invited", value: loading ? "—" : String(rows.filter((row) => row.status === "invited").length), footnote: "Awaiting activation", icon: UserPlus },
+        ]}
       />
 
       <SectionCard flush>

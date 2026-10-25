@@ -6,7 +6,7 @@ const View = dynamic(() => import("./programme-plans-register-view"), {
   ssr: false,
   loading: () => (
     <div className="cf-page">
-      <p className="text-sm text-muted-foreground">Loading programme plans…</p>
+      <p className="text-sm text-muted-foreground">Loading Core Operations plans…</p>
     </div>
   ),
 });

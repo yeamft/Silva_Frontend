@@ -10,6 +10,13 @@ import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -57,6 +64,15 @@ function afpPromotionFromPlan(plan: ProgrammePlanDto): AfpPromotion {
 }
 
 type Tab = "afe" | "afp" | "projects" | "interventions" | "monthly" | "weekly";
+
+const APPROVAL_TYPES: { id: Tab; label: string }[] = [
+  { id: "afp", label: "Core Operations plans" },
+  { id: "afe", label: "Spending requests" },
+  { id: "projects", label: "Projects" },
+  { id: "interventions", label: "Interventions" },
+  { id: "monthly", label: "Monthly work orders" },
+  { id: "weekly", label: "Weekly plans" },
+];
 
 function ProjectDetail({ project }: { project: ProjectDto }) {
   const done = project.milestones.filter((m) => m.done).length;
@@ -255,7 +271,7 @@ function AfpDetail({
         <DetailKV label="Band">
           <span className="font-medium">Band {promotion.band}</span>
         </DetailKV>
-        <DetailKV label="Programme total">
+        <DetailKV label="Core Operations total">
           <span className="cf-numeric font-medium">{fmtEtb(promotion.totalEtb)}</span>
         </DetailKV>
         <DetailKV label="Included lines">
@@ -360,7 +376,7 @@ function AfpDetail({
 
       <ReviewGate
         items={[
-          { ok: included.length > 0, label: "Programme has included activity lines" },
+          { ok: included.length > 0, label: "Core Operations plan has included activity lines" },
           { ok: missingQty === 0, label: missingQty === 0 ? "All included lines have quantity" : `${missingQty} lines missing quantity` },
           { ok: missingRate === 0, label: missingRate === 0 ? "All included lines have approved rates" : `${missingRate} lines missing rates` },
           {
@@ -549,27 +565,30 @@ export default function ApprovalsView() {
   const canDecide = canApproveOperations(user.role);
   const afesQuery = useAfes(Boolean(activeProgram?.id), "submitted");
   const decideAfe = useDecideAfe();
-  const afes = afesQuery.data || [];
+  const afes = useMemo(() => afesQuery.data || [], [afesQuery.data]);
   const weeklyQuery = useWeeklyPlans(Boolean(activeProgram?.id), "submitted");
   const decideWeeklyMut = useDecideWeeklyPlan();
-  const weeklyPlans = weeklyQuery.data || [];
+  const weeklyPlans = useMemo(() => weeklyQuery.data || [], [weeklyQuery.data]);
   const monthlyQuery = useMonthlyWorkOrders(Boolean(activeProgram?.id), "submitted");
   const decideMonthlyMut = useDecideMonthlyWorkOrder();
-  const monthlyOrders = monthlyQuery.data || [];
+  const monthlyOrders = useMemo(() => monthlyQuery.data || [], [monthlyQuery.data]);
   const afpPlansQuery = useProgrammePlans(Boolean(activeProgram?.id), {
     status: "submitted",
   });
   const decideAfpMut = useDecideProgrammePlan();
-  const afpPlans = afpPlansQuery.data || [];
+  const afpPlans = useMemo(() => afpPlansQuery.data || [], [afpPlansQuery.data]);
   const projectsQuery = useProjects(Boolean(activeProgram?.id), "submitted");
   const decideProjectMut = useDecideProject();
-  const projects = projectsQuery.data || [];
+  const projects = useMemo(() => projectsQuery.data || [], [projectsQuery.data]);
   const interventionsQuery = useInterventions(Boolean(activeProgram?.id), "submitted");
   const decideInterventionMut = useDecideIntervention();
-  const interventions = interventionsQuery.data || [];
+  const interventions = useMemo(
+    () => interventionsQuery.data || [],
+    [interventionsQuery.data],
+  );
   const bandAutoApproves = useSpendBandStore((s) => s.bandAutoApproves);
 
-  const [tab, setTab] = useState<Tab>("afe");
+  const [tab, setTab] = useState<Tab>("afp");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [decisionNote, setDecisionNote] = useState("");
 
@@ -728,16 +747,16 @@ export default function ApprovalsView() {
     }
   };
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "afe", label: "AFEs" },
-    { id: "afp", label: "AFPs" },
-    { id: "projects", label: "Projects" },
-    { id: "interventions", label: "Interventions" },
-    { id: "monthly", label: "Monthly WOs" },
-    { id: "weekly", label: "Weekly plans" },
-  ];
+  const waitingTotal = APPROVAL_TYPES.reduce((s, t) => s + queues[t.id].length, 0);
 
-  const waitingTotal = tabs.reduce((s, t) => s + queues[t.id].length, 0);
+  useEffect(() => {
+    if (queues[tab].length > 0 || waitingTotal === 0) return;
+    const firstQueueWithWork = APPROVAL_TYPES.find((item) => queues[item.id].length > 0);
+    if (firstQueueWithWork) {
+      setTab(firstQueueWithWork.id);
+      setSelectedId(null);
+    }
+  }, [queues, tab, waitingTotal]);
 
   return (
     <PageContainer className={cn(isSilva && "gap-5")}>
@@ -747,11 +766,15 @@ export default function ApprovalsView() {
           <p className="text-sm text-muted-foreground">
             {waitingTotal} awaiting your decision
           </p>
+          <p className="text-xs text-muted-foreground">
+            Review one request at a time, then approve it or request changes.
+          </p>
         </header>
       ) : (
         <PageHeader
           eyebrow={activeProgram?.name || "Control"}
           title={area.label}
+          description="Review one request at a time, then approve it or return it with clear instructions."
           breadcrumbs={[
             { label: "Home", href: CROPFORT_ROUTES.dashboard },
             { label: "Control" },
@@ -765,46 +788,44 @@ export default function ApprovalsView() {
         />
       )}
 
-      <nav aria-label="Approval queues" className="cf-tab-scroll -mx-1 border-b border-border px-1">
-        {tabs.map((t) => {
-          const active = tab === t.id;
-          const count = queues[t.id].length;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              aria-current={active ? "page" : undefined}
-              onClick={() => {
-                setTab(t.id);
-                setSelectedId(null);
-              }}
-              className={cn(
-                "relative flex shrink-0 items-center gap-1.5 px-3 py-2.5 text-[13px] font-medium touch-manipulation transition-colors",
-                active ? "text-primary" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {t.label}
-              {count > 0 ? (
-                <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] tabular-nums text-foreground">
-                  {count}
-                </span>
-              ) : null}
-              {active ? (
-                <span
-                  className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary"
-                  aria-hidden
-                />
-              ) : null}
-            </button>
-          );
-        })}
-      </nav>
+      {waitingTotal > 0 ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <label className="text-sm font-medium" htmlFor="approval-review-type">Review type</label>
+            <p className="text-xs text-muted-foreground">Choose the kind of request you want to review.</p>
+          </div>
+          <Select
+            value={tab}
+            onValueChange={(value) => {
+              setTab(value as Tab);
+              setSelectedId(null);
+            }}
+          >
+            <SelectTrigger id="approval-review-type" className="w-full sm:w-[260px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {APPROVAL_TYPES.filter((item) => queues[item.id].length > 0).map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.label} ({queues[item.id].length})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
-      {rows.length === 0 ? (
+      {waitingTotal === 0 ? (
         <SectionCard>
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Nothing waiting in this queue.
-          </p>
+          <div className="py-10 text-center">
+            <CheckCircle2 className="mx-auto mb-3 size-9 text-success" aria-hidden />
+            <p className="font-medium">You’re all caught up</p>
+            <p className="mt-1 text-sm text-muted-foreground">There are no requests waiting for your decision.</p>
+          </div>
+        </SectionCard>
+      ) : rows.length === 0 ? (
+        <SectionCard>
+          <p className="py-8 text-center text-sm text-muted-foreground">Nothing waiting in this category.</p>
         </SectionCard>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
@@ -915,7 +936,7 @@ export default function ApprovalsView() {
                       variant="outline"
                       onClick={() => decideRow("returned")}
                     >
-                      Return
+                      Request changes
                     </Button>
                   </div>
                 ) : (

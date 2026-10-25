@@ -500,7 +500,7 @@ const UserManagementView = () => {
             <DialogDescription>
               {isSupabaseConfigured
                 ? "A temporary password is generated and shown once after creation."
-                : "Create a desk account for this programme."}
+                : "Create a desk account for this Core Operations workspace."}
             </DialogDescription>
           </DialogHeader>
           {formFields("create")}

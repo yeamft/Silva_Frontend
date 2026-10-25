@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
 import { CropfortAuthProvider, useCropfortAuth } from "@/components/navigation/auth-context";
 import { DeskModeProvider, useDeskMode } from "@/components/cropfort/desk-mode";
 import { SpxPlatformShell } from "@/components/cropfort/shells/spx-platform-shell";
@@ -10,14 +9,11 @@ import { SilvaApprovalShell } from "@/components/cropfort/shells/silva-approval-
 import { useAuthStore } from "@/store/authStore";
 import {
   clearWorkspaceSelectionRequired,
-  needsWorkspaceSelection,
   planWorkspaceEntry,
-  SELECT_WORKSPACE_PATH,
 } from "@/lib/workspace-gate";
+import { toast } from "sonner";
 
 function WorkspaceGate({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
   const { user, activeProgram, programs } = useCropfortAuth();
   const switchProgram = useAuthStore((s) => s.switchProgram);
   const [ready, setReady] = useState(false);
@@ -27,14 +23,6 @@ function WorkspaceGate({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const run = async () => {
-      const mustPick =
-        needsWorkspaceSelection() || (!activeProgram?.id && programs.length > 0);
-
-      if (!mustPick) {
-        if (!cancelled) setReady(true);
-        return;
-      }
-
       const plan = planWorkspaceEntry({
         role: user.role,
         programs,
@@ -47,25 +35,26 @@ function WorkspaceGate({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (plan.action === "auto" && !autoTried.current) {
+      if (!autoTried.current) {
         autoTried.current = true;
         const result = await switchProgram(plan.programId);
         if (cancelled) return;
-        if (result.ok) {
+        if (result.ok === true) {
           clearWorkspaceSelectionRequired();
           setReady(true);
           return;
         }
+        toast.error(result.error || "Could not open your workspace");
       }
 
-      router.replace(SELECT_WORKSPACE_PATH);
+      if (!cancelled) setReady(true);
     };
 
     void run();
     return () => {
       cancelled = true;
     };
-  }, [activeProgram?.id, programs, pathname, router, switchProgram, user.role]);
+  }, [activeProgram?.id, programs, switchProgram, user.role]);
 
   if (!ready) {
     return (

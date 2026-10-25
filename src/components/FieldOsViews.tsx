@@ -74,10 +74,7 @@ import {
 function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <div className="hidden h-8 w-1.5 rounded-full gold-gradient sm:block" aria-hidden />
-        <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h2>
-      </div>
+      <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h2>
       {action}
     </div>
   );
@@ -324,7 +321,7 @@ export function FieldDashboardView() {
               <CardHeader>
                 <CardTitle className="text-base">Budget vs actual by AFP line</CardTitle>
                 <CardDescription>Planned spend against field actuals</CardDescription>
-              </CardHeader>
+              </CardHeader> 
               <CardContent>
                 <ChartContainer config={budgetChartConfig} className="aspect-[16/9] w-full">
                   <BarChart data={budgetBars} margin={{ left: 8, right: 8, top: 8 }}>
@@ -698,7 +695,13 @@ export function AfpView() {
             </Table>
           </DataTableCard>
         </>
-      ) : null}
+      ) : (
+        <Card className="border-border/70 bg-card/90 shadow-card">
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No farm plans available.
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -724,6 +727,11 @@ export function AfeView() {
             <CardTitle className="text-base">Author AFE</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-4">
+            {afps.length === 0 ? (
+              <p className="text-sm text-muted-foreground md:col-span-4">
+                Create a farm plan before authoring an AFE.
+              </p>
+            ) : null}
             <div className="space-y-2 md:col-span-2">
               <Label>Title</Label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Campaign title" />
@@ -734,9 +742,9 @@ export function AfeView() {
             </div>
             <div className="space-y-2">
               <Label>AFP line</Label>
-              <Select value={lineId} onValueChange={setLineId}>
+              <Select value={lineId} onValueChange={setLineId} disabled={!afps[0]}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={afps[0] ? "Select a plan line" : "No farm plan available"} />
                 </SelectTrigger>
                 <SelectContent>
                   {afps[0]?.lines.map((l) => (
@@ -751,6 +759,7 @@ export function AfeView() {
           <CardFooter>
             <Button
               className="gap-2 gold-gradient text-primary-foreground hover:brightness-105"
+              disabled={!afps[0]}
               onClick={() => {
                 if (!title) return;
                 const afe = createAfe({
@@ -759,6 +768,10 @@ export function AfeView() {
                   amountUsd: Number(amount) || 0,
                   vendorOrgId: "org-bagro",
                 });
+                if (!afe) {
+                  toast.error("Create a farm plan before authoring an AFE");
+                  return;
+                }
                 toast.success(`AFE created · ${bandLabel(afe.band)}`);
                 setTitle("");
               }}

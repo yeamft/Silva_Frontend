@@ -78,7 +78,7 @@ export default function EstateMapView() {
         ) : farmAreas.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
             <MapPinned className="h-8 w-8 opacity-50" />
-            No farm areas on this programme yet.
+            No farm areas on this Core Operations plan yet.
           </div>
         ) : (
           <FarmBlockMap

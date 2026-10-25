@@ -11,7 +11,7 @@ const LINKS = [
   {
     title: "Programs",
     href: CROPFORT_ROUTES.programs,
-    detail: "Workspace programmes and membership",
+    detail: "Core Operations workspaces and membership",
   },
   {
     title: "Spend bands",

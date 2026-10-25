@@ -1,23 +1,12 @@
-/** Session-only gate: after login, user must pick a workspace before Cropfort. */
+/** Remove the legacy workspace-picker flag from earlier sessions. */
 
 const KEY = "cropfort.needWorkspace";
-
-export function markWorkspaceSelectionRequired() {
-  if (typeof window === "undefined") return;
-  sessionStorage.setItem(KEY, "1");
-}
 
 export function clearWorkspaceSelectionRequired() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(KEY);
 }
 
-export function needsWorkspaceSelection() {
-  if (typeof window === "undefined") return false;
-  return sessionStorage.getItem(KEY) === "1";
-}
-
-export const SELECT_WORKSPACE_PATH = "/select-workspace";
 export const WORKSPACE_HOME_PATH = "/cropfort/dashboard";
 
 type ProgramLike = { id: string; status?: string | null };
@@ -29,12 +18,12 @@ export function activeWorkspacePrograms<T extends ProgramLike>(programs: T[] | n
   );
 }
 
-/** Any role with exactly one workspace skips the picker and enters it. */
+/** Retained for callers that distinguish a single assigned workspace. */
 export function shouldAutoEnterSingleWorkspace(programCount: number): boolean {
   return programCount === 1;
 }
 
-/** Show workspace switcher / “All workspaces” only when there is a choice. */
+/** Show the program switcher only when there is a choice. */
 export function canChooseWorkspace(
   _role: string | null | undefined,
   programCount: number,
@@ -44,12 +33,11 @@ export function canChooseWorkspace(
 
 export type WorkspaceEntryPlan =
   | { action: "home" }
-  | { action: "auto"; programId: string }
-  | { action: "pick" };
+  | { action: "auto"; programId: string };
 
 /**
- * Post-login / gate: one assigned workspace → home or auto-enter;
- * zero or multiple → workspace picker.
+ * Post-login / gate: keep a valid active workspace, otherwise open the first
+ * available workspace. Users can switch workspaces from the global context bar.
  */
 export function planWorkspaceEntry(opts: {
   role?: string | null;
@@ -58,11 +46,10 @@ export function planWorkspaceEntry(opts: {
 }): WorkspaceEntryPlan {
   const programs = activeWorkspacePrograms(opts.programs);
 
-  if (shouldAutoEnterSingleWorkspace(programs.length)) {
-    const only = programs[0]!;
-    if (opts.activeProgramId === only.id) return { action: "home" };
-    return { action: "auto", programId: only.id };
+  if (opts.activeProgramId && programs.some((p) => p.id === opts.activeProgramId)) {
+    return { action: "home" };
   }
 
-  return { action: "pick" };
+  const first = programs[0];
+  return first ? { action: "auto", programId: first.id } : { action: "home" };
 }

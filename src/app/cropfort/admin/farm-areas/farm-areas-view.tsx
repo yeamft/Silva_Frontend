@@ -7,7 +7,7 @@ import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { MultiCheck } from "@/components/cropfort/multi-check";
-import { PageContainer, PageHeader, SectionCard, StatusSummaryCards } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards, PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -176,9 +176,8 @@ export default function FarmAreasPage() {
         }
       />
 
-      <StatusSummaryCards
+      <CompactSummaryCards
         label="Farm areas summary"
-        columns={3}
         items={[
           {
             id: "areas",
@@ -186,7 +185,6 @@ export default function FarmAreasPage() {
             value: String(areas.length),
             icon: MapPinned,
             footnote: "Mapped areas",
-            emphasis: true,
           },
           {
             id: "ha",

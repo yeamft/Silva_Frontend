@@ -7,14 +7,10 @@ import {
   Palette,
   Bell,
   CheckCircle2,
-  Sun,
-  Moon,
-  Monitor,
   Lock,
 } from "lucide-react";
 import { useFieldOsStore } from "@/store/fieldOsStore";
 import { ROLE_LABELS } from "@/lib/rbac";
-import { useThemeStore } from "@/store/themeStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,68 +124,15 @@ function FirewallsTab() {
 }
 
 function AppearanceTab() {
-  const dark = useThemeStore((s) => s.dark);
-  const setDark = useThemeStore((s) => s.setDark);
-  const [saved, setSaved] = useState(false);
-  const theme = dark ? "dark" : "light";
-
-  const themeOptions = [
-    { value: "light", label: "Light", icon: Sun },
-    { value: "dark", label: "Dark", icon: Moon },
-    { value: "system", label: "System", icon: Monitor },
-  ] as const;
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Appearance</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Label id="theme-label">Theme</Label>
-          <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby="theme-label">
-            {themeOptions.map((opt) => {
-              const Icon = opt.icon;
-              const active = opt.value === "system" ? false : theme === opt.value;
-              return (
-                <Button
-                  key={opt.value}
-                  type="button"
-                  variant={active ? "default" : "outline"}
-                  aria-pressed={active}
-                  className="h-auto flex-col gap-1.5 py-3"
-                  onClick={() => {
-                    if (opt.value === "light") setDark(false);
-                    if (opt.value === "dark") setDark(true);
-                    if (opt.value === "system") {
-                      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-                      setDark(prefersDark);
-                    }
-                  }}
-                >
-                  <Icon className="h-4 w-4" aria-hidden />
-                  <span className="text-xs">{opt.label}</span>
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-
-        <Button
-          className="gap-1.5"
-          onClick={() => {
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
-          }}
-        >
-          {saved ? (
-            <>
-              <CheckCircle2 className="h-4 w-4" aria-hidden /> Saved
-            </>
-          ) : (
-            "Save appearance"
-          )}
-        </Button>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          Light Green appearance is applied consistently across the workspace.
+        </p>
       </CardContent>
     </Card>
   );

@@ -31,11 +31,6 @@ const UserMenu = dynamic(
   },
 );
 
-const ThemeToggle = dynamic(() => import("@/components/ThemeToggle"), {
-  ssr: false,
-  loading: () => <div className="h-9 w-9" aria-hidden />,
-});
-
 type GlobalContextBarProps = {
   onOpenSearch?: () => void;
   onOpenAttention?: () => void;
@@ -88,7 +83,7 @@ export function GlobalContextBar({
       return year ? `${activePlan.name} · ${year}` : activePlan.name;
     }
     if (plansQuery.isLoading) return "Loading plans…";
-    return "Select programme plan";
+    return "Select Core Operations plan";
   }, [activePlan, plansQuery.isLoading, yearLabel]);
 
   // Drop stale remembered plan ids. ActivePlanSync then picks a valid preferred
@@ -105,7 +100,7 @@ export function GlobalContextBar({
     setSwitching(true);
     const result = await switchProgram(nextProgramId);
     setSwitching(false);
-    if (!result.ok) toast.error(result.error || "Could not switch programme");
+    if (!result.ok) toast.error(result.error || "Could not switch Core Operations");
   };
 
   const onSelectPlan = (planId: string) => {
@@ -114,15 +109,15 @@ export function GlobalContextBar({
   };
 
   const triggerClass =
-    "h-9 gap-1 border-transparent bg-transparent px-2 font-medium text-foreground shadow-none hover:bg-muted touch-manipulation";
+    "h-9 gap-1.5 rounded-lg border border-border/80 bg-card px-3 font-medium text-foreground shadow-sm transition-[border-color,background-color,box-shadow] duration-150 ease-out hover:border-primary/25 hover:bg-primary/[0.03] hover:shadow focus-visible:ring-2 focus-visible:ring-ring touch-manipulation motion-reduce:transition-none";
 
   const iconBtn =
-    "relative h-9 w-9 shrink-0 touch-manipulation text-muted-foreground";
+    "relative h-9 w-9 shrink-0 rounded-lg border border-transparent text-muted-foreground transition-[border-color,background-color,color] duration-150 ease-out hover:border-border/70 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring touch-manipulation motion-reduce:transition-none";
 
   return (
     <div
       className={cn(
-        "flex h-14 min-h-14 items-center gap-0.5 bg-card px-2 sm:gap-1 sm:px-4 md:px-6",
+        "sticky top-0 z-30 flex h-14 min-h-14 items-center gap-1 border-b border-border/80 bg-background/95 px-2 shadow-[0_2px_10px_-8px_hsl(var(--foreground)/0.25)] backdrop-blur-md sm:gap-2 sm:px-4 md:px-6",
         className,
       )}
     >
@@ -141,7 +136,7 @@ export function GlobalContextBar({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[min(calc(100vw-1.5rem),18rem)]">
-          <DropdownMenuLabel>Estate / programme</DropdownMenuLabel>
+          <DropdownMenuLabel>Estate / Core Operations</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {programs.length === 0 ? (
             <DropdownMenuItem disabled>No workspaces</DropdownMenuItem>
@@ -160,7 +155,7 @@ export function GlobalContextBar({
             ))
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Programme plan</DropdownMenuLabel>
+          <DropdownMenuLabel>Core Operations plan</DropdownMenuLabel>
           {plans.length === 0 ? (
             <DropdownMenuItem asChild>
               <Link href={CROPFORT_ROUTES.programmePlans}>Create a plan…</Link>
@@ -199,7 +194,7 @@ export function GlobalContextBar({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
-          <DropdownMenuLabel>Estate / programme workspace</DropdownMenuLabel>
+          <DropdownMenuLabel>Estate / Core Operations workspace</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {programs.length === 0 ? (
             <DropdownMenuItem disabled>No workspaces</DropdownMenuItem>
@@ -231,11 +226,11 @@ export function GlobalContextBar({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72">
-          <DropdownMenuLabel>Active programme plan</DropdownMenuLabel>
+          <DropdownMenuLabel>Active Core Operations plan</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {plans.length === 0 ? (
             <DropdownMenuItem asChild>
-              <Link href={CROPFORT_ROUTES.programmePlans}>Open Programme Plans…</Link>
+              <Link href={CROPFORT_ROUTES.programmePlans}>Open Core Operations plans…</Link>
             </DropdownMenuItem>
           ) : (
             plans.map((p) => (
@@ -305,7 +300,6 @@ export function GlobalContextBar({
         >
           <HelpCircle className="h-4 w-4" aria-hidden />
         </Button>
-        <ThemeToggle />
         <div className="ml-0.5">
           <UserMenu />
         </div>

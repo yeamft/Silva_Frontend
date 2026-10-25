@@ -1,11 +1,11 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, ClipboardCheck, Leaf, WalletCards } from "lucide-react";
+import Link from "next/link";
 import { useMemo } from "react";
 import {
   AttentionItem,
   AttentionPanel,
-  DeskMetric,
 } from "@/components/cropfort/attention-panel";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
@@ -16,23 +16,54 @@ import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
 import { useProjects } from "@/lib/query/hooks/use-projects";
 import { useSettlements } from "@/lib/query/hooks/use-payment-requests";
 import { useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
-import { mapTicketDto, useWorkOrders } from "@/lib/query/hooks/use-work-orders";
-import { fmtEtb, ticketWaitingOn } from "@/store/cropfortOpsStore";
+import { fmtEtb } from "@/store/cropfortOpsStore";
 
 type Decision = {
   id: string;
-  kind: string;
   title: string;
   meta: string;
   detail?: string;
 };
 
+function OwnerMetric({
+  href,
+  label,
+  value,
+  icon: Icon,
+  emphasis = false,
+}: {
+  href: string;
+  label: string;
+  value: string;
+  icon: typeof ClipboardCheck;
+  emphasis?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group rounded-2xl border border-emerald-900/10 bg-white p-4 shadow-sm transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-5"
+    >
+      <span className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+          <Icon className="size-[18px]" aria-hidden />
+        </span>
+      </span>
+      <span className={`cf-numeric mt-4 block truncate text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl ${emphasis ? "text-primary" : "text-foreground"}`}>
+        {value}
+      </span>
+      <span className="mt-3 flex items-center justify-end text-primary opacity-70 transition-[opacity,transform] group-hover:translate-x-0.5 group-hover:opacity-100">
+        <ArrowRight className="size-4" aria-hidden />
+      </span>
+    </Link>
+  );
+}
+
 /** Asset owner home — short header, clear position, attention only when needed. */
 export function SilvaDeskHome() {
-  const { activeProgram } = useCropfortAuth();
+  const { activeProgram, user } = useCropfortAuth();
   const enabled = Boolean(activeProgram?.id);
 
-  const woQuery = useWorkOrders(enabled);
   const afesQuery = useAfes(enabled, "submitted");
   const afpQuery = useProgrammePlans(enabled, { status: "submitted" });
   const projectsQuery = useProjects(enabled, "submitted");
@@ -41,21 +72,13 @@ export function SilvaDeskHome() {
   const weeklyQuery = useWeeklyPlans(enabled, "submitted");
   const settlementsQuery = useSettlements(enabled);
 
-  const signOffs = useMemo(() => {
-    const tickets = (woQuery.data || []).flatMap((wo) =>
-      (wo.tickets || []).map((t) => mapTicketDto(t, wo)),
-    );
-    return tickets.filter((t) => ticketWaitingOn(t.status) === "asset_owner");
-  }, [woQuery.data]);
-
   const decisions = useMemo(() => {
     const rows: Decision[] = [];
     for (const p of afpQuery.data || []) {
       const included = Object.values(p.activities ?? {}).filter((a) => a.included).length;
       rows.push({
         id: `afp-${p.id}`,
-        kind: "Programme plan",
-        title: p.farmName ? `${p.farmName} programme` : p.name || "Programme plan",
+        title: p.farmName ? `${p.farmName} Core Operations` : p.name || "Core Operations plan",
         meta: [p.budgetYearLabel, p.submittedAt ? new Date(p.submittedAt).toLocaleDateString() : null]
           .filter(Boolean)
           .join(" · "),
@@ -70,7 +93,6 @@ export function SilvaDeskHome() {
     for (const a of afesQuery.data || []) {
       rows.push({
         id: `afe-${a.id}`,
-        kind: "AFE",
         title: a.title,
         meta: `Band ${a.band}`,
         detail: fmtEtb(a.amountEtb),
@@ -79,7 +101,6 @@ export function SilvaDeskHome() {
     for (const p of projectsQuery.data || []) {
       rows.push({
         id: `proj-${p.id}`,
-        kind: "Project",
         title: p.title,
         meta: p.code,
       });
@@ -87,7 +108,6 @@ export function SilvaDeskHome() {
     for (const i of interventionsQuery.data || []) {
       rows.push({
         id: `int-${i.id}`,
-        kind: "Intervention",
         title: i.title,
         meta: i.code,
       });
@@ -95,7 +115,6 @@ export function SilvaDeskHome() {
     for (const o of monthlyQuery.data || []) {
       rows.push({
         id: `mo-${o.id}`,
-        kind: "Monthly work order",
         title: o.code,
         meta: o.farmName || "Estate",
       });
@@ -103,7 +122,6 @@ export function SilvaDeskHome() {
     for (const w of weeklyQuery.data || []) {
       rows.push({
         id: `wk-${w.id}`,
-        kind: "Weekly plan",
         title: w.code,
         meta: w.weekLabel || "Week",
       });
@@ -130,7 +148,6 @@ export function SilvaDeskHome() {
     };
   }, [settlementsQuery.data]);
 
-  const estate = activeProgram?.name || "Estate";
   const approvalsAwaiting = decisions.length;
   const loading =
     afesQuery.isLoading ||
@@ -139,83 +156,75 @@ export function SilvaDeskHome() {
     interventionsQuery.isLoading ||
     monthlyQuery.isLoading ||
     weeklyQuery.isLoading ||
-    woQuery.isLoading;
-
-  const attentionCount = approvalsAwaiting + signOffs.length;
-  const hasAttention = !loading && attentionCount > 0;
+    settlementsQuery.isLoading;
+  const hasError =
+    afesQuery.isError ||
+    afpQuery.isError ||
+    projectsQuery.isError ||
+    interventionsQuery.isError ||
+    monthlyQuery.isError ||
+    weeklyQuery.isError ||
+    settlementsQuery.isError;
+  const dataReady = enabled && !loading && !hasError;
 
   return (
     <div className="cf-page space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{estate}</h1>
-        {!loading ? (
-          <span
-            className={
-              hasAttention
-                ? "inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tabular-nums text-primary"
-                : "inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium tabular-nums text-muted-foreground"
-            }
-          >
-            {hasAttention ? (
-              attentionCount
-            ) : (
-              <>
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                0
-              </>
-            )}
-          </span>
-        ) : null}
+      <header className="relative isolate flex min-h-32 items-center justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-700 via-emerald-600 to-green-500 px-5 py-6 text-white shadow-sm sm:px-7">
+        <span className="pointer-events-none absolute -right-8 -top-14 -z-10 size-48 rounded-full border-[22px] border-white/10" aria-hidden />
+        <span className="pointer-events-none absolute -bottom-24 right-24 -z-10 size-40 rounded-full bg-white/[0.07]" aria-hidden />
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          Welcome back, {user.name.trim().split(/\s+/)[0] || "there"}
+        </h1>
+        <span className="mr-2 hidden size-14 items-center justify-center rounded-2xl bg-white/15 text-white sm:flex">
+          <Leaf className="size-7" aria-hidden />
+        </span>
       </header>
 
-      {hasAttention ? (
-        <AttentionPanel title="Queue" actionHref={CROPFORT_ROUTES.approvals} actionLabel="All">
-          {decisions.slice(0, 5).map((row) => (
-            <AttentionItem
-              key={row.id}
-              href={CROPFORT_ROUTES.approvals}
-              eyebrow={row.kind}
-              title={row.title}
-              meta={row.meta}
-              detail={row.detail}
-              cta="Open"
-            />
-          ))}
-          {signOffs.slice(0, 4).map((t) => (
-            <AttentionItem
-              key={t.id}
-              href={`${CROPFORT_ROUTES.fieldTickets}?ticket=${t.id}`}
-              title={t.code}
-              meta={[t.block, t.title].filter(Boolean).join(" · ") || undefined}
-              cta="Open"
-            />
-          ))}
-        </AttentionPanel>
-      ) : null}
+      <AttentionPanel
+        title="Items for your review"
+        actionHref={CROPFORT_ROUTES.approvals}
+        actionLabel="View all"
+        empty={
+          !enabled
+            ? "Select an estate to see items waiting for your review."
+            : loading
+              ? "Checking for items that need your review…"
+              : hasError
+                ? "Review items could not be loaded. Please try again shortly."
+                : "You're all caught up. New submissions will appear here."
+        }
+      >
+        {decisions.slice(0, 5).map((row) => (
+          <AttentionItem
+            key={row.id}
+            href={CROPFORT_ROUTES.approvals}
+            title={row.title}
+            meta={row.meta}
+            detail={row.detail}
+          />
+        ))}
+      </AttentionPanel>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <DeskMetric
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <OwnerMetric
           href={CROPFORT_ROUTES.approvals}
-          label="Approvals"
-          value={loading ? "—" : String(approvalsAwaiting)}
-          emphasis={!loading && approvalsAwaiting > 0}
+          label="Waiting for your review"
+          value={dataReady ? String(approvalsAwaiting) : "—"}
+          icon={ClipboardCheck}
+          emphasis={dataReady && approvalsAwaiting > 0}
         />
-        <DeskMetric
-          href={CROPFORT_ROUTES.fieldTickets}
-          label="Sign-offs"
-          value={loading ? "—" : String(signOffs.length)}
-          emphasis={!loading && signOffs.length > 0}
-        />
-        <DeskMetric
+        <OwnerMetric
           href={CROPFORT_ROUTES.settlements}
-          label="To settle"
-          value={loading ? "—" : fmtEtb(settlementSnap.readyValue)}
-          emphasis={!loading && settlementSnap.readyCount > 0}
+          label="Ready to settle"
+          value={dataReady ? fmtEtb(settlementSnap.readyValue) : "—"}
+          icon={WalletCards}
+          emphasis={dataReady && settlementSnap.readyCount > 0}
         />
-        <DeskMetric
+        <OwnerMetric
           href={CROPFORT_ROUTES.settlements}
-          label="Settled"
-          value={loading ? "—" : fmtEtb(settlementSnap.settledValue)}
+          label="Paid to date"
+          value={dataReady ? fmtEtb(settlementSnap.settledValue) : "—"}
+          icon={CheckCircle2}
         />
       </section>
     </div>

@@ -53,7 +53,7 @@ export default function ProgrammePerformanceView() {
       title: "Core operations",
       detail: plan
         ? `${plan.budgetYearLabel} · ${planCompletion().includedCount} activities`
-        : "No programme plan",
+        : "No Core Operations plan",
       value: fmtEtb(snap.planEtb),
       href: CROPFORT_ROUTES.coreOperations,
     },
@@ -81,11 +81,11 @@ export default function ProgrammePerformanceView() {
     <PageContainer>
       <PageHeader
         eyebrow={activeProgram?.name || "Performance"}
-        title="Programme Performance"
+        title="Core Operations performance"
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Performance", href: CROPFORT_ROUTES.progress },
-          { label: "Programme Performance" },
+          { label: "Core Operations performance" },
         ]}
         meta={
           <>

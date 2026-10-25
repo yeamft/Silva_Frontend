@@ -448,12 +448,12 @@ export default function LandingPage() {
           >
          
 
-            <h1 className="mt-8 max-w-3xl font-display text-3xl font-semibold leading-[1.1] tracking-[-0.03em] text-white sm:text-4xl lg:text-[52px]">
+            <h1 className="mt-8 max-w-3xl font-display text-3xl font-semibold leading-[1.1] tracking-[-0.03em] text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.55)] sm:text-4xl lg:text-[52px]">
               Control field operations
-              <span className="block text-[#B7D4B9]">from plan to payment.</span>
+              <span className="mt-2 block text-[#B7D4B9]">from plan to payment.</span>
             </h1>
 
-            <p className="mt-6 max-w-2xl text-base leading-7 text-white/80 sm:text-lg sm:leading-8">
+            <p className="mt-6 max-w-2xl text-base leading-7 text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,0.65)] sm:text-lg sm:leading-8">
               One controlled environment for estate owners, SPX managers, and delivery partners
               planning, execution, verification, and settlement.
             </p>
@@ -462,7 +462,7 @@ export default function LandingPage() {
               <Button
                 asChild
                 size="lg"
-                className="h-12 rounded-xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_14px_30px_-14px_hsl(120_35%_28%/0.4)] hover:bg-[hsl(var(--primary-hover))]"
+                className="h-12 rounded-xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_8px_24px_-8px_rgba(0,0,0,0.55)] hover:bg-[hsl(var(--primary-hover))]"
               >
                 <Link href="/login">
                   Open Cropfort
@@ -472,13 +472,13 @@ export default function LandingPage() {
 
               <a
                 href="#platform"
-                className="inline-flex h-12 items-center justify-center rounded-xl border border-[#B7D4B9]/35 bg-black/15 px-7 text-sm font-medium text-white backdrop-blur-sm transition hover:border-[#B7D4B9]/55 hover:bg-black/25"
+                className="inline-flex h-12 items-center justify-center rounded-xl border border-[#B7D4B9]/45 bg-black/25 px-7 text-sm font-medium text-white [text-shadow:0_1px_5px_rgba(0,0,0,0.55)] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.55)] backdrop-blur-sm transition hover:border-[#B7D4B9]/65 hover:bg-black/35"
               >
                 Explore the platform
               </a>
             </div>
 
-            <p className="mt-6 text-sm text-white/55">
+            <p className="mt-6 text-sm text-white/75 [text-shadow:0_1px_5px_rgba(0,0,0,0.65)]">
               Invited organisations sign in with their Cropfort account.{" "}
               <a href="#contact" className="text-[#B7D4B9] underline-offset-2 hover:underline">
                 Request access

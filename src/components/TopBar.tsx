@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, ChevronDown, LogOut, Menu, Search, User } from "lucide-react";
-import ThemeToggle from "./ThemeToggle";
 import { NotificationBell } from "@/components/navigation/notification-bell";
 import { useAuthStore } from "@/store/authStore";
 import { useLocaleStore } from "@/store/localeStore";
@@ -80,7 +79,7 @@ const TopBar = ({ title, onNavigate, onOpenMenu }: TopBarProps) => {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background px-3 shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] sm:gap-3 sm:px-6"
+      className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border/80 bg-background/95 px-3 shadow-[0_2px_10px_-8px_rgba(15,23,20,0.25)] backdrop-blur-md sm:gap-3 sm:px-6"
       style={{ paddingTop: "max(0px, env(safe-area-inset-top))" }}
     >
       <div className="flex min-w-0 items-center gap-2">
@@ -139,8 +138,6 @@ const TopBar = ({ title, onNavigate, onOpenMenu }: TopBarProps) => {
             <span className="text-xs text-muted-foreground">{ROLE_LABELS[user.role] ?? user.role}</span>
           </div>
         )}
-
-        <ThemeToggle />
 
         <Popover open={searchOpen} onOpenChange={setSearchOpen}>
           <PopoverTrigger asChild>

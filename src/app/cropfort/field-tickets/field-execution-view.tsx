@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
+  CheckCircle2,
   Clock3,
   MoreHorizontal,
   Plus,
+  Store,
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,7 +21,7 @@ import {
   OpsDeskList,
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
-import { StatCard } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -457,29 +459,39 @@ export default function FieldExecutionView() {
       )}
 
       {desk === "spx" ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard label="Vendor" value={String(waitingCounts.vendor)} />
-          <StatCard label="Site" value={String(waitingCounts.site)} emphasis />
-          <StatCard label="Asset" value={String(waitingCounts.asset)} />
-          <StatCard
-            label="Closed"
-            value={String(tickets.filter((t) => t.status === "validated").length)}
-          />
-        </div>
+        <CompactSummaryCards
+          label="Field ticket status summary"
+          items={[
+            { id: "vendor", label: "Vendor", value: woQuery.isLoading ? "—" : String(waitingCounts.vendor), footnote: "Awaiting vendor", icon: Store },
+            { id: "site", label: "Site", value: woQuery.isLoading ? "—" : String(waitingCounts.site), footnote: "Awaiting site review", icon: UserRound },
+            { id: "asset", label: "Asset", value: woQuery.isLoading ? "—" : String(waitingCounts.asset), footnote: "Awaiting asset owner", icon: Clock3 },
+            { id: "closed", label: "Closed", value: woQuery.isLoading ? "—" : String(tickets.filter((t) => t.status === "validated").length), footnote: "Validated tickets", icon: CheckCircle2 },
+          ]}
+        />
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard
-            label="Queue"
-            value={String(
-              desk === "vendor" ? waitingCounts.vendor : waitingCounts.asset,
-            )}
-            emphasis
-          />
-          <StatCard
-            label="Closed"
-            value={String(tickets.filter((t) => t.status === "validated").length)}
-          />
-        </div>
+        <CompactSummaryCards
+          label="Field ticket status summary"
+          items={[
+            {
+              id: "queue",
+              label: "Queue",
+              value: woQuery.isLoading
+                ? "—"
+                : String(desk === "vendor" ? waitingCounts.vendor : waitingCounts.asset),
+              footnote: "Tickets awaiting action",
+              icon: Clock3,
+            },
+            {
+              id: "closed",
+              label: "Closed",
+              value: woQuery.isLoading
+                ? "—"
+                : String(tickets.filter((t) => t.status === "validated").length),
+              footnote: "Validated tickets",
+              icon: CheckCircle2,
+            },
+          ]}
+        />
       )}
 
       <OpsDeskControlPanel

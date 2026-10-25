@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Gauge, MoreHorizontal, Plus } from "lucide-react";
+import { CircleAlert, Gauge, Layers3, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
-import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards, PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -279,6 +279,15 @@ export default function SpendBandsView() {
             </Button>
           ) : null
         }
+      />
+
+      <CompactSummaryCards
+        label="Spend bands summary"
+        items={[
+          { id: "programs", label: "Configured programs", value: String(sets.length), footnote: "Programs with spend bands", icon: Gauge },
+          { id: "bands", label: "Spend tiers", value: String(sets.reduce((total, set) => total + set.bands.length, 0)), footnote: "Configured across programs", icon: Layers3 },
+          { id: "missing", label: "Needs setup", value: String(programsWithoutBands.length), footnote: "Programs without bands", icon: CircleAlert },
+        ]}
       />
 
       <SectionCard flush>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
-import { PageContainer, PageHeader, SectionCard, StatusSummaryCards } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards, PageContainer, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,7 @@ export default function OrganizationsPage() {
   }, [orgs, debounced]);
 
   const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const columnCount = canEdit ? 6 : 5;
 
   const startEdit = (org?: AdminOrganization) => {
     setEditing(org ?? null);
@@ -102,10 +103,19 @@ export default function OrganizationsPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        eyebrow="Administration"
-        title="Organizations"
-        actions={
+      <CompactSummaryCards
+        label="Organization map summary"
+        items={[
+          { id: "orgs", label: "Organizations", value: String(orgs.length), footnote: "Registered entities", icon: Building2 },
+          { id: "vendors", label: "Vendors", value: String(vendors.length), footnote: "Delivery partners", icon: Store },
+          { id: "areas", label: "Farm areas", value: String(areas.length), footnote: "Mapped estates", icon: Trees },
+        ]}
+      />
+
+      <SectionCard
+        title="Organization register"
+        description="Manage organizations and see their connected farm areas and vendors."
+        action={
           canEdit ? (
             <Button size="sm" onClick={() => startEdit()}>
               <Plus className="h-4 w-4" aria-hidden />
@@ -113,55 +123,37 @@ export default function OrganizationsPage() {
             </Button>
           ) : null
         }
-      />
-
-      <StatusSummaryCards
-        label="Organization map summary"
-        columns={3}
-        items={[
-          {
-            id: "orgs",
-            label: "Organizations",
-            value: String(orgs.length),
-            icon: Building2,
-            footnote: "Registered entities",
-            emphasis: true,
-          },
-          {
-            id: "vendors",
-            label: "Vendors",
-            value: String(vendors.length),
-            icon: Store,
-            footnote: "Delivery partners",
-          },
-          {
-            id: "areas",
-            label: "Farm areas",
-            value: String(areas.length),
-            icon: Trees,
-            footnote: "Mapped estates",
-          },
-        ]}
-      />
-
-      <SectionCard flush>
-        <div className="border-b px-4 py-3">
-          <TableToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search name or type" />
+        flush
+      >
+        <div className="border-b border-border bg-muted/15 px-4 py-3 sm:px-5">
+          <TableToolbar
+            search={search}
+            onSearchChange={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
+            searchPlaceholder="Search organizations by name or type"
+            activeFilterCount={Number(Boolean(search.trim()))}
+            onClearFilters={() => {
+              setSearch("");
+              setPage(1);
+            }}
+          />
         </div>
-        <Table>
+        <Table aria-label="Organizations">
           <TableHeader>
-            <TableRow>
-              <TableHead scope="col">Name</TableHead>
-              <TableHead scope="col">Type</TableHead>
-              <TableHead scope="col" className="text-right">
+            <TableRow className="hover:bg-transparent">
+              <TableHead scope="col" className="h-11 bg-muted/40 text-[10px] font-semibold uppercase tracking-wide">Organization</TableHead>
+              <TableHead scope="col" className="h-11 bg-muted/40 text-[10px] font-semibold uppercase tracking-wide">Type</TableHead>
+              <TableHead scope="col" className="h-11 bg-muted/40 text-right text-[10px] font-semibold uppercase tracking-wide">
                 Farm areas
               </TableHead>
-              <TableHead scope="col" className="text-right">
+              <TableHead scope="col" className="h-11 bg-muted/40 text-right text-[10px] font-semibold uppercase tracking-wide">
                 Vendors
               </TableHead>
-              <TableHead scope="col">Status</TableHead>
+              <TableHead scope="col" className="h-11 bg-muted/40 text-[10px] font-semibold uppercase tracking-wide">Status</TableHead>
               {canEdit ? (
-                <TableHead scope="col" className="text-right">
+                <TableHead scope="col" className="h-11 bg-muted/40 text-right text-[10px] font-semibold uppercase tracking-wide">
                   Actions
                 </TableHead>
               ) : null}
@@ -171,14 +163,39 @@ export default function OrganizationsPage() {
             {loading ? (
               <TableSkeleton rows={6} columns={canEdit ? 6 : 5} />
             ) : paged.length === 0 ? (
-              <TableMessageRow colSpan={6} icon={Building2} title="No organizations" />
+              <TableMessageRow
+                colSpan={columnCount}
+                icon={Building2}
+                title={orgs.length === 0 ? "No organizations yet" : "No matching organizations"}
+                description={
+                  orgs.length === 0
+                    ? "Create an organization to connect farm areas and vendors."
+                    : "Try a different organization name or type."
+                }
+                action={
+                  orgs.length === 0 && canEdit ? (
+                    <Button size="sm" onClick={() => startEdit()}>
+                      <Plus className="h-4 w-4" aria-hidden />
+                      Create organization
+                    </Button>
+                  ) : search ? (
+                    <Button size="sm" variant="outline" onClick={() => setSearch("")}>
+                      Clear search
+                    </Button>
+                  ) : null
+                }
+              />
             ) : (
               paged.map((org) => (
-                <TableRow key={org.id}>
-                  <TableCell className="font-medium">{org.name}</TableCell>
-                  <TableCell>{ORG_TYPE_LABELS[org.type]}</TableCell>
-                  <TableCell className="cf-numeric text-right">{farmCounts[org.id] ?? 0}</TableCell>
-                  <TableCell className="cf-numeric text-right">{vendorCounts[org.id] ?? 0}</TableCell>
+                <TableRow key={org.id} className="odd:bg-background even:bg-muted/15 hover:bg-primary/5">
+                  <TableCell className="h-auto min-w-[200px] py-3 font-semibold">{org.name}</TableCell>
+                  <TableCell className="min-w-[150px] text-sm text-muted-foreground">
+                    <span className="inline-flex rounded-md border border-border bg-card px-2 py-1">
+                      {ORG_TYPE_LABELS[org.type]}
+                    </span>
+                  </TableCell>
+                  <TableCell className="cf-numeric text-right font-medium tabular-nums">{farmCounts[org.id] ?? 0}</TableCell>
+                  <TableCell className="cf-numeric text-right font-medium tabular-nums">{vendorCounts[org.id] ?? 0}</TableCell>
                   <TableCell>
                     <StatusBadge status={org.status} />
                   </TableCell>
@@ -186,7 +203,12 @@ export default function OrganizationsPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${org.name}`}>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Actions for ${org.name}`}
+                            title={`Actions for ${org.name}`}
+                          >
                             <MoreHorizontal className="h-4 w-4" aria-hidden />
                           </Button>
                         </DropdownMenuTrigger>

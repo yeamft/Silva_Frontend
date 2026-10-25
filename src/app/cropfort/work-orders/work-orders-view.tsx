@@ -21,7 +21,7 @@ import {
   OpsDeskList,
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
-import { StatCard } from "@/components/cropfort/page-shell";
+import { CompactSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -333,17 +333,15 @@ export default function WorkOrdersView() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard label="Open" value={String(orders.filter((o) => o.status !== "complete").length)} icon={ClipboardList} />
-        <StatCard label="In field" value={String(orders.filter((o) => o.status === "in_progress").length)} icon={Sparkles} emphasis />
-        <StatCard
-          label="Attention"
-          value={String(orders.filter((o) => o.attention !== "none").length)}
-          icon={AlertTriangle}
-          intent={orders.some((o) => o.attention !== "none") ? "negative" : "positive"}
-        />
-        <StatCard label="Done" value={String(orders.filter((o) => o.status === "complete").length)} icon={CheckCircle2} />
-      </div>
+      <CompactSummaryCards
+        label="Work order status summary"
+        items={[
+          { id: "open", label: "Open", value: woQuery.isLoading ? "—" : String(orders.filter((o) => o.status !== "complete").length), footnote: "Not yet completed", icon: ClipboardList },
+          { id: "in-field", label: "In field", value: woQuery.isLoading ? "—" : String(orders.filter((o) => o.status === "in_progress").length), footnote: "Currently underway", icon: Sparkles },
+          { id: "attention", label: "Attention", value: woQuery.isLoading ? "—" : String(orders.filter((o) => o.attention !== "none").length), footnote: "Requires follow-up", icon: AlertTriangle },
+          { id: "done", label: "Done", value: woQuery.isLoading ? "—" : String(orders.filter((o) => o.status === "complete").length), footnote: "Completed orders", icon: CheckCircle2 },
+        ]}
+      />
 
       <OpsDeskControlPanel
         search={query}

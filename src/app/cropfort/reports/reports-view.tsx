@@ -117,7 +117,7 @@ export default function ReportsView() {
     const completion = planCompletion();
     return generateReportPayload({
       farmName: plan?.farmName || activeProgram?.name || "Farm",
-      programName: activeProgram?.name || "Programme",
+      programName: activeProgram?.name || "Core Operations",
       authorName: user.name || "SPX",
       plan,
       planBudgetEtb: completion.budgetEtb,
@@ -232,7 +232,7 @@ export default function ReportsView() {
         ]}
         actions={
           <Button size="sm" variant="outline" asChild>
-            <Link href="/cropfort/performance/programme">Programme performance</Link>
+            <Link href="/cropfort/performance/programme">Core Operations performance</Link>
           </Button>
         }
       />
@@ -652,4 +652,3 @@ export default function ReportsView() {
     </PageContainer>
   );
 }
-

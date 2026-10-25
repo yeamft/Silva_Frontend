@@ -9,7 +9,7 @@ const View = dynamic(() => import("../../../afp/core-operations-view"), {
   ssr: false,
   loading: () => (
     <div className="cf-page">
-      <p className="text-sm text-muted-foreground">Loading programme plan…</p>
+      <p className="text-sm text-muted-foreground">Loading Core Operations plan…</p>
     </div>
   ),
 });

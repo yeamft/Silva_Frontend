@@ -479,7 +479,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
 
   const band = bandForEtb(completion.budgetEtb);
 
-  if (!canView) return <NotAuthorized title="Programme" />;
+  if (!canView) return <NotAuthorized title="Core Operations" />;
 
   const goNext = () => {
     if (step === "setup" && !plan && !planId && farms[0]) {
@@ -497,12 +497,11 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
     <PageContainer>
       <PageHeader
         eyebrow={activeProgram?.name || "Workspace"}
-        title={plan?.name || "Programme plan"}
+        title={plan?.name || "Core Operations plan"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Planning" },
-          { label: "Programme Plans", href: CROPFORT_ROUTES.programmePlans },
-          { label: plan?.name || "Editor" },
+          { label: "Core Operations", href: CROPFORT_ROUTES.programmePlans },
+          { label: "Details" },
         ]}
         meta={
           plan ? (
@@ -512,16 +511,13 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
               <span className="text-xs text-muted-foreground">
                 {plan.planningCycleLabel || plan.budgetYearLabel}
               </span>
-              <span className="text-xs font-medium tabular-nums">
-                {fmtEtb(completion.budgetEtb)}
-              </span>
             </>
           ) : null
         }
       />
 
       {/* Steps */}
-      <nav aria-label="Programme steps" className="cf-tab-scroll -mx-1 border-b border-border px-1">
+      <nav aria-label="Core Operations steps" className="cf-tab-scroll -mx-1 border-b border-border px-1">
         {STEPS.map((s, index) => {
           const active = step === s.id;
           const locked = !plan && s.id !== "setup";
@@ -569,7 +565,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
       </nav>
 
       {/* Completion strip */}
-      {plan ? (
+      {plan && step !== "setup" ? (
         <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm sm:grid-cols-4">
           <div>
             <p className="text-xs text-muted-foreground">Included</p>
@@ -623,7 +619,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
               )}
             />
             <FormField
-              label="Programme plan name"
+              label="Core Operations plan name"
               required
               render={(props) => (
                 <Input
@@ -643,7 +639,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                   value={plan?.planningCycleLabel || ""}
                   onChange={(e) => updatePlanMeta({ planningCycleLabel: e.target.value })}
                   disabled={!canEdit}
-                  placeholder="e.g. 2027 Programme"
+                  placeholder="e.g. 2027 Core Operations"
                 />
               )}
             />
@@ -659,7 +655,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                       updatePlanMeta({
                         budgetYearGc: y,
                         budgetYearLabel: budgetYearLabel(y).label,
-                        planningCycleLabel: plan.planningCycleLabel || `${y} Programme`,
+                        planningCycleLabel: plan.planningCycleLabel || `${y} Core Operations`,
                       });
                     }
                   }}
@@ -1656,68 +1652,72 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
       ) : null}
 
       {/* Persistent action bar */}
-      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-border bg-background/95 px-1 py-3 backdrop-blur">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!plan}
-          onClick={() => {
-            void (async () => {
-              try {
-                await saveDraft();
-                toast.success("Draft saved");
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Save failed");
-              }
-            })();
-          }}
-        >
-          Save draft
-        </Button>
-        {prevStep(step) ? (
-          <Button size="sm" variant="outline" onClick={goBack}>
-            Back
+        <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-border bg-background/95 px-1 py-3 backdrop-blur">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!plan}
+            onClick={() => {
+              void (async () => {
+                try {
+                  await saveDraft();
+                  toast.success("Draft saved");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Save failed");
+                }
+              })();
+            }}
+          >
+            Save draft
           </Button>
-        ) : null}
-        <div className="sm:ml-auto" />
-        {step !== "review" ? (
-          <Button size="sm" disabled={!plan} onClick={goNext}>
-            Continue
-          </Button>
-        ) : (
-          <>
+          {prevStep(step) ? (
+            <Button size="sm" variant="outline" onClick={goBack}>
+              Back
+            </Button>
+          ) : null}
+          <div className="sm:ml-auto" />
+          {step !== "review" ? (
             <Button
               size="sm"
-              variant="outline"
-              disabled={!plan || !canEdit || blockingIssues.length > 0}
-              onClick={() => {
-                void (async () => {
-                  try {
-                    await finalize();
-                    toast.success("Plan finalized");
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Finalize failed");
-                  }
-                })();
-              }}
+              disabled={!plan}
+              onClick={goNext}
             >
-              Finalize
+              Continue
             </Button>
-            <Button
-              size="sm"
-              disabled={
-                !plan ||
-                !canEdit ||
-                blockingIssues.length > 0 ||
-                completion.budgetEtb <= 0
-              }
-              onClick={() => setSubmitOpen(true)}
-            >
-              Submit → AFPs
-            </Button>
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!plan || !canEdit || blockingIssues.length > 0}
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      await finalize();
+                      toast.success("Plan finalized");
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Finalize failed");
+                    }
+                  })();
+                }}
+              >
+                Finalize
+              </Button>
+              <Button
+                size="sm"
+                disabled={
+                  !plan ||
+                  !canEdit ||
+                  blockingIssues.length > 0 ||
+                  completion.budgetEtb <= 0
+                }
+                onClick={() => setSubmitOpen(true)}
+              >
+                Submit → AFPs
+              </Button>
+            </>
+          )}
+        </div>
 
       <Dialog open={assignQtyOpen} onOpenChange={setAssignQtyOpen}>
         <DialogContent>

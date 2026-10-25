@@ -13,10 +13,10 @@
   :root {
     /*
      * CropFort operational planning system
-     * Neutral canvas + forest-green accent (not green everywhere)
+     * Fixed Light Green workspace palette
      */
-    /* #F5F6F3 */
-    --background: 90 12% 96%;
+    /* #F3FBF3 */
+    --background: 120 44% 97%;
     /* #17201B */
     --foreground: 150 18% 11%;
 
@@ -27,23 +27,22 @@
     --popover: 0 0% 100%;
     --popover-foreground: 150 18% 11%;
 
-    /* #1F5A42 primary action */
-    --primary: 154 48% 24%;
+    /* #14A800 primary action */
+    --primary: 114 100% 33%;
     --primary-foreground: 0 0% 100%;
-    /* #174733 */
-    --primary-hover: 155 51% 18%;
+    --primary-hover: 114 100% 25%;
 
     /* Quiet secondary surfaces */
-    --secondary: 90 8% 95%;
+    --secondary: 120 40% 93%;
     --secondary-foreground: 150 18% 11%;
 
-    --muted: 90 8% 95%;
+    --muted: 120 38% 94%;
     /* #66706A */
     --muted-foreground: 150 5% 42%;
 
     /* #E8F1EC selected / soft accent wash */
-    --accent: 150 25% 93%;
-    --accent-foreground: 154 48% 20%;
+    --accent: 120 44% 97%;
+    --accent-foreground: 114 55% 28%;
 
     /* #B42318 */
     --destructive: 4 76% 40%;
@@ -62,26 +61,25 @@
     --info-foreground: 0 0% 100%;
 
     /* #E1E5E1 */
-    --border: 120 6% 89%;
-    --input: 120 6% 89%;
-    --ring: 154 48% 24%;
+    --border: 114 14% 88%;
+    --input: 114 14% 86%;
+    --ring: 114 100% 33%;
 
     --overlay: 150 18% 8%;
 
     /* Precise / operational — avoid oversized radii */
     --radius: 0.5rem;
 
-    /* #F8F9F7 sidebar slightly distinct from canvas */
-    --sidebar-background: 90 10% 97%;
+    --sidebar-background: var(--card);
     --sidebar-foreground: 150 18% 11%;
-    --sidebar-primary: 154 48% 24%;
+    --sidebar-primary: 114 100% 33%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 150 25% 93%;
-    --sidebar-accent-foreground: 154 48% 20%;
-    --sidebar-border: 120 6% 89%;
-    --sidebar-ring: 154 48% 24%;
+    --sidebar-accent: 120 42% 95%;
+    --sidebar-accent-foreground: 114 55% 28%;
+    --sidebar-border: 114 12% 88%;
+    --sidebar-ring: 114 100% 33%;
 
-    --gold-glow: 38 40% 55%;
+    --gold-glow: 114 45% 45%;
     --surface-elevated: 0 0% 100%;
     --surface-overlay: 90 8% 95%;
 
@@ -136,7 +134,7 @@
 
     --radius: 0.5rem;
 
-    --sidebar-background: 150 12% 10%;
+    --sidebar-background: var(--card);
     --sidebar-foreground: 90 10% 92%;
     --sidebar-primary: 154 42% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -159,38 +157,36 @@
   }
 
   /*
-   * Marketing / auth surfaces only (home + login).
-   * Softened Upwork-inspired green — ops shell keeps its forest primary.
+   * Marketing / auth surfaces use the shared Light Green palette.
    */
   .cf-gold-marketing {
-    --background: 90 16% 98%;
-    --foreground: 150 10% 14%;
+    --background: 120 44% 97%;
+    --foreground: 150 18% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 150 10% 14%;
+    --card-foreground: 150 18% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 150 10% 14%;
+    --popover-foreground: 150 18% 11%;
 
-    /* Softened from Upwork #14A800 — lower saturation */
-    --primary: 120 42% 38%;
+    --primary: 114 100% 33%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 120 44% 30%;
+    --primary-hover: 114 100% 25%;
 
-    --secondary: 100 14% 95%;
-    --secondary-foreground: 150 10% 16%;
+    --secondary: 120 40% 93%;
+    --secondary-foreground: 150 18% 11%;
 
-    --muted: 100 12% 94%;
-    --muted-foreground: 150 6% 42%;
+    --muted: 120 38% 94%;
+    --muted-foreground: 150 5% 42%;
 
-    --accent: 110 22% 94%;
-    --accent-foreground: 120 35% 28%;
+    --accent: 120 44% 97%;
+    --accent-foreground: 114 55% 28%;
 
-    --border: 100 10% 88%;
-    --input: 100 10% 88%;
-    --ring: 120 42% 38%;
+    --border: 114 14% 88%;
+    --input: 114 14% 86%;
+    --ring: 114 100% 33%;
 
-    --gold-glow: 120 30% 50%;
+    --gold-glow: 114 45% 45%;
   }
 }
 
@@ -227,31 +223,31 @@
 @layer components {
   .cf-auth-shell {
     background:
-      radial-gradient(ellipse 90% 60% at 12% -10%, hsl(110 30% 82% / 0.28), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 100% 0%, hsl(120 28% 50% / 0.07), transparent 50%),
-      radial-gradient(ellipse 50% 40% at 50% 100%, hsl(100 20% 75% / 0.1), transparent 55%),
-      linear-gradient(180deg, hsl(90 18% 99%) 0%, hsl(100 12% 96%) 100%);
+      radial-gradient(ellipse 90% 60% at 12% -10%, hsl(114 55% 70% / 0.24), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 100% 0%, hsl(114 55% 45% / 0.08), transparent 50%),
+      radial-gradient(ellipse 50% 40% at 50% 100%, hsl(120 35% 78% / 0.12), transparent 55%),
+      linear-gradient(180deg, hsl(120 44% 98%) 0%, hsl(120 40% 95%) 100%);
   }
 
   .cf-auth-card {
-    border: 1px solid hsl(100 10% 87% / 0.95);
+    border: 1px solid hsl(114 14% 84% / 0.95);
     background: hsl(0 0% 100% / 0.92);
     box-shadow:
-      0 1px 0 hsl(100 20% 98% / 0.9) inset,
-      0 18px 40px -24px hsl(120 20% 22% / 0.18);
+      0 1px 0 hsl(120 44% 98% / 0.9) inset,
+      0 18px 40px -24px hsl(114 35% 22% / 0.18);
     backdrop-filter: blur(10px);
   }
 
   .lp {
-    --lp-espresso: hsl(150 10% 14%);
-    --lp-cream: hsl(100 14% 95%);
-    --lp-cream-muted: hsl(100 10% 68%);
+    --lp-espresso: hsl(150 18% 11%);
+    --lp-cream: hsl(120 40% 93%);
+    --lp-cream-muted: hsl(120 18% 56%);
     --lp-gold: hsl(var(--primary));
-    --lp-gold-ink: hsl(120 35% 28%);
-    --lp-paper: hsl(90 16% 98%);
-    --lp-ink: hsl(150 10% 14%);
-    --lp-mute: hsl(150 6% 42%);
-    --lp-rule: hsl(100 10% 88%);
+    --lp-gold-ink: hsl(114 55% 28%);
+    --lp-paper: hsl(120 44% 97%);
+    --lp-ink: hsl(150 18% 11%);
+    --lp-mute: hsl(150 5% 42%);
+    --lp-rule: hsl(114 14% 88%);
   }
 
   .dark .lp {

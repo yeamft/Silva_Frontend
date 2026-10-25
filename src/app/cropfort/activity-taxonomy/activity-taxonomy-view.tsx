@@ -69,36 +69,48 @@ export default function ActivityTaxonomyView() {
     () => [
       col.accessor("id", {
         header: "Code",
-        cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span>,
+        cell: (c) => (
+          <span className="rounded bg-muted px-1.5 py-1 font-mono text-[11px] text-muted-foreground">
+            {c.getValue()}
+          </span>
+        ),
       }),
       col.accessor("tier", {
         header: "Kind",
-        cell: (c) => kindLabel(c.getValue()),
+        cell: (c) => (
+          <span className="inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            {kindLabel(c.getValue())}
+          </span>
+        ),
       }),
       col.accessor("tier", {
         id: "serviceType",
         header: "Service type",
         cell: (c) => {
           const t = c.getValue();
-          if (t === 2) return "Project";
-          if (t === 3) return "Intervention";
-          return "Core";
-        },
-      }),
-      col.accessor("category", { header: "Category" }),
-      col.accessor("name", { header: "Activity" }),
-      col.accessor("unitOfMeasure", { header: "UoM" }),
-      col.display({
-        id: "manual",
-        header: "Manual",
-        cell: (c) => {
-          const row = c.row.original;
+          const serviceType = t === 2 ? "Project" : t === 3 ? "Intervention" : "Core";
           return (
-            <span className="text-xs text-muted-foreground">
-              {row.name} — Operating Manual
+            <span className="inline-flex rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">
+              {serviceType}
             </span>
           );
         },
+      }),
+      col.accessor("category", {
+        header: "Category",
+        cell: (c) => <span className="text-sm text-muted-foreground">{c.getValue()}</span>,
+      }),
+      col.accessor("name", {
+        header: "Activity",
+        cell: (c) => <span className="font-semibold text-foreground">{c.getValue()}</span>,
+      }),
+      col.accessor("unitOfMeasure", {
+        header: "Unit",
+        cell: (c) => (
+          <span className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium">
+            {c.getValue()}
+          </span>
+        ),
       }),
     ],
     [],
@@ -141,7 +153,7 @@ export default function ActivityTaxonomyView() {
       />
 
       <SectionCard flush className="overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex flex-col gap-3 border-b border-border bg-muted/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div
             role="tablist"
             aria-label="Activity kind"
@@ -166,11 +178,11 @@ export default function ActivityTaxonomyView() {
             ))}
           </div>
           <Input
-            className="w-full sm:max-w-xs"
-            placeholder="Search code, name, or category"
+            className="h-10 w-full bg-background sm:max-w-xs"
+            placeholder="Search by activity, code, or category"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            aria-label="Search activities"
+            aria-label="Search activities by name, code, or category"
           />
         </div>
 
@@ -178,7 +190,12 @@ export default function ActivityTaxonomyView() {
           table={table}
           loading={query.isLoading}
           emptyTitle="No activities"
-          emptyDescription="Taxonomy seed has not been loaded yet."
+          emptyDescription={
+            q
+              ? "Try another activity name, code, or category."
+              : "The activity catalogue is empty or has not finished loading."
+          }
+          className="[&_tbody_tr:nth-child(even)]:bg-muted/15 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-primary/5"
         />
       </SectionCard>
     </PageContainer>

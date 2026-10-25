@@ -61,7 +61,7 @@ export type CoreOpsPlan = {
   name?: string;
   code?: string;
   description?: string;
-  /** Global planning cycle label e.g. "2027 Programme". */
+  /** Global planning cycle label e.g. "2027 Core Operations". */
   planningCycleLabel?: string;
   farmEstateId: string;
   farmName: string;

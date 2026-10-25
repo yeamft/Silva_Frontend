@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { useAuthStore, type UserRole } from "@/store/authStore";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { continueAfterAuth } from "@/lib/post-auth-workspace";
-import ThemeToggle from "@/components/ThemeToggle";
 import { FormField } from "@/components/cropfort/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -105,7 +104,6 @@ const RegisterPage = () => {
           </span>
           <span className="text-sm font-semibold tracking-tight">Coffee Field OS</span>
         </div>
-        <ThemeToggle />
       </header>
 
       <main className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6">

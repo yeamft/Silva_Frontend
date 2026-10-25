@@ -1,5 +1,5 @@
 /**
- * Workspace color palettes — curated CropFort themes.
+ * Workspace color tokens — Light Green is the fixed CropFort palette.
  * Soft background = page canvas; primary = actions / accents.
  */
 
@@ -81,7 +81,7 @@ function buildLightTokens(primaryHex: string, softBgHex: string): WorkspaceColor
   const softBg = hsl(soft.h, soft.s, soft.l);
   return {
     background: softBg,
-    sidebarBackground: hsl(soft.h, Math.max(soft.s - 4, 8), Math.min(soft.l + 1, 99)),
+    sidebarBackground: "0 0% 100%",
     muted: hsl(soft.h, Math.max(soft.s - 6, 6), Math.max(soft.l - 3, 90)),
     secondary: hsl(soft.h, Math.max(soft.s - 4, 8), Math.max(soft.l - 4, 90)),
     border: hsl(p.h, Math.min(p.s, 14), 88),
@@ -107,7 +107,7 @@ function buildDarkTokens(primaryHex: string): WorkspaceColorTokens {
   const darkPrimaryS = Math.min(85, Math.max(s, 35));
   return {
     background: hsl(h, Math.min(s, 14), 9),
-    sidebarBackground: hsl(h, Math.min(s, 14), 10),
+    sidebarBackground: "150 10% 11%",
     muted: hsl(h, Math.min(s, 10), 14),
     secondary: hsl(h, Math.min(s, 10), 15),
     border: hsl(h, Math.min(s, 10), 18),
@@ -156,7 +156,7 @@ export const WORKSPACE_COLORS: WorkspaceColorDef[] = [
   defineTheme("earth", "Earth", "Agricultural", "#9A6A35", "#FAF5EE"),
 ];
 
-export const DEFAULT_WORKSPACE_COLOR: WorkspaceColorId = "forest";
+export const DEFAULT_WORKSPACE_COLOR: WorkspaceColorId = "light-green";
 
 /** Map legacy persisted ids → current palette. */
 const LEGACY_COLOR_MAP: Record<string, WorkspaceColorId> = {
@@ -183,10 +183,10 @@ const LEGACY_COLOR_MAP: Record<string, WorkspaceColorId> = {
 /** Role desk colors. */
 export const ROLE_WORKSPACE_COLOR: Record<CropfortRole, WorkspaceColorId> = {
   bagro_office: "light-green",
-  farm_owner: "blue",
-  field_supervisor: "teal",
-  spx_validator: "forest",
-  spx_platform_admin: "indigo",
+  farm_owner: "light-green",
+  field_supervisor: "light-green",
+  spx_validator: "light-green",
+  spx_platform_admin: "light-green",
 };
 
 export function workspaceColorForRole(role: CropfortRole): WorkspaceColorId {

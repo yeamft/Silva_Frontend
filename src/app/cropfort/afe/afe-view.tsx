@@ -13,7 +13,7 @@ import {
   PageContainer,
   PageHeader,
   SectionCard,
-  StatusSummaryCards,
+  CompactSummaryCards,
 } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { canApproveOperations, canEditPlanScope } from "@/lib/cropfort/platform-access";
@@ -174,13 +174,13 @@ export default function AfeView() {
         }
       />
 
-      <StatusSummaryCards
+      <CompactSummaryCards
         label="AFE status summary"
         items={[
           {
             id: "awaiting",
             label: "Awaiting",
-            value: String(stats.waiting),
+            value: afesQuery.isLoading ? "—" : String(stats.waiting),
             icon: Clock3,
             footnote: "Submitted for review",
             active: statusFilter === "submitted",
@@ -192,10 +192,9 @@ export default function AfeView() {
           {
             id: "approved",
             label: "Approved",
-            value: String(stats.approved),
+            value: afesQuery.isLoading ? "—" : String(stats.approved),
             icon: CheckCircle2,
             footnote: "Authorized to proceed",
-            intent: "positive",
             active: statusFilter === "approved",
             onClick: () => {
               setStatusFilter("approved");
@@ -205,10 +204,9 @@ export default function AfeView() {
           {
             id: "returned",
             label: "Returned",
-            value: String(stats.returned),
+            value: afesQuery.isLoading ? "—" : String(stats.returned),
             icon: RotateCcw,
             footnote: "Needs revision",
-            intent: "negative",
             active: statusFilter === "returned",
             onClick: () => {
               setStatusFilter("returned");
@@ -218,10 +216,9 @@ export default function AfeView() {
           {
             id: "authorized",
             label: "Authorized",
-            value: fmtEtb(stats.value),
+            value: afesQuery.isLoading ? "—" : fmtEtb(stats.value),
             icon: Wallet,
             footnote: "Approved AFE value",
-            emphasis: true,
             active: statusFilter === "approved",
             onClick: () => {
               setStatusFilter("approved");

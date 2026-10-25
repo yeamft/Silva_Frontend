@@ -165,7 +165,7 @@ export function generateReportPayload(input: ReportGenerationInput): ReportGener
 
   const topActs = activityLines.slice(0, 3);
   const summary = [
-    `${input.farmName} programme activity for this period shows ${metrics.spendPct}% budget absorption`,
+    `${input.farmName} Core Operations activity for this period shows ${metrics.spendPct}% budget absorption`,
     `(actual ${Math.round(metrics.actualEtb).toLocaleString()} ETB vs plan ${Math.round(metrics.planEtb).toLocaleString()} ETB).`,
     `Work-order progress averages ${metrics.woProgressAvg}% with ${metrics.ticketsClosed} of ${metrics.ticketsClosed + metrics.ticketsOpen} tickets closed.`,
     metrics.attentionCount
@@ -228,13 +228,13 @@ export function generateReportPayload(input: ReportGenerationInput): ReportGener
     missAttributions.push({
       cause: "spx",
       kpiLabel: "Budget vs actual",
-      detail: `Programme underspend ${metrics.variancePct}% — review phasing`,
+      detail: `Core Operations underspend ${metrics.variancePct}% — review phasing`,
     });
   } else if (metrics.variancePct > 10) {
     missAttributions.push({
       cause: "chaka_buna",
       kpiLabel: "Budget vs actual",
-      detail: `Programme overspend ${metrics.variancePct}% — check commitments`,
+      detail: `Core Operations overspend ${metrics.variancePct}% — check commitments`,
     });
   }
 
