@@ -16,7 +16,6 @@ import {
 } from "@/components/rate-cards/rate-card-proposal-form";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import {
   canApproveAsAssetOwner,
@@ -284,73 +283,81 @@ export default function RateCardProposalDetailView() {
         }}
       />
 
-      <SectionCard title="Rate card">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Activity</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead>UoM</TableHead>
-                <TableHead className="text-right">Norm</TableHead>
-                <TableHead className="text-right">Approved</TableHead>
-                <TableHead className="text-right">Fallback</TableHead>
-                <TableHead>Source / basis</TableHead>
-                <TableHead>Effective</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell className="font-mono text-xs">{card.activity?.code ?? "—"}</TableCell>
-                <TableCell className="font-medium">
-                  {card.activity?.name ?? card.activityId}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {card.block?.name || card.farmArea?.name || "Program"}
-                </TableCell>
-                <TableCell className="text-sm">{card.activity?.uom ?? "—"}</TableCell>
-                <TableCell className="cf-numeric text-right tabular-nums">
-                  {card.norm ?? "—"}
-                </TableCell>
-                <TableCell className="cf-numeric text-right tabular-nums font-medium">
-                  {fmtEtb(card.proposedRate)}
-                </TableCell>
-                <TableCell className="cf-numeric text-right tabular-nums">
-                  {fmtEtb(card.fallbackRate)}
-                </TableCell>
-                <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground">
-                  {card.sourceBasis || "—"}
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                  {fmtAvail(card.availableFrom, card.availableTo)}
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={card.status} />
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="mt-4 grid gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm sm:grid-cols-3">
-          <div>
-            <p className="cf-label">Benchmark recommended</p>
-            <p className="cf-data">{fmtEtb(card.recommendedRate)}</p>
+      <SectionCard
+        title="Rate overview"
+        description="Review the proposed rate and the activity details before saving or submitting."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-4 sm:col-span-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Proposed rate
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+              {fmtEtb(Number(form.proposedRate) || card.proposedRate)}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                / {card.activity?.uom || "unit"}
+              </span>
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Benchmark recommendation:{" "}
+              <span className="font-medium text-foreground">{fmtEtb(card.recommendedRate)}</span>
+            </p>
           </div>
-          <div>
-            <p className="cf-label">Proposed</p>
-            <p className="cf-data">{fmtEtb(Number(form.proposedRate) || card.proposedRate)}</p>
-          </div>
-          <div>
-            <p className="cf-label">Variance</p>
-            <p className="cf-data">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Variance
+            </p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">
               {liveVariance.variancePct != null
                 ? `${liveVariance.variancePct.toFixed(1)}%`
                 : "—"}
-              {liveVariance.flagged ? " · flagged" : ""}
             </p>
+            {liveVariance.flagged ? (
+              <StatusBadge status="flagged" label="Review needed" className="mt-2" />
+            ) : null}
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Status
+            </p>
+            <div className="mt-2">
+              <StatusBadge status={card.status} />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-x-6 gap-y-4 rounded-lg bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <p className="cf-label">Activity code</p>
+            <p className="cf-data font-mono text-xs">{card.activity?.code ?? "—"}</p>
+          </div>
+          <div>
+            <p className="cf-label">Activity</p>
+            <p className="cf-data font-medium">{card.activity?.name ?? card.activityId}</p>
+          </div>
+          <div>
+            <p className="cf-label">Scope</p>
+            <p className="cf-data">{card.block?.name || card.farmArea?.name || "Program"}</p>
+          </div>
+          <div>
+            <p className="cf-label">Unit</p>
+            <p className="cf-data">{card.activity?.uom ?? "—"}</p>
+          </div>
+          <div>
+            <p className="cf-label">Norm</p>
+            <p className="cf-data tabular-nums">{card.norm ?? "—"}</p>
+          </div>
+          <div>
+            <p className="cf-label">Fallback rate</p>
+            <p className="cf-data tabular-nums">{fmtEtb(card.fallbackRate)}</p>
+          </div>
+          <div>
+            <p className="cf-label">Effective period</p>
+            <p className="cf-data">{fmtAvail(card.availableFrom, card.availableTo)}</p>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-2">
+            <p className="cf-label">Source / basis</p>
+            <p className="cf-data">{card.sourceBasis || "—"}</p>
           </div>
         </div>
 
@@ -433,36 +440,90 @@ export default function RateCardProposalDetailView() {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-md border border-border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Neighbor</TableHead>
-                    <TableHead className="text-right">Rate</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>{survey.neighbor1Name || "—"}</TableCell>
-                    <TableCell className="cf-numeric text-right tabular-nums">
-                      {fmtEtb(survey.neighbor1Rate)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>{survey.neighbor2Name || "—"}</TableCell>
-                    <TableCell className="cf-numeric text-right tabular-nums">
-                      {fmtEtb(survey.neighbor2Rate)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Recommended (AVG)</TableCell>
-                    <TableCell className="cf-numeric text-right tabular-nums font-medium">
-                      {fmtEtb(survey.recommendedRate)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Recommended rate
+                </p>
+                <p className="mt-1 text-xl font-semibold tabular-nums">
+                  {fmtEtb(survey.recommendedRate)}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">
+                    / {survey.activityUnit || "unit"}
+                  </span>
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Average source
+                </p>
+                <p className="mt-1 font-medium">
+                  {survey.benchmarkData?.recommendedSource === "industry_average"
+                    ? "Selected farms"
+                    : survey.benchmarkData?.recommendedSource === "six_farm_fallback"
+                      ? "All farms with rates"
+                      : "Survey average"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {survey.benchmarkData?.recommendedSource === "six_farm_fallback"
+                    ? `${survey.benchmarkData.sixFarmAverage.farmsWithRate} farms with rates`
+                    : survey.benchmarkData?.industryAverage?.farmsWithRate != null
+                      ? `${survey.benchmarkData.industryAverage.farmsWithRate} farms included`
+                      : "Farm count unavailable"}
+                </p>
+              </div>
             </div>
+
+            {survey.benchmarkData?.farms?.length ? (
+              <div>
+                <h3 className="mb-2 text-sm font-medium">Farm rates</h3>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {survey.benchmarkData.farms
+                    .filter((farm) => farm.name.trim())
+                    .map((farm) => (
+                      <div key={farm.name} className="rounded-lg border border-border p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium">{farm.name}</p>
+                          {farm.includeInIndustryAverage ? (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                              Included in average
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 text-base font-semibold tabular-nums">
+                          {fmtEtb(farm.costPerUnit)}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            / {survey.activityUnit || "unit"}
+                          </span>
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          {farm.manDaysPerUnit != null ? (
+                            <span>{farm.manDaysPerUnit} man-days / unit</span>
+                          ) : null}
+                          {farm.frequency != null ? <span>{farm.frequency} times / year</span> : null}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  { name: survey.neighbor1Name, rate: survey.neighbor1Rate },
+                  { name: survey.neighbor2Name, rate: survey.neighbor2Rate },
+                ]
+                  .filter((entry) => entry.name || entry.rate != null)
+                  .map((entry, index) => (
+                    <div
+                      key={`${entry.name || "legacy-farm"}-${index}`}
+                      className="rounded-lg border border-border p-3"
+                    >
+                      <p className="text-xs text-muted-foreground">Farm</p>
+                      <p className="mt-1 font-medium">{entry.name || "Unnamed farm"}</p>
+                      <p className="mt-1 tabular-nums">{fmtEtb(entry.rate)}</p>
+                    </div>
+                  ))}
+              </div>
+            )}
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div>

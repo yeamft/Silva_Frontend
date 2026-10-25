@@ -1,6 +1,4 @@
-/**
- * Read-only platform Activity taxonomy (labor / materials / services).
- */
+/** Platform Activity taxonomy (labor / materials / services). */
 import { apiFetch } from "@/lib/api/http";
 import { ApiError } from "@/lib/api/types";
 
@@ -20,10 +18,16 @@ async function call<T>(path: string, options?: Parameters<typeof apiFetch>[1]): 
 
 export type PlatformActivity = {
   id: string;
+  code: string;
   tier: number;
   category: string;
+  subgroup?: string;
   name: string;
+  nameAm?: string;
   unitOfMeasure: string;
+  description?: string;
+  active?: boolean;
+  sortOrder?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -33,6 +37,21 @@ export type ListActivitiesParams = {
   category?: string;
   q?: string;
 };
+
+export type CreateActivityInput = {
+  code: string;
+  name: string;
+  nameAm?: string;
+  tier: 1 | 2 | 3;
+  category: string;
+  subgroup?: string;
+  unitOfMeasure: string;
+  description?: string;
+  active?: boolean;
+  sortOrder?: number;
+};
+
+export type UpdateActivityInput = Partial<CreateActivityInput>;
 
 export const listActivities = (params: ListActivitiesParams = {}) => {
   const q = new URLSearchParams();
@@ -44,3 +63,27 @@ export const listActivities = (params: ListActivitiesParams = {}) => {
 };
 
 export const getActivity = (id: string) => call<PlatformActivity>(`/activities/${id}`);
+
+export const createActivity = (payload: CreateActivityInput) =>
+  call<PlatformActivity>("/activities", {
+    method: "POST",
+    body: payload,
+  });
+
+export const updateActivity = (id: string, patch: UpdateActivityInput) =>
+  call<PlatformActivity>(`/activities/${id}`, {
+    method: "PATCH",
+    body: patch,
+  });
+
+export const bulkUpdateActivities = (ids: string[], patch: UpdateActivityInput) =>
+  call<PlatformActivity[]>("/activities/bulk", {
+    method: "PATCH",
+    body: { ids, patch },
+  });
+
+export const deactivateActivities = (ids: string[]) =>
+  call<{ deactivatedCount: number }>("/activities/bulk/deactivate", {
+    method: "POST",
+    body: { ids },
+  });

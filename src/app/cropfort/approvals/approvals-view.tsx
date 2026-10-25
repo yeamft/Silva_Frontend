@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
@@ -26,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
+import { listProgramRateCardProposals } from "@/lib/api/rate-card-proposals";
 import { PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
 import { cn } from "@/lib/utils";
 import type { CropfortAfeDto } from "@/lib/api/afes";
@@ -45,6 +48,7 @@ import { useDecideProject, useProjects } from "@/lib/query/hooks/use-projects";
 import { useDecideWeeklyPlan, useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
 import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { canApproveOperations } from "@/lib/cropfort/platform-access";
+import { canApproveAsAssetOwner } from "@/lib/cropfortAccess";
 import { fmtEtb } from "@/store/cropfortOpsStore";
 import { scheduleLabel, scheduleStatusOf } from "@/store/coreOpsPlanStore";
 import { useSpendBandStore } from "@/store/spendBandStore";
@@ -563,6 +567,14 @@ export default function ApprovalsView() {
   const isSilva = desk === "silva";
   const area = getCropfortArea("approvals");
   const canDecide = canApproveOperations(user.role);
+  const canDecideRateCards = canApproveAsAssetOwner(user.role);
+  const rateCardsQuery = useQuery({
+    queryKey: ["approval-rate-cards", activeProgram?.id],
+    queryFn: () => listProgramRateCardProposals({ status: "submitted", programWide: true }),
+    enabled: canDecideRateCards && Boolean(activeProgram?.id),
+    refetchInterval: 10_000,
+  });
+  const pendingRateCards = rateCardsQuery.data ?? [];
   const afesQuery = useAfes(Boolean(activeProgram?.id), "submitted");
   const decideAfe = useDecideAfe();
   const afes = useMemo(() => afesQuery.data || [], [afesQuery.data]);
@@ -747,7 +759,8 @@ export default function ApprovalsView() {
     }
   };
 
-  const waitingTotal = APPROVAL_TYPES.reduce((s, t) => s + queues[t.id].length, 0);
+  const otherWaitingTotal = APPROVAL_TYPES.reduce((s, t) => s + queues[t.id].length, 0);
+  const waitingTotal = otherWaitingTotal + pendingRateCards.length;
 
   useEffect(() => {
     if (queues[tab].length > 0 || waitingTotal === 0) return;
@@ -788,7 +801,62 @@ export default function ApprovalsView() {
         />
       )}
 
-      {waitingTotal > 0 ? (
+      {canDecideRateCards &&
+      (pendingRateCards.length > 0 || rateCardsQuery.isLoading || rateCardsQuery.isError) ? (
+        <SectionCard
+          title={`Rate cards awaiting your decision${pendingRateCards.length ? ` (${pendingRateCards.length})` : ""}`}
+          description="Submitted rate cards are reviewed separately from Core Operations and spending requests."
+          flush
+        >
+          {rateCardsQuery.isLoading && pendingRateCards.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">Loading submitted rate cards…</p>
+          ) : rateCardsQuery.isError ? (
+            <div className="flex flex-col gap-2 px-4 py-5 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-destructive">
+                Could not load submitted rate cards.{" "}
+                {rateCardsQuery.error instanceof Error ? rateCardsQuery.error.message : ""}
+              </p>
+              <Button size="sm" variant="outline" onClick={() => void rateCardsQuery.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {pendingRateCards.map((card) => (
+                <li key={card.id}>
+                  <Link
+                    href={`${CROPFORT_ROUTES.rateCardProposals}/${card.id}`}
+                    className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {card.activityName || card.activityCode || "Rate card"}
+                      </span>
+                      <span className="mt-0.5 block text-xs capitalize text-muted-foreground">
+                        {[card.kind, card.farmEstateName, card.activityCode]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        {card.submittedAt
+                          ? ` · Submitted ${new Date(card.submittedAt).toLocaleDateString()}`
+                          : ""}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                      <span className="text-xs text-muted-foreground">Proposed</span>
+                      <span className="cf-numeric text-sm font-semibold tabular-nums">
+                        {fmtEtb(card.proposedRate)}
+                      </span>
+                      <span className="text-xs font-medium text-primary">Review →</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      ) : null}
+
+      {otherWaitingTotal > 0 ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <label className="text-sm font-medium" htmlFor="approval-review-type">Review type</label>
@@ -815,7 +883,7 @@ export default function ApprovalsView() {
         </div>
       ) : null}
 
-      {waitingTotal === 0 ? (
+      {waitingTotal === 0 && !rateCardsQuery.isLoading && !rateCardsQuery.isError ? (
         <SectionCard>
           <div className="py-10 text-center">
             <CheckCircle2 className="mx-auto mb-3 size-9 text-success" aria-hidden />
@@ -823,7 +891,7 @@ export default function ApprovalsView() {
             <p className="mt-1 text-sm text-muted-foreground">There are no requests waiting for your decision.</p>
           </div>
         </SectionCard>
-      ) : rows.length === 0 ? (
+      ) : otherWaitingTotal === 0 ? null : rows.length === 0 ? (
         <SectionCard>
           <p className="py-8 text-center text-sm text-muted-foreground">Nothing waiting in this category.</p>
         </SectionCard>

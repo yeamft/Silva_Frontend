@@ -16,6 +16,7 @@ import {
 } from "@/components/cropfort/ops-desk";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { AuditTimelineDrawer } from "@/components/rate-cards/audit-timeline-drawer";
+import { BenchmarkFarmDataFields } from "@/components/rate-cards/benchmark-farm-data-fields";
 import { RateWorkflowImportDialog } from "@/components/rate-cards/rate-workflow-import-dialog";
 import {
   loadWorkflowContext,
@@ -30,6 +31,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { canProposeRateCard, canViewBenchmarkSurveys } from "@/lib/cropfortAccess";
+import {
+  buildBenchmarkData,
+  emptyBenchmarkFarmInputs,
+  findDuplicateBenchmarkFarmName,
+  type BenchmarkFarmInputs,
+} from "@/lib/benchmark-data";
 import { enrichSurvey } from "@/lib/mock-api/rate-card-workflow";
 import { useBenchmarkSurveyStore } from "@/store/benchmarkSurveyStore";
 import type {
@@ -72,13 +79,10 @@ export default function BenchmarkSurveysListView() {
   const [category, setCategory] = useState("");
   const [activityId, setActivityId] = useState("");
   const [farmAreaId, setFarmAreaId] = useState("");
-  const [n1Name, setN1Name] = useState("");
-  const [n2Name, setN2Name] = useState("");
-  const [n1Rate, setN1Rate] = useState("");
-  const [n2Rate, setN2Rate] = useState("");
-  const [surveyDate, setSurveyDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [farmInputs, setFarmInputs] = useState<BenchmarkFarmInputs>(emptyBenchmarkFarmInputs);
   const [sourceEvidence, setSourceEvidence] = useState("");
   const [notes, setNotes] = useState("");
+  const benchmarkSummary = buildBenchmarkData(farmInputs, notes);
 
   // One request via store — mock and live share the same store path.
   useEffect(() => {
@@ -196,14 +200,18 @@ export default function BenchmarkSurveysListView() {
 
       <OpsDeskList>
         <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
-          <Table aria-label="Benchmark surveys" className="min-w-[980px]">
+          <Table aria-label="Benchmark surveys" className="min-w-[1320px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Type</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Code</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Category</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Sub-group</TableHead>
                 <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Activity</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Unit</TableHead>
                 <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Farm area</TableHead>
-                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Neighbor benchmarks</TableHead>
-                <TableHead className="h-12 bg-muted/50 text-right text-[10px] font-semibold uppercase tracking-wide">Recommended rate</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Industry average</TableHead>
+                <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">All-farm fallback</TableHead>
                 <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Lock</TableHead>
                 <TableHead className="h-12 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide">Status</TableHead>
                 <TableHead className="h-12 bg-muted/50 text-right text-[10px] font-semibold uppercase tracking-wide">Actions</TableHead>
@@ -212,13 +220,13 @@ export default function BenchmarkSurveysListView() {
             <TableBody>
               {listLoading && rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={12} className="h-24 text-center text-sm text-muted-foreground">
                     Loading benchmark surveys…
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-12 text-center">
+                  <TableCell colSpan={12} className="py-12 text-center">
                     <p className="text-sm font-medium text-foreground">No benchmark surveys found</p>
                     <p className="mt-1 text-xs text-muted-foreground">Try changing your filters or create a new survey.</p>
                   </TableCell>
@@ -248,30 +256,37 @@ export default function BenchmarkSurveysListView() {
                         {row.kind}
                       </span>
                     </TableCell>
-                    <TableCell className="h-auto min-w-[190px] py-3.5">
-                      <div className="font-semibold leading-snug text-foreground">{row.activity?.name ?? row.activityId}</div>
-                      {row.activity?.code ? (
-                        <div className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                          {row.activity.code}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="min-w-[130px] text-sm font-medium">{row.farmArea?.name ?? "—"}</TableCell>
-                    <TableCell className="min-w-[190px] py-3.5 text-sm">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="max-w-[145px] truncate text-xs font-medium" title={row.neighbor1Name}>{row.neighbor1Name}</p>
-                          <span className="cf-numeric shrink-0 text-xs tabular-nums text-muted-foreground">{fmtEtb(row.neighbor1Rate)}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="max-w-[145px] truncate text-xs text-muted-foreground" title={row.neighbor2Name}>{row.neighbor2Name}</p>
-                          <span className="cf-numeric shrink-0 text-xs tabular-nums text-muted-foreground">{fmtEtb(row.neighbor2Rate)}</span>
-                        </div>
+                    <TableCell className="font-mono text-xs">{row.activity?.code ?? row.activityId}</TableCell>
+                    <TableCell>{row.activity?.category || "—"}</TableCell>
+                    <TableCell>{row.activity?.subgroup || "—"}</TableCell>
+                    <TableCell className="min-w-[180px] font-semibold">{row.activity?.name ?? row.activityId}</TableCell>
+                    <TableCell>{row.activity?.uom || "—"}</TableCell>
+                    <TableCell className="min-w-[180px] text-sm font-medium">{row.farmArea?.name ?? "—"}</TableCell>
+                    <TableCell className="min-w-[220px] py-3.5 text-xs">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-foreground">{fmtEtb(row.benchmarkData?.industryAverage.costPerUnit)} / unit</p>
+                        <p className="text-muted-foreground">
+                          {row.benchmarkData?.industryAverage.manDaysPerUnit?.toFixed(3) ?? "—"} MD/unit ·{" "}
+                          {fmtEtb(row.benchmarkData?.industryAverage.wagePerManDay)} / MD
+                        </p>
+                        <p className="text-muted-foreground">
+                          {row.benchmarkData?.industryAverage.frequency?.toFixed(2) ?? "—"} times/year ·{" "}
+                          {row.benchmarkData?.industryAverage.farmsWithRate ?? "—"} farms with rate
+                        </p>
                       </div>
                     </TableCell>
-                    <TableCell className="cf-numeric min-w-[155px] text-right tabular-nums">
-                      <span className="font-semibold text-foreground">{fmtEtb(row.recommendedRate)}</span>
-                      <span className="mt-1 block text-[10px] text-muted-foreground">Average benchmark</span>
+                    <TableCell className="min-w-[220px] py-3.5 text-xs">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-foreground">{fmtEtb(row.benchmarkData?.sixFarmAverage.costPerUnit)} / unit</p>
+                        <p className="text-muted-foreground">
+                          {row.benchmarkData?.sixFarmAverage.manDaysPerUnit?.toFixed(3) ?? "—"} MD/unit ·{" "}
+                          {fmtEtb(row.benchmarkData?.sixFarmAverage.wagePerManDay)} / MD
+                        </p>
+                        <p className="text-muted-foreground">
+                          {row.benchmarkData?.sixFarmAverage.frequency?.toFixed(2) ?? "—"} times/year ·{" "}
+                          {row.benchmarkData?.sixFarmAverage.farmsWithRate ?? "—"} farms with rate
+                        </p>
+                      </div>
                     </TableCell>
                     <TableCell className="min-w-[90px]">
                       {row.lockedAt ? (
@@ -322,11 +337,11 @@ export default function BenchmarkSurveysListView() {
       />
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>New benchmark survey</DialogTitle>
+            <DialogTitle>New farm benchmark</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               label="Kind"
               required
@@ -427,65 +442,40 @@ export default function BenchmarkSurveysListView() {
                   <SelectContent>
                     {activities.map((a) => (
                       <SelectItem key={a.id} value={a.id}>
-                        {a.code} · {a.name}
+                        {a.code} · {a.subgroup ? `${a.subgroup} · ` : ""}{a.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
             />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField
-                label="Neighbor 1 name"
-                required
-                render={(props) => (
-                  <Input {...props} value={n1Name} onChange={(e) => setN1Name(e.target.value)} />
-                )}
-              />
-              <FormField
-                label="Neighbor 1 rate (ETB)"
-                required
-                render={(props) => (
-                  <Input
-                    {...props}
-                    type="number"
-                    value={n1Rate}
-                    onChange={(e) => setN1Rate(e.target.value)}
-                  />
-                )}
-              />
-              <FormField
-                label="Neighbor 2 name"
-                required
-                render={(props) => (
-                  <Input {...props} value={n2Name} onChange={(e) => setN2Name(e.target.value)} />
-                )}
-              />
-              <FormField
-                label="Neighbor 2 rate (ETB)"
-                required
-                render={(props) => (
-                  <Input
-                    {...props}
-                    type="number"
-                    value={n2Rate}
-                    onChange={(e) => setN2Rate(e.target.value)}
-                  />
-                )}
-              />
+            <div className="space-y-2 sm:col-span-2">
+              <div>
+                <p className="text-sm font-medium">Source farm rates</p>
+                <p className="text-xs text-muted-foreground">
+                  Add farms and enter available rates. Mark farms to include in the industry average.
+                </p>
+              </div>
+              <BenchmarkFarmDataFields value={farmInputs} onChange={setFarmInputs} />
             </div>
-            <FormField
-              label="Survey date"
-              required
-              render={(props) => (
-                <Input
-                  {...props}
-                  type="date"
-                  value={surveyDate}
-                  onChange={(e) => setSurveyDate(e.target.value)}
-                />
-              )}
-            />
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/30 p-3 sm:col-span-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Recommended rate</p>
+                <p className="text-lg font-semibold">
+                  {fmtEtb(
+                    benchmarkSummary.industryAverage.costPerUnit ??
+                      benchmarkSummary.sixFarmAverage.costPerUnit,
+                  )}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">per unit</span>
+                </p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Based on{" "}
+                {benchmarkSummary.recommendedSource === "industry_average"
+                  ? `industry average · ${benchmarkSummary.industryAverage.farmsWithRate} farms`
+                  : `all-farm average · ${benchmarkSummary.sixFarmAverage.farmsWithRate} farms`}
+              </p>
+            </div>
             <FormField
               label="Source / evidence"
               render={(props) => (
@@ -497,7 +487,7 @@ export default function BenchmarkSurveysListView() {
               )}
             />
             <FormField
-              label="Notes"
+              label="Data notes"
               render={(props) => (
                 <Textarea {...props} value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
               )}
@@ -522,17 +512,22 @@ export default function BenchmarkSurveysListView() {
                   toast.error("Select an activity");
                   return;
                 }
+                const duplicateFarmName = findDuplicateBenchmarkFarmName(farmInputs);
+                if (duplicateFarmName) {
+                  toast.error(`Source farm "${duplicateFarmName}" is listed more than once`);
+                  return;
+                }
+                if (benchmarkSummary.sixFarmAverage.farmsWithRate === 0) {
+                  toast.error("Enter cost per unit for at least one source farm");
+                  return;
+                }
                 try {
                   const created = await create(farmAreaId, {
                     activityId,
                     kind,
-                    neighbor1Name: n1Name,
-                    neighbor2Name: n2Name,
-                    neighbor1Rate: Number(n1Rate),
-                    neighbor2Rate: Number(n2Rate),
+                    benchmarkData: { farms: farmInputs, dataNotes: notes },
                     sourceEvidence,
                     notes,
-                    surveyDate,
                     programId: ctx.programId,
                     budgetYearId: ctx.budgetYearId,
                   });
@@ -557,7 +552,7 @@ export default function BenchmarkSurveysListView() {
                 }
               }}
             >
-              Create draft
+              Create benchmark
             </Button>
           </DialogFooter>
         </DialogContent>

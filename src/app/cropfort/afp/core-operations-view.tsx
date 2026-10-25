@@ -496,72 +496,59 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
   return (
     <PageContainer>
       <PageHeader
-        eyebrow={activeProgram?.name || "Workspace"}
-        title={plan?.name || "Core Operations plan"}
-        breadcrumbs={[
-          { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Core Operations", href: CROPFORT_ROUTES.programmePlans },
-          { label: "Details" },
-        ]}
-        meta={
-          plan ? (
-            <>
-              <StatusBadge status={plan.status} label={(plan.statusRaw || plan.status).replace(/_/g, " ")} />
-              <span className="text-xs text-muted-foreground">{plan.farmName}</span>
-              <span className="text-xs text-muted-foreground">
-                {plan.planningCycleLabel || plan.budgetYearLabel}
-              </span>
-            </>
-          ) : null
-        }
+        title="Core Operations"
       />
 
       {/* Steps */}
-      <nav aria-label="Core Operations steps" className="cf-tab-scroll -mx-1 border-b border-border px-1">
-        {STEPS.map((s, index) => {
-          const active = step === s.id;
-          const locked = !plan && s.id !== "setup";
-          return (
-            <button
-              key={s.id}
-              type="button"
-              disabled={locked}
-              aria-current={active ? "step" : undefined}
-              onClick={() => setStep(s.id)}
-              className={cn(
-                "relative flex shrink-0 items-center gap-2 px-3 py-2.5 text-[13px] font-medium touch-manipulation transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                locked && "cursor-not-allowed opacity-40",
-                active
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <span
-                className={cn(
-                  "flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-semibold tabular-nums",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground",
-                )}
-                aria-hidden
-              >
-                {s.short}
-              </span>
-              <span className="hidden sm:inline">{s.label}</span>
-              <span className="sm:hidden">{s.mobile}</span>
-              {active ? (
-                <span
-                  className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary"
-                  aria-hidden
-                />
-              ) : null}
-              <span className="sr-only">
-                Step {index + 1} of {STEPS.length}: {s.label}
-              </span>
-            </button>
-          );
-        })}
+      <nav
+        aria-label="Core Operations steps"
+        className="mx-auto w-full max-w-4xl rounded-xl border border-border bg-card px-2 py-4 shadow-sm sm:px-6"
+      >
+        <ol className="grid grid-cols-4 gap-1 sm:gap-4">
+          {STEPS.map((s, index) => {
+            const active = step === s.id;
+            const locked = !plan && s.id !== "setup";
+            const complete = index < STEPS.findIndex((item) => item.id === step);
+            return (
+              <li key={s.id} className="min-w-0">
+                <button
+                  type="button"
+                  disabled={locked}
+                  aria-current={active ? "step" : undefined}
+                  onClick={() => setStep(s.id)}
+                  className={cn(
+                    "flex w-full flex-col items-center gap-2 rounded-lg px-1 py-1.5 text-center transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    locked && "cursor-not-allowed opacity-40",
+                    active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground shadow-sm ring-4 ring-primary/10"
+                        : complete
+                          ? "bg-primary/10 text-primary"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                    aria-hidden
+                  >
+                    {s.short}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">
+                      Step {index + 1} of {STEPS.length}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] font-semibold sm:text-sm">
+                      {s.label}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
       </nav>
 
       {/* Completion strip */}
@@ -594,7 +581,10 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
 
       {/* ——— SETUP ——— */}
       {step === "setup" ? (
-        <SectionCard title="Scope">
+        <SectionCard
+          title="Start your plan"
+          description="Set the basics first. You can add detailed settings now or come back to them later."
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField
               label="Workspace"
@@ -619,6 +609,47 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
               )}
             />
             <FormField
+              label="Farm area / estate"
+              required
+              render={() => (
+                <div className="space-y-1.5">
+                  <Select
+                    value={plan?.farmEstateId || ""}
+                    onValueChange={(id) => {
+                      if (planId) {
+                        const farm = farms.find((f) => f.id === id);
+                        if (farm) {
+                          updatePlanMeta({
+                            farmEstateId: farm.id,
+                            farmName: farm.name,
+                          });
+                        }
+                        return;
+                      }
+                      void ensurePlan(id, plan?.budgetYearGc);
+                    }}
+                    disabled={!canEdit}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select farm area" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {farms.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!plan ? (
+                    <p className="text-xs text-muted-foreground">
+                      Select a farm to start your draft plan.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            />
+            <FormField
               label="Core Operations plan name"
               required
               render={(props) => (
@@ -626,20 +657,8 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                   {...props}
                   value={plan?.name || ""}
                   onChange={(e) => updatePlanMeta({ name: e.target.value })}
-                  disabled={!canEdit}
-                  placeholder="e.g. Annual Coffee Operations"
-                />
-              )}
-            />
-            <FormField
-              label="Planning cycle"
-              render={(props) => (
-                <Input
-                  {...props}
-                  value={plan?.planningCycleLabel || ""}
-                  onChange={(e) => updatePlanMeta({ planningCycleLabel: e.target.value })}
-                  disabled={!canEdit}
-                  placeholder="e.g. 2027 Core Operations"
+                  disabled={!canEdit || !plan}
+                  placeholder={plan ? "e.g. Annual Coffee Operations" : "Select a farm first"}
                 />
               )}
             />
@@ -659,7 +678,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                       });
                     }
                   }}
-                  disabled={!canEdit}
+                  disabled={!canEdit || !plan}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -674,109 +693,23 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                 </Select>
               )}
             />
-            <FormField
-              label="Farm area / estate"
-              required
-              render={() => (
-                <Select
-                  value={plan?.farmEstateId || ""}
-                  onValueChange={(id) => {
-                    if (planId) {
-                      const farm = farms.find((f) => f.id === id);
-                      if (farm) {
-                        updatePlanMeta({
-                          farmEstateId: farm.id,
-                          farmName: farm.name,
-                        });
-                      }
-                      return;
-                    }
-                    void ensurePlan(id, plan?.budgetYearGc);
-                  }}
-                  disabled={!canEdit}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select farm" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {farms.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            <FormField
-              label="Program band"
-              required
-              render={() => {
-                const a = activeBandSet?.bands.find((b) => b.band === "A");
-                const b = activeBandSet?.bands.find((x) => x.band === "B");
-                const c = activeBandSet?.bands.find((x) => x.band === "C");
-                const value =
-                  plan?.programBandSetId ||
-                  activeBandSet?.id ||
-                  programBandOptions[0]?.id ||
-                  "";
-                return (
-                  <div className="space-y-2">
-                    <Select
-                      value={value}
-                      disabled={!canEdit || programBandOptions.length === 0}
-                      onValueChange={(id) => {
-                        const row = bandSets.find((s) => s.id === id);
-                        if (row) setActiveBandProgram(row.programId);
-                        updatePlanMeta({ programBandSetId: id });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select program band" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {programBandOptions.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.programName} · {s.effectiveYear}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {a && b && c
-                        ? `A ≤ ETB ${a.maxEtb?.toLocaleString()} · B ≤ ETB ${b.maxEtb?.toLocaleString()} · C/D Silva gate`
-                        : "Create bands under Administration → Spend Bands"}
-                      {" · "}
-                      <Link
-                        href={CROPFORT_ROUTES.spendBands}
-                        className="underline-offset-2 hover:underline"
-                      >
-                        Manage
-                      </Link>
-                    </p>
-                  </div>
-                );
-              }}
-            />
-            <FormField
-              label="Plan status"
-              render={() => (
-                <div className="flex h-10 items-center">
-                  {plan ? (
+            {plan ? (
+              <FormField
+                label="Plan status"
+                render={() => (
+                  <div className="flex h-10 items-center">
                     <StatusBadge status={plan.status} />
-                  ) : (
-                    <span className="text-sm text-muted-foreground">No plan yet</span>
-                  )}
-                </div>
-              )}
-            />
+                  </div>
+                )}
+              />
+            ) : null}
           </div>
 
           {plan ? (
-            <p className="mt-3 text-sm text-muted-foreground">
+            <p className="mt-3 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
               {loading
                 ? "Loading rates…"
-                : `${farmEligibleCount} approved rates · ${farmBlocksAll.length} blocks`}
+                : `${farmEligibleCount} approved rates available · ${farmBlocksAll.length} blocks on this farm`}
             </p>
           ) : null}
           {error ? (
@@ -785,7 +718,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
 
           <button
             type="button"
-            className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground"
+            className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             onClick={() => setMoreSetup((v) => !v)}
           >
             {moreSetup ? (
@@ -793,11 +726,73 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
             ) : (
               <ChevronRight className="h-4 w-4" />
             )}
-            More
+            {moreSetup ? "Hide additional settings" : "Additional settings (optional)"}
           </button>
 
           {moreSetup && plan ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <FormField
+                label="Planning cycle"
+                render={(props) => (
+                  <Input
+                    {...props}
+                    value={plan.planningCycleLabel || ""}
+                    disabled={!canEdit}
+                    placeholder="e.g. 2027 Core Operations"
+                    onChange={(e) => updatePlanMeta({ planningCycleLabel: e.target.value })}
+                  />
+                )}
+              />
+              <FormField
+                label="Program band"
+                required
+                render={() => {
+                  const a = activeBandSet?.bands.find((b) => b.band === "A");
+                  const b = activeBandSet?.bands.find((x) => x.band === "B");
+                  const c = activeBandSet?.bands.find((x) => x.band === "C");
+                  const value =
+                    plan.programBandSetId ||
+                    activeBandSet?.id ||
+                    programBandOptions[0]?.id ||
+                    "";
+                  return (
+                    <div className="space-y-2">
+                      <Select
+                        value={value}
+                        disabled={!canEdit || programBandOptions.length === 0}
+                        onValueChange={(id) => {
+                          const row = bandSets.find((s) => s.id === id);
+                          if (row) setActiveBandProgram(row.programId);
+                          updatePlanMeta({ programBandSetId: id });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select program band" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {programBandOptions.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.programName} · {s.effectiveYear}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {a && b && c
+                          ? `A ≤ ETB ${a.maxEtb?.toLocaleString()} · B ≤ ETB ${b.maxEtb?.toLocaleString()} · C/D Silva gate`
+                          : "Create bands under Administration → Spend Bands"}
+                        {" · "}
+                        <Link
+                          href={CROPFORT_ROUTES.spendBands}
+                          className="underline-offset-2 hover:underline"
+                        >
+                          Manage
+                        </Link>
+                      </p>
+                    </div>
+                  );
+                }}
+              />
               <FormField
                 label="Vendor / operator"
                 render={(props) => (

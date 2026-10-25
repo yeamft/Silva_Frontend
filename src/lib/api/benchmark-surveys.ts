@@ -3,6 +3,7 @@
  */
 import { apiFetch } from "@/lib/api/http";
 import { ApiError } from "@/lib/api/types";
+import type { BenchmarkData, BenchmarkFarmInputs } from "@/lib/benchmark-data";
 
 function asError(err: unknown): Error {
   if (err instanceof ApiError) return new Error(err.message);
@@ -32,6 +33,7 @@ export type ActivitySummary = {
   name: string;
   tier?: number;
   category?: string;
+  subgroup?: string;
   unitOfMeasure?: string;
 };
 
@@ -48,12 +50,14 @@ export type BenchmarkSurvey = {
   activityCode: string | null;
   activityName: string | null;
   activityUnit?: string | null;
+  activitySubgroup?: string | null;
   activityTier?: number | null;
   kind?: string | null;
   neighbor1Name: string | null;
   neighbor2Name: string | null;
   neighbor1Rate: number | null;
   neighbor2Rate: number | null;
+  benchmarkData: BenchmarkData | null;
   lockedAt: string | null;
   recommendedRate: number | null;
   proposedRate: number | null;
@@ -147,10 +151,10 @@ export const createBenchmarkSurvey = (
   farmId: string,
   input: {
     activityId: string;
-    neighbor1Name: string;
-    neighbor2Name: string;
-    neighbor1Rate: number;
-    neighbor2Rate: number;
+    benchmarkData: {
+      farms: BenchmarkFarmInputs;
+      dataNotes?: string;
+    };
     proposedRate?: number;
     sourceEvidence?: string;
     notes?: string;

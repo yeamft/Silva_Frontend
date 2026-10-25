@@ -1,4 +1,5 @@
 /** Client-side Rate Card workflow model (B–F). Live API via USE_RATE_CARD_MOCK=false. */
+import type { BenchmarkData } from "@/lib/benchmark-data";
 
 export type WorkflowStatus = "draft" | "submitted" | "approved" | "returned" | "archived";
 
@@ -43,6 +44,7 @@ export interface WorkflowActivity {
   code: string;
   name: string;
   category: string;
+  subgroup?: string;
   uom: string;
   tier: 1 | 2 | 3;
   defaultNorm: number | null;
@@ -72,7 +74,7 @@ export interface WorkflowAuditEvent {
 }
 
 /**
- * Benchmark Survey — neighbor evidence for any kind.
+ * Benchmark Survey — flexible farm cost, man-day, and frequency evidence.
  * Lock → recommended rate. Rate Card is created from this and goes to Silva.
  */
 export interface BenchmarkSurveyRecord {
@@ -87,6 +89,7 @@ export interface BenchmarkSurveyRecord {
   neighbor2Name: string;
   neighbor1Rate: number;
   neighbor2Rate: number;
+  benchmarkData?: BenchmarkData | null;
   lockedAt: string | null;
   recommendedRate: number;
   /** Prefill for rate card proposed rate after lock. */

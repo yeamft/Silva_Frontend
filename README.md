@@ -73,6 +73,7 @@ This app now supports Supabase as a backend for:
 Create a `.env.local` file with:
 
 ```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api/v1
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_anon_publishable_key
 ```

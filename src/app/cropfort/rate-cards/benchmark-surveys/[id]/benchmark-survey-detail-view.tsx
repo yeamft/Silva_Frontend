@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { FormField } from "@/components/cropfort/form-field";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { BenchmarkFarmDataFields } from "@/components/rate-cards/benchmark-farm-data-fields";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { AuditTimelineDrawer } from "@/components/rate-cards/audit-timeline-drawer";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -14,6 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
+import {
+  buildBenchmarkData,
+  emptyBenchmarkFarmInputs,
+  findDuplicateBenchmarkFarmName,
+  normalizeBenchmarkFarmInputs,
+  type BenchmarkFarmInputs,
+} from "@/lib/benchmark-data";
 import { canProposeRateCard, canViewBenchmarkSurveys } from "@/lib/cropfortAccess";
 import { enrichSurvey } from "@/lib/mock-api/rate-card-workflow";
 import { useBenchmarkSurveyStore } from "@/store/benchmarkSurveyStore";
@@ -24,7 +32,7 @@ function fmtEtb(n: number | null | undefined) {
   return `ETB ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-/** Benchmark Survey = neighbor evidence. Rate card (from this survey) goes to Silva. */
+/** Benchmark Survey = farm-level evidence. Rate card (from this survey) goes to Silva. */
 export default function BenchmarkSurveyDetailView() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -42,11 +50,7 @@ export default function BenchmarkSurveyDetailView() {
   const createCard = useRateCardStore((s) => s.createFromSurvey);
   const cardPending = useRateCardStore((s) => s.actionPending);
 
-  const [n1Name, setN1Name] = useState("");
-  const [n2Name, setN2Name] = useState("");
-  const [n1Rate, setN1Rate] = useState("");
-  const [n2Rate, setN2Rate] = useState("");
-  const [surveyDate, setSurveyDate] = useState("");
+  const [farmInputs, setFarmInputs] = useState<BenchmarkFarmInputs>(emptyBenchmarkFarmInputs);
   const [sourceEvidence, setSourceEvidence] = useState("");
   const [notes, setNotes] = useState("");
   const [auditOpen, setAuditOpen] = useState(false);
@@ -58,21 +62,16 @@ export default function BenchmarkSurveyDetailView() {
 
   useEffect(() => {
     if (!selected || selected.id !== id) return;
-    setN1Name(selected.neighbor1Name);
-    setN2Name(selected.neighbor2Name);
-    setN1Rate(String(selected.neighbor1Rate));
-    setN2Rate(String(selected.neighbor2Rate));
-    setSurveyDate(selected.surveyDate);
+    setFarmInputs(
+      normalizeBenchmarkFarmInputs(selected.benchmarkData?.farms ?? emptyBenchmarkFarmInputs()),
+    );
     setSourceEvidence(selected.sourceEvidence);
     setNotes(selected.notes);
   }, [selected, id]);
 
   const survey = selected && selected.id === id ? enrichSurvey(selected) : null;
 
-  const a = Number(n1Rate);
-  const b = Number(n2Rate);
-  const liveRecommended =
-    Number.isFinite(a) && Number.isFinite(b) ? Math.round(((a + b) / 2) * 100) / 100 : null;
+  const benchmarkSummary = buildBenchmarkData(farmInputs, notes);
 
   if (!canView) return <NotAuthorized title="Benchmark survey" />;
   if (detailLoading && !survey) {
@@ -99,14 +98,11 @@ export default function BenchmarkSurveyDetailView() {
 
   const locked = Boolean(survey.lockedAt);
   const editable = canPropose && (survey.status === "draft" || survey.status === "returned");
-  const neighborsEditable = editable && !locked;
+  const benchmarkEditable = editable && !locked;
   const busy = actionPending || cardPending;
 
-  const patchNeighbors = {
-    neighbor1Name: n1Name,
-    neighbor2Name: n2Name,
-    neighbor1Rate: Number(n1Rate),
-    neighbor2Rate: Number(n2Rate),
+  const patchBenchmark = {
+    benchmarkData: { farms: farmInputs, dataNotes: notes },
     sourceEvidence,
     notes,
   };
@@ -137,78 +133,51 @@ export default function BenchmarkSurveyDetailView() {
         }
       />
 
-      <SectionCard title="Neighbor evidence">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField
-            label="Neighbor 1 name"
-            required
-            render={(props) => (
-              <Input
-                {...props}
-                value={n1Name}
-                disabled={!neighborsEditable}
-                onChange={(e) => setN1Name(e.target.value)}
-              />
-            )}
-          />
-          <FormField
-            label="Neighbor 1 rate (ETB)"
-            required
-            render={(props) => (
-              <Input
-                {...props}
-                type="number"
-                value={n1Rate}
-                disabled={!neighborsEditable}
-                onChange={(e) => setN1Rate(e.target.value)}
-              />
-            )}
-          />
-          <FormField
-            label="Neighbor 2 name"
-            required
-            render={(props) => (
-              <Input
-                {...props}
-                value={n2Name}
-                disabled={!neighborsEditable}
-                onChange={(e) => setN2Name(e.target.value)}
-              />
-            )}
-          />
-          <FormField
-            label="Neighbor 2 rate (ETB)"
-            required
-            render={(props) => (
-              <Input
-                {...props}
-                type="number"
-                value={n2Rate}
-                disabled={!neighborsEditable}
-                onChange={(e) => setN2Rate(e.target.value)}
-              />
-            )}
-          />
-          <FormField
-            label="Survey date"
-            required
-            render={(props) => (
-              <Input
-                {...props}
-                type="date"
-                value={surveyDate}
-                disabled={!neighborsEditable}
-                onChange={(e) => setSurveyDate(e.target.value)}
-              />
-            )}
-          />
+      <SectionCard title="Farm benchmark data">
+        <p className="mb-3 text-sm text-muted-foreground">
+          Include any farms in the industry average. If none of those farms have rates, all farms
+          with rates are used for the fallback. Wage per man-day is cost per unit divided by
+          man-days per unit.
+        </p>
+        <BenchmarkFarmDataFields
+          value={farmInputs}
+          onChange={setFarmInputs}
+          disabled={!benchmarkEditable}
+        />
+        <div className="mt-3 grid gap-3 rounded-md bg-muted/40 p-3 text-sm sm:grid-cols-2">
+          <div>
+            <p className="cf-label">Industry average</p>
+            <p className="font-semibold">
+              {fmtEtb(benchmarkSummary.industryAverage.costPerUnit)} / unit ·{" "}
+              {benchmarkSummary.industryAverage.manDaysPerUnit?.toFixed(3) ?? "—"} MD/unit
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {fmtEtb(benchmarkSummary.industryAverage.wagePerManDay)} / MD ·{" "}
+              {benchmarkSummary.industryAverage.frequency?.toFixed(2) ?? "—"} times/year ·{" "}
+              {benchmarkSummary.industryAverage.farmsWithRate} farms with rate
+            </p>
+          </div>
+          <div>
+            <p className="cf-label">All-farm fallback</p>
+            <p className="font-semibold">
+              {fmtEtb(benchmarkSummary.sixFarmAverage.costPerUnit)} / unit ·{" "}
+              {benchmarkSummary.sixFarmAverage.manDaysPerUnit?.toFixed(3) ?? "—"} MD/unit
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {fmtEtb(benchmarkSummary.sixFarmAverage.wagePerManDay)} / MD ·{" "}
+              {benchmarkSummary.sixFarmAverage.frequency?.toFixed(2) ?? "—"} times/year ·{" "}
+              {benchmarkSummary.sixFarmAverage.farmsWithRate} farms with rate
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <FormField
             label="Source / evidence"
             render={(props) => (
               <Input
                 {...props}
                 value={sourceEvidence}
-                disabled={!neighborsEditable}
+                disabled={!benchmarkEditable}
                 onChange={(e) => setSourceEvidence(e.target.value)}
               />
             )}
@@ -220,7 +189,7 @@ export default function BenchmarkSurveyDetailView() {
                 <Textarea
                   {...props}
                   value={notes}
-                  disabled={!neighborsEditable}
+                  disabled={!benchmarkEditable}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
                 />
@@ -231,32 +200,45 @@ export default function BenchmarkSurveyDetailView() {
 
         <div className="mt-3 grid gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm sm:grid-cols-2">
           <div>
-            <p className="cf-label">Recommended (neighbor AVG)</p>
-            <p className="cf-data">{fmtEtb(liveRecommended ?? survey.recommendedRate)}</p>
+            <p className="cf-label">Recommended rate / unit</p>
+            <p className="cf-data">
+              {fmtEtb(
+                benchmarkSummary.industryAverage.costPerUnit ??
+                  benchmarkSummary.sixFarmAverage.costPerUnit ??
+                  survey.recommendedRate,
+              )}
+            </p>
           </div>
           <div>
             <p className="cf-label">Activity</p>
             <p className="cf-data">
-              {survey.activity?.code} · {survey.activity?.name} · {survey.farmArea?.name}
+              {survey.activity?.code} · {survey.activity?.category}
+              {survey.activity?.subgroup ? ` · ${survey.activity.subgroup}` : ""} ·{" "}
+              {survey.activity?.name} · {survey.activity?.uom} · {survey.farmArea?.name}
             </p>
           </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {neighborsEditable ? (
+          {benchmarkEditable ? (
             <Button
               size="sm"
               disabled={busy}
               onClick={async () => {
+                const duplicateFarmName = findDuplicateBenchmarkFarmName(farmInputs);
+                if (duplicateFarmName) {
+                  toast.error(`Source farm "${duplicateFarmName}" is listed more than once`);
+                  return;
+                }
                 try {
-                  await update(survey.id, patchNeighbors);
-                  toast.success("Neighbors saved");
+                  await update(survey.id, patchBenchmark);
+                  toast.success("Benchmark data saved");
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "Save failed");
                 }
               }}
             >
-              Save neighbors
+              Save benchmark
             </Button>
           ) : null}
           {canPropose && editable && !locked ? (
@@ -264,8 +246,13 @@ export default function BenchmarkSurveyDetailView() {
               size="sm"
               disabled={busy}
               onClick={async () => {
+                const duplicateFarmName = findDuplicateBenchmarkFarmName(farmInputs);
+                if (duplicateFarmName) {
+                  toast.error(`Source farm "${duplicateFarmName}" is listed more than once`);
+                  return;
+                }
                 try {
-                  await update(survey.id, patchNeighbors);
+                  await update(survey.id, patchBenchmark);
                   await lock(survey.id);
                   toast.success("Benchmark locked — create a rate card next");
                 } catch (err) {

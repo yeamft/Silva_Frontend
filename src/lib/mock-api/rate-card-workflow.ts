@@ -22,6 +22,7 @@ import type {
   WorkflowProgram,
   WorkflowStatus,
 } from "@/types/rate-card-workflow";
+import { buildBenchmarkData, type BenchmarkFarmInputs } from "@/lib/benchmark-data";
 import { isoNow, mockDelay, newId } from "./delay";
 
 const SPX_ACTOR = { id: "u-spx-1", name: "Ada Mengistu", party: "spx" as const };
@@ -679,6 +680,7 @@ export function registerWorkflowActivity(input: {
   code?: string;
   name: string;
   category: string;
+  subgroup?: string;
   unitOfMeasure?: string;
   tier: number;
 }) {
@@ -689,6 +691,7 @@ export function registerWorkflowActivity(input: {
     code: input.code || input.id,
     name: input.name,
     category: input.category,
+    subgroup: input.subgroup,
     uom: input.unitOfMeasure || "unit",
     tier,
     defaultNorm: null,
@@ -768,10 +771,7 @@ export async function createBenchmarkSurvey(
     farmAreaId: string;
     activityId: string;
     kind: StandingKind;
-    neighbor1Name: string;
-    neighbor2Name: string;
-    neighbor1Rate: number;
-    neighbor2Rate: number;
+    benchmarkData: { farms: BenchmarkFarmInputs; dataNotes?: string };
     surveyDate: string;
     sourceEvidence: string;
     notes: string;
@@ -793,24 +793,18 @@ export async function createBenchmarkSurvey(
   if (input.kind === "services" && act.tier !== 3) {
     throw new Error("Services benchmarks require a tier 3 (services) activity");
   }
-  if (!input.neighbor1Name.trim() || !input.neighbor2Name.trim()) {
-    throw new Error("Both neighbor names are required");
-  }
-  if (
-    !Number.isFinite(input.neighbor1Rate) ||
-    !Number.isFinite(input.neighbor2Rate) ||
-    input.neighbor1Rate < 0 ||
-    input.neighbor2Rate < 0
-  ) {
-    throw new Error("Neighbor rates must be non-negative numbers");
-  }
-  const recommended = avgRecommended(input.neighbor1Rate, input.neighbor2Rate);
+  const benchmarkData = buildBenchmarkData(input.benchmarkData.farms, input.benchmarkData.dataNotes || "");
+  const recommended =
+    benchmarkData.industryAverage.costPerUnit ?? benchmarkData.sixFarmAverage.costPerUnit;
+  if (recommended == null) throw new Error("Enter cost per unit for at least one source farm");
   const now = isoNow();
   const day = now.slice(0, 10);
   const fallback =
     input.kind === "labor" && act.defaultNorm != null && act.defaultWage != null
       ? Math.round(act.defaultNorm * act.defaultWage)
-      : Math.round(recommended * 0.95);
+      : benchmarkData.recommendedSource === "six_farm_fallback"
+        ? benchmarkData.sixFarmAverage.costPerUnit ?? recommended
+        : Math.round(recommended * 0.95);
   const row = withSurveyDerived({
     id: newId("bs"),
     programId: input.programId,
@@ -818,10 +812,11 @@ export async function createBenchmarkSurvey(
     farmAreaId: input.farmAreaId,
     activityId: input.activityId,
     kind: input.kind,
-    neighbor1Name: input.neighbor1Name.trim(),
-    neighbor2Name: input.neighbor2Name.trim(),
-    neighbor1Rate: input.neighbor1Rate,
-    neighbor2Rate: input.neighbor2Rate,
+    neighbor1Name: "Industry average",
+    neighbor2Name: "All-farm average",
+    neighbor1Rate: benchmarkData.industryAverage.costPerUnit ?? 0,
+    neighbor2Rate: benchmarkData.sixFarmAverage.costPerUnit ?? 0,
+    benchmarkData,
     lockedAt: null,
     proposedRate: recommended,
     availableFrom: input.availableFrom?.trim() || day,
@@ -864,6 +859,7 @@ export async function updateBenchmarkSurvey(
       | "sourceEvidence"
       | "notes"
       | "farmAreaId"
+      | "benchmarkData"
     >
   >,
   party: WorkflowParty = "spx",
@@ -883,18 +879,26 @@ export async function updateBenchmarkSurvey(
     (patch.neighbor1Name !== undefined ||
       patch.neighbor2Name !== undefined ||
       patch.neighbor1Rate !== undefined ||
-      patch.neighbor2Rate !== undefined)
+      patch.neighbor2Rate !== undefined ||
+      patch.benchmarkData !== undefined)
   ) {
-    throw new Error("Neighbor rates are locked and cannot be changed");
+    throw new Error("Benchmark data is locked and cannot be changed");
   }
 
   const nextN1 = patch.neighbor1Rate ?? current.neighbor1Rate;
   const nextN2 = patch.neighbor2Rate ?? current.neighbor2Rate;
-  const recommended = avgRecommended(nextN1, nextN2);
+  const benchmarkData = patch.benchmarkData
+    ? buildBenchmarkData(patch.benchmarkData.farms, patch.benchmarkData.dataNotes || "")
+    : current.benchmarkData;
+  const recommended = benchmarkData
+    ? benchmarkData.industryAverage.costPerUnit ?? benchmarkData.sixFarmAverage.costPerUnit ?? 0
+    : avgRecommended(nextN1, nextN2);
   let proposed = patch.proposedRate ?? current.proposedRate;
   if (
     !locked &&
-    (patch.neighbor1Rate !== undefined || patch.neighbor2Rate !== undefined) &&
+    (patch.benchmarkData !== undefined ||
+      patch.neighbor1Rate !== undefined ||
+      patch.neighbor2Rate !== undefined) &&
     patch.proposedRate === undefined &&
     current.proposedRate === current.recommendedRate
   ) {
@@ -917,6 +921,7 @@ export async function updateBenchmarkSurvey(
     ...patch,
     neighbor1Rate: nextN1,
     neighbor2Rate: nextN2,
+    benchmarkData,
     recommendedRate: recommended,
     proposedRate: proposed,
     availableFrom: availableFrom || current.availableFrom,
@@ -2011,6 +2016,7 @@ export function enrichSurvey(row: BenchmarkSurveyRecord) {
       code: (row as { activityCode?: string }).activityCode || row.activityId,
       name: (row as { activityName?: string }).activityName || row.activityId,
       category: "Labor",
+      subgroup: (row as { activitySubgroup?: string | null }).activitySubgroup || "",
       uom: (row as { activityUnit?: string }).activityUnit || "unit",
       tier: (row as { activityTier?: number }).activityTier ?? 1,
       defaultNorm: null,

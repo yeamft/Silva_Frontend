@@ -9,6 +9,8 @@ import {
 } from "@/components/cropfort/attention-panel";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
+import { listProgramRateCardProposals } from "@/lib/api/rate-card-proposals";
+import { useQuery } from "@tanstack/react-query";
 import { useAfes } from "@/lib/query/hooks/use-afes";
 import { useInterventions } from "@/lib/query/hooks/use-interventions";
 import { useMonthlyWorkOrders } from "@/lib/query/hooks/use-monthly-work-orders";
@@ -23,6 +25,7 @@ type Decision = {
   title: string;
   meta: string;
   detail?: string;
+  href?: string;
 };
 
 function OwnerMetric({
@@ -64,6 +67,12 @@ export function SilvaDeskHome() {
   const { activeProgram, user } = useCropfortAuth();
   const enabled = Boolean(activeProgram?.id);
 
+  const rateCardsQuery = useQuery({
+    queryKey: ["approval-rate-cards", activeProgram?.id],
+    queryFn: () => listProgramRateCardProposals({ status: "submitted", programWide: true }),
+    enabled: enabled && Boolean(activeProgram?.id),
+    refetchInterval: 10_000,
+  });
   const afesQuery = useAfes(enabled, "submitted");
   const afpQuery = useProgrammePlans(enabled, { status: "submitted" });
   const projectsQuery = useProjects(enabled, "submitted");
@@ -98,6 +107,21 @@ export function SilvaDeskHome() {
         detail: fmtEtb(a.amountEtb),
       });
     }
+    for (const card of rateCardsQuery.data || []) {
+      rows.push({
+        id: `rate-card-${card.id}`,
+        title: card.activityName || card.activityCode || "Rate card",
+        meta: [
+          card.kind,
+          card.farmEstateName,
+          card.submittedAt ? `Submitted ${new Date(card.submittedAt).toLocaleDateString()}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        detail: fmtEtb(card.proposedRate),
+        href: `${CROPFORT_ROUTES.rateCardProposals}/${card.id}`,
+      });
+    }
     for (const p of projectsQuery.data || []) {
       rows.push({
         id: `proj-${p.id}`,
@@ -130,6 +154,7 @@ export function SilvaDeskHome() {
   }, [
     afpQuery.data,
     afesQuery.data,
+    rateCardsQuery.data,
     projectsQuery.data,
     interventionsQuery.data,
     monthlyQuery.data,
@@ -149,23 +174,25 @@ export function SilvaDeskHome() {
   }, [settlementsQuery.data]);
 
   const approvalsAwaiting = decisions.length;
-  const loading =
+  const approvalsLoading =
     afesQuery.isLoading ||
+    rateCardsQuery.isLoading ||
     afpQuery.isLoading ||
     projectsQuery.isLoading ||
     interventionsQuery.isLoading ||
     monthlyQuery.isLoading ||
-    weeklyQuery.isLoading ||
-    settlementsQuery.isLoading;
-  const hasError =
+    weeklyQuery.isLoading;
+  const approvalsHasError =
     afesQuery.isError ||
+    rateCardsQuery.isError ||
     afpQuery.isError ||
     projectsQuery.isError ||
     interventionsQuery.isError ||
     monthlyQuery.isError ||
-    weeklyQuery.isError ||
-    settlementsQuery.isError;
-  const dataReady = enabled && !loading && !hasError;
+    weeklyQuery.isError;
+  const approvalsReady = enabled && !approvalsLoading && !approvalsHasError;
+  const settlementReady =
+    enabled && !settlementsQuery.isLoading && !settlementsQuery.isError;
 
   return (
     <div className="cf-page space-y-6">
@@ -187,9 +214,9 @@ export function SilvaDeskHome() {
         empty={
           !enabled
             ? "Select an estate to see items waiting for your review."
-            : loading
+            : approvalsLoading
               ? "Checking for items that need your review…"
-              : hasError
+              : approvalsHasError
                 ? "Review items could not be loaded. Please try again shortly."
                 : "You're all caught up. New submissions will appear here."
         }
@@ -197,7 +224,7 @@ export function SilvaDeskHome() {
         {decisions.slice(0, 5).map((row) => (
           <AttentionItem
             key={row.id}
-            href={CROPFORT_ROUTES.approvals}
+            href={row.href || CROPFORT_ROUTES.approvals}
             title={row.title}
             meta={row.meta}
             detail={row.detail}
@@ -209,21 +236,21 @@ export function SilvaDeskHome() {
         <OwnerMetric
           href={CROPFORT_ROUTES.approvals}
           label="Waiting for your review"
-          value={dataReady ? String(approvalsAwaiting) : "—"}
+          value={approvalsReady ? String(approvalsAwaiting) : "—"}
           icon={ClipboardCheck}
-          emphasis={dataReady && approvalsAwaiting > 0}
+          emphasis={approvalsReady && approvalsAwaiting > 0}
         />
         <OwnerMetric
           href={CROPFORT_ROUTES.settlements}
           label="Ready to settle"
-          value={dataReady ? fmtEtb(settlementSnap.readyValue) : "—"}
+          value={settlementReady ? fmtEtb(settlementSnap.readyValue) : "—"}
           icon={WalletCards}
-          emphasis={dataReady && settlementSnap.readyCount > 0}
+          emphasis={settlementReady && settlementSnap.readyCount > 0}
         />
         <OwnerMetric
           href={CROPFORT_ROUTES.settlements}
           label="Paid to date"
-          value={dataReady ? fmtEtb(settlementSnap.settledValue) : "—"}
+          value={settlementReady ? fmtEtb(settlementSnap.settledValue) : "—"}
           icon={CheckCircle2}
         />
       </section>

@@ -38,6 +38,7 @@ import type {
   WorkflowStatus,
 } from "@/types/rate-card-workflow";
 import { USE_RATE_CARD_MOCK } from "@/types/rate-card-workflow";
+import type { BenchmarkFarmInputs } from "@/lib/benchmark-data";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { queryKeys } from "@/lib/query/keys";
 import type { RateCardProposalDto } from "@/lib/api/rate-card-proposals";
@@ -490,23 +491,21 @@ export function useCreateMockBenchmarkSurvey() {
         farmAreaId: string;
         activityId: string;
         kind: StandingKind;
-        neighbor1Name: string;
-        neighbor2Name: string;
-        neighbor1Rate: number;
-        neighbor2Rate: number;
-        surveyDate?: string;
+        benchmarkData: { farms: BenchmarkFarmInputs; dataNotes?: string };
         sourceEvidence: string;
         notes: string;
       };
     }) => {
-      if (USE_RATE_CARD_MOCK) return mock.createBenchmarkSurvey(input, party);
+      if (USE_RATE_CARD_MOCK) {
+        return mock.createBenchmarkSurvey(
+          { ...input, surveyDate: new Date().toISOString().slice(0, 10) },
+          party,
+        );
+      }
       return mapSurvey(
         await apiCreateSurvey(input.farmAreaId, {
           activityId: input.activityId,
-          neighbor1Name: input.neighbor1Name,
-          neighbor2Name: input.neighbor2Name,
-          neighbor1Rate: input.neighbor1Rate,
-          neighbor2Rate: input.neighbor2Rate,
+          benchmarkData: input.benchmarkData,
           sourceEvidence: input.sourceEvidence,
           notes: input.notes,
         }),

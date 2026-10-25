@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { listActivities } from "@/lib/api/activities";
 import {
+  normalizeBenchmarkFarmInputs,
+  type BenchmarkFarmInputs,
+} from "@/lib/benchmark-data";
+import {
   createBenchmarkSurvey as apiCreateBenchmarkSurvey,
   getBenchmarkSurvey as apiGetBenchmarkSurvey,
   listFarms as apiListFarms,
@@ -30,6 +34,7 @@ function toActivitySummary(row: {
   name: string;
   tier?: number;
   category?: string;
+  subgroup?: string;
   unitOfMeasure?: string;
   code?: string;
 }): ActivitySummary {
@@ -39,6 +44,7 @@ function toActivitySummary(row: {
     name: row.name,
     tier: row.tier,
     category: row.category,
+    subgroup: row.subgroup,
     unitOfMeasure: row.unitOfMeasure,
   };
 }
@@ -66,6 +72,12 @@ function mapDto(s: BenchmarkSurvey, budgetYearId = String(new Date().getFullYear
     neighbor2Name: s.neighbor2Name || "",
     neighbor1Rate: s.neighbor1Rate ?? 0,
     neighbor2Rate: s.neighbor2Rate ?? 0,
+    benchmarkData: s.benchmarkData
+      ? {
+          ...s.benchmarkData,
+          farms: normalizeBenchmarkFarmInputs(s.benchmarkData.farms),
+        }
+      : null,
     lockedAt: s.lockedAt,
     recommendedRate: s.recommendedRate ?? 0,
     proposedRate: s.proposedRate ?? s.recommendedRate ?? 0,
@@ -87,11 +99,13 @@ function mapDto(s: BenchmarkSurvey, budgetYearId = String(new Date().getFullYear
     updatedAt: s.updatedAt,
     activityCode: s.activityCode,
     activityName: s.activityName,
+    activitySubgroup: s.activitySubgroup,
     activityUnit: s.activityUnit,
     activityTier: s.activityTier,
   } as BenchmarkSurveyRecord & {
     activityCode?: string | null;
     activityName?: string | null;
+    activitySubgroup?: string | null;
     activityUnit?: string | null;
     activityTier?: number | null;
   };
@@ -156,13 +170,9 @@ type BenchmarkSurveyStore = {
     input: {
       activityId: string;
       kind?: StandingKind;
-      neighbor1Name: string;
-      neighbor2Name: string;
-      neighbor1Rate: number;
-      neighbor2Rate: number;
+      benchmarkData: { farms: BenchmarkFarmInputs; dataNotes?: string };
       sourceEvidence?: string;
       notes?: string;
-      surveyDate?: string;
       programId?: string;
       budgetYearId?: string;
     },
@@ -297,10 +307,11 @@ export const useBenchmarkSurveyStore = create<BenchmarkSurveyStore>((set, get) =
         forTier = rows.map((a) =>
           toActivitySummary({
             id: a.id,
-            code: a.id,
+            code: a.code,
             name: a.name,
             tier: a.tier,
             category: a.category,
+            subgroup: a.subgroup,
             unitOfMeasure: a.unitOfMeasure,
           }),
         );
@@ -311,6 +322,7 @@ export const useBenchmarkSurveyStore = create<BenchmarkSurveyStore>((set, get) =
               code: a.code,
               name: a.name,
               category: a.category || kind,
+              subgroup: a.subgroup,
               unitOfMeasure: a.unitOfMeasure,
               tier: a.tier ?? tier,
             });
@@ -328,6 +340,7 @@ export const useBenchmarkSurveyStore = create<BenchmarkSurveyStore>((set, get) =
             name: a.name,
             tier: a.tier,
             category: a.category,
+            subgroup: a.subgroup,
             unitOfMeasure: a.uom,
           }),
         );
@@ -366,6 +379,7 @@ export const useBenchmarkSurveyStore = create<BenchmarkSurveyStore>((set, get) =
             code: selected.code,
             name: selected.name,
             category: selected.category || input.kind || "labor",
+            subgroup: selected.subgroup,
             unitOfMeasure: selected.unitOfMeasure,
             tier: selected.tier ?? kindToTier(input.kind || "labor"),
           });
@@ -384,11 +398,8 @@ export const useBenchmarkSurveyStore = create<BenchmarkSurveyStore>((set, get) =
             farmAreaId: farmId,
             activityId: input.activityId,
             kind,
-            neighbor1Name: input.neighbor1Name,
-            neighbor2Name: input.neighbor2Name,
-            neighbor1Rate: input.neighbor1Rate,
-            neighbor2Rate: input.neighbor2Rate,
-            surveyDate: input.surveyDate || new Date().toISOString().slice(0, 10),
+            benchmarkData: input.benchmarkData,
+            surveyDate: new Date().toISOString().slice(0, 10),
             sourceEvidence: input.sourceEvidence || "",
             notes: input.notes || "",
           },
@@ -406,10 +417,7 @@ export const useBenchmarkSurveyStore = create<BenchmarkSurveyStore>((set, get) =
       const row = mapDto(
         await apiCreateBenchmarkSurvey(farmId, {
           activityId: input.activityId,
-          neighbor1Name: input.neighbor1Name,
-          neighbor2Name: input.neighbor2Name,
-          neighbor1Rate: input.neighbor1Rate,
-          neighbor2Rate: input.neighbor2Rate,
+          benchmarkData: input.benchmarkData,
           sourceEvidence: input.sourceEvidence,
           notes: input.notes,
         }),

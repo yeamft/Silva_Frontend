@@ -9,6 +9,12 @@ import {
   createRateCardFromImport,
 } from "@/lib/mock-api/rate-card-workflow";
 import type { StandingKind, WorkflowContextFilters } from "@/types/rate-card-workflow";
+import {
+  buildBenchmarkData,
+  findDuplicateBenchmarkFarmName,
+  normalizeBenchmarkFarmInputs,
+  type BenchmarkFarmInputs,
+} from "@/lib/benchmark-data";
 
 export type RateImportKind =
   | "benchmark_survey"
@@ -39,12 +45,8 @@ const TEMPLATES: Record<RateImportKind, { filename: string; headers: string[] }>
       "activity_id",
       "activity_name",
       "unit",
-      "neighbor_farm_1_name",
-      "neighbor_farm_1_rate",
-      "neighbor_farm_2_name",
-      "neighbor_farm_2_rate",
-      "proposed_rate",
-      "valid_until",
+      "farms_json",
+      "data_notes",
       "status_source",
     ],
   },
@@ -233,31 +235,69 @@ export async function previewRateImport(
         const code = row.activity_id || "";
         const act = findActivity(code);
         if (!act) throw new Error(`Unknown activity_id: ${code || "(empty)"}`);
-        const n1 = num(row.neighbor_farm_1_rate);
-        const n2 = num(row.neighbor_farm_2_rate);
-        if (n1 == null || n2 == null || n1 < 0 || n2 < 0) {
-          throw new Error("Neighbor rates must be non-negative numbers");
+        let farmInputs: BenchmarkFarmInputs;
+        if (row.farms_json?.trim()) {
+          let parsedFarms: unknown;
+          try {
+            parsedFarms = JSON.parse(row.farms_json);
+          } catch {
+            throw new Error("farms_json must contain a valid JSON array");
+          }
+          if (!Array.isArray(parsedFarms)) {
+            throw new Error("farms_json must contain a JSON array");
+          }
+          farmInputs = normalizeBenchmarkFarmInputs(parsedFarms);
+        } else {
+          const legacyFarmNames = Object.keys(row)
+            .filter((column) => column.endsWith("_cost_per_unit"))
+            .map((column) => column.slice(0, -"_cost_per_unit".length));
+          farmInputs = legacyFarmNames.map((name) => {
+            const readNumber = (column: string) => {
+              const raw = row[column];
+              const parsed = num(raw);
+              if (raw?.trim() && parsed == null) {
+                throw new Error(`${column} must be a valid number`);
+              }
+              return parsed;
+            };
+            const key = name.toLowerCase();
+            return {
+              name,
+              includeInIndustryAverage: ["telli", "gawi", "chetu"].includes(key),
+              costPerUnit: readNumber(`${name}_cost_per_unit`),
+              manDaysPerUnit: readNumber(`${name}_man_days_per_unit`),
+              frequency: readNumber(`${name}_frequency`),
+            };
+          });
         }
-        if (!row.neighbor_farm_1_name?.trim() || !row.neighbor_farm_2_name?.trim()) {
-          throw new Error("Both neighbor names are required");
+        if (
+          farmInputs.some((farm) =>
+            [farm.costPerUnit, farm.manDaysPerUnit, farm.frequency].some(
+              (value) => value != null && value < 0,
+            ),
+          )
+        ) {
+          throw new Error("Benchmark values must be non-negative numbers");
+        }
+        const duplicateFarmName = findDuplicateBenchmarkFarmName(farmInputs);
+        if (duplicateFarmName) {
+          throw new Error(`Source farm "${duplicateFarmName}" is listed more than once`);
+        }
+        const benchmarkData = buildBenchmarkData(farmInputs, row.data_notes || "");
+        if (benchmarkData.sixFarmAverage.farmsWithRate === 0) {
+          throw new Error("Enter cost per unit for at least one source farm");
         }
         const kindMap: StandingKind =
           act.tier === 1 ? "labor" : act.tier === 2 ? "materials" : "services";
-        const proposed = num(row.proposed_rate) ?? Math.round(((n1 + n2) / 2) * 100) / 100;
         validRows.push({
           rowNumber,
           status: "new",
           label: `${act.code} · ${act.name}`,
-          detail: `N1 ${n1} / N2 ${n2} → proposed ${proposed}`,
+          detail: `Industry ${benchmarkData.industryAverage.costPerUnit ?? "—"} / unit · fallback ${benchmarkData.sixFarmAverage.costPerUnit}`,
           payload: {
             kind: kindMap,
             activityId: act.id,
-            neighbor1Name: row.neighbor_farm_1_name.trim(),
-            neighbor2Name: row.neighbor_farm_2_name.trim(),
-            neighbor1Rate: n1,
-            neighbor2Rate: n2,
-            proposedRate: proposed,
-            availableTo: row.valid_until?.trim() || null,
+            benchmarkData: { farms: farmInputs, dataNotes: row.data_notes || "" },
             sourceEvidence: row.status_source?.trim() || "Benchmark survey import",
             notes: "",
           },
@@ -372,14 +412,10 @@ export async function commitRateImport(
           farmAreaId: ctx.farmAreaId,
           activityId: String(p.activityId),
           kind: p.kind as StandingKind,
-          neighbor1Name: String(p.neighbor1Name),
-          neighbor2Name: String(p.neighbor2Name),
-          neighbor1Rate: Number(p.neighbor1Rate),
-          neighbor2Rate: Number(p.neighbor2Rate),
+          benchmarkData: p.benchmarkData as { farms: BenchmarkFarmInputs; dataNotes?: string },
           surveyDate: day,
           sourceEvidence: String(p.sourceEvidence || ""),
           notes: String(p.notes || ""),
-          availableTo: (p.availableTo as string | null) ?? null,
         },
         party,
       );
