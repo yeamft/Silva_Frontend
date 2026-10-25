@@ -443,6 +443,18 @@ const LoginPage = () => {
               </Button>
             ) : null}
           </form>
+          <div className="mt-3 flex justify-center">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="gap-1.5 text-muted-foreground hover:text-primary"
+              onClick={() => router.push("/")}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+              Back to home
+            </Button>
+          </div>
         </div>
 
         {!mfaStep ? (
@@ -495,16 +507,7 @@ const LoginPage = () => {
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           {!mfaStep ? (
             <p className="text-xs text-muted-foreground">Demo password: {DEMO_PASSWORD}</p>
-          ) : <span />}
-          <Button
-            variant="link"
-            size="sm"
-            className="gap-1.5 text-muted-foreground hover:text-primary"
-            onClick={() => router.push("/")}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-            Back to home
-          </Button>
+          ) : null}
         </div>
       </motion.div>
     </div>
