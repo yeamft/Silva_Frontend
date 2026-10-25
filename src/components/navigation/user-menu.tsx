@@ -46,9 +46,6 @@ export function UserMenu() {
             <span className="block truncate text-[13px] font-medium leading-tight">
               {user.name}
             </span>
-            <span className="block truncate text-[11px] leading-tight text-muted-foreground">
-              {CROPFORT_ROLE_LABELS[user.role]}
-            </span>
           </span>
           <ChevronDown
             className="hidden h-4 w-4 shrink-0 text-muted-foreground lg:block"

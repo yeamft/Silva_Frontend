@@ -173,9 +173,6 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
         <DropdownMenuSeparator />
         <div className="px-2 py-1.5">
           <p className="truncate text-xs font-medium">{orgName}</p>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {CROPFORT_ROLE_LABELS[user.role]}
-          </p>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

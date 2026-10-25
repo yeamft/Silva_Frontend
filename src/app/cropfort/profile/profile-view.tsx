@@ -1,25 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Check, KeyRound, Languages, MonitorSmartphone, Save, ShieldCheck, Type } from "lucide-react";
+import { Bell, KeyRound, Languages, MonitorSmartphone, Save, ShieldCheck } from "lucide-react";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { CROPFORT_ROLE_LABELS } from "@/types/cropfort";
-import { useThemeStore } from "@/store/themeStore";
-import { WORKSPACE_FONTS } from "@/lib/workspace-fonts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
-
 export default function ProfilePage() {
   const { user } = useCropfortAuth();
-  const workspaceFont = useThemeStore((s) => s.workspaceFont);
-  const setWorkspaceFont = useThemeStore((s) => s.setWorkspaceFont);
 
   const initials = user.name
     .split(" ")
@@ -142,61 +136,6 @@ export default function ProfilePage() {
 
           <SectionCard title="Preferences">
             <div className="space-y-5">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm">Workspace theme</span>
-                <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="h-3 w-3 rounded-full bg-[#14A800]" aria-hidden />
-                  Light Green
-                </span>
-              </div>
-
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 text-sm">
-                    <Type className="h-4 w-4 text-muted-foreground" aria-hidden />
-                    Font
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {WORKSPACE_FONTS.find((f) => f.id === workspaceFont)?.label}
-                  </span>
-                </div>
-                <div className="grid gap-1.5 sm:grid-cols-2">
-                  {WORKSPACE_FONTS.map((font) => {
-                    const selected = font.id === workspaceFont;
-                    return (
-                      <button
-                        key={font.id}
-                        type="button"
-                        onClick={() => setWorkspaceFont(font.id)}
-                        className={cn(
-                          "flex items-center justify-between gap-2 rounded-md border px-3 py-2.5 text-left transition-colors",
-                          selected
-                            ? "border-primary/40 bg-accent text-accent-foreground"
-                            : "border-border text-foreground hover:bg-muted",
-                        )}
-                        aria-pressed={selected}
-                        title={font.description}
-                      >
-                        <span className="min-w-0">
-                          <span
-                            className="block truncate text-sm font-medium leading-tight"
-                            style={{ fontFamily: `var(${font.cssVar})` }}
-                          >
-                            {font.label}
-                          </span>
-                          <span className="block truncate text-[11px] text-muted-foreground">
-                            {font.description}
-                          </span>
-                        </span>
-                        {selected ? (
-                          <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2.5">
                   <Languages className="h-4 w-4 text-muted-foreground" aria-hidden />
