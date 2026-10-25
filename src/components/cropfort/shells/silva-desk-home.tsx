@@ -1,24 +1,16 @@
 "use client";
 
-import { ArrowRight, CheckCircle2, ClipboardCheck, Leaf, WalletCards } from "lucide-react";
+import { ArrowRight, ClipboardCheck, Leaf, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
-import {
-  AttentionItem,
-  AttentionPanel,
-} from "@/components/cropfort/attention-panel";
+import { AttentionItem, AttentionPanel } from "@/components/cropfort/attention-panel";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 import { listProgramRateCardProposals } from "@/lib/api/rate-card-proposals";
 import { useQuery } from "@tanstack/react-query";
 import { useAfes } from "@/lib/query/hooks/use-afes";
-import { useInterventions } from "@/lib/query/hooks/use-interventions";
-import { useMonthlyWorkOrders } from "@/lib/query/hooks/use-monthly-work-orders";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
-import { useProjects } from "@/lib/query/hooks/use-projects";
-import { useSettlements } from "@/lib/query/hooks/use-payment-requests";
-import { useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
-import { fmtEtb } from "@/store/cropfortOpsStore";
+import { listFarmAssessments } from "@/lib/api/farm-assessments";
 
 type Decision = {
   id: string;
@@ -62,7 +54,7 @@ function OwnerMetric({
   );
 }
 
-/** Asset owner home — short header, clear position, attention only when needed. */
+/** Asset owner home — farm assessments, approvals, settlements. */
 export function SilvaDeskHome() {
   const { activeProgram, user } = useCropfortAuth();
   const enabled = Boolean(activeProgram?.id);
@@ -70,33 +62,34 @@ export function SilvaDeskHome() {
   const rateCardsQuery = useQuery({
     queryKey: ["approval-rate-cards", activeProgram?.id],
     queryFn: () => listProgramRateCardProposals({ status: "submitted", programWide: true }),
-    enabled: enabled && Boolean(activeProgram?.id),
+    enabled,
     refetchInterval: 10_000,
   });
   const afesQuery = useAfes(enabled, "submitted");
   const afpQuery = useProgrammePlans(enabled, { status: "submitted" });
-  const projectsQuery = useProjects(enabled, "submitted");
-  const interventionsQuery = useInterventions(enabled, "submitted");
-  const monthlyQuery = useMonthlyWorkOrders(enabled, "submitted");
-  const weeklyQuery = useWeeklyPlans(enabled, "submitted");
-  const settlementsQuery = useSettlements(enabled);
+  const assessmentsQuery = useQuery({
+    queryKey: ["farm-assessments-owner", activeProgram?.id],
+    queryFn: () => listFarmAssessments({ status: "submitted" }),
+    enabled,
+    refetchInterval: 15_000,
+  });
 
   const decisions = useMemo(() => {
     const rows: Decision[] = [];
+
+    for (const a of assessmentsQuery.data || []) {
+      rows.push({
+        id: `fa-${a.id}`,
+        title: a.title || "Farm Assessment",
+        meta: [a.farmName, a.cycleLabel].filter(Boolean).join(" · "),
+        href: `${CROPFORT_ROUTES.farmAssessments}/${a.id}`,
+      });
+    }
     for (const p of afpQuery.data || []) {
-      const included = Object.values(p.activities ?? {}).filter((a) => a.included).length;
       rows.push({
         id: `afp-${p.id}`,
         title: p.farmName ? `${p.farmName} Core Operations` : p.name || "Core Operations plan",
-        meta: [p.budgetYearLabel, p.submittedAt ? new Date(p.submittedAt).toLocaleDateString() : null]
-          .filter(Boolean)
-          .join(" · "),
-        detail: [
-          typeof p.plannedCostEtb === "number" ? fmtEtb(p.plannedCostEtb) : null,
-          included ? `${included} activities` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
+        meta: p.budgetYearLabel || "",
       });
     }
     for (const a of afesQuery.data || []) {
@@ -111,88 +104,19 @@ export function SilvaDeskHome() {
       rows.push({
         id: `rate-card-${card.id}`,
         title: card.activityName || card.activityCode || "Rate card",
-        meta: [
-          card.kind,
-          card.farmEstateName,
-          card.submittedAt ? `Submitted ${new Date(card.submittedAt).toLocaleDateString()}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
+        meta: [card.kind, card.farmEstateName].filter(Boolean).join(" · "),
         detail: fmtEtb(card.proposedRate),
         href: `${CROPFORT_ROUTES.rateCardProposals}/${card.id}`,
       });
     }
-    for (const p of projectsQuery.data || []) {
-      rows.push({
-        id: `proj-${p.id}`,
-        title: p.title,
-        meta: p.code,
-      });
-    }
-    for (const i of interventionsQuery.data || []) {
-      rows.push({
-        id: `int-${i.id}`,
-        title: i.title,
-        meta: i.code,
-      });
-    }
-    for (const o of monthlyQuery.data || []) {
-      rows.push({
-        id: `mo-${o.id}`,
-        title: o.code,
-        meta: o.farmName || "Estate",
-      });
-    }
-    for (const w of weeklyQuery.data || []) {
-      rows.push({
-        id: `wk-${w.id}`,
-        title: w.code,
-        meta: w.weekLabel || "Week",
-      });
-    }
     return rows;
-  }, [
-    afpQuery.data,
-    afesQuery.data,
-    rateCardsQuery.data,
-    projectsQuery.data,
-    interventionsQuery.data,
-    monthlyQuery.data,
-    weeklyQuery.data,
-  ]);
+  }, [assessmentsQuery.data, afpQuery.data, afesQuery.data, rateCardsQuery.data]);
 
-  const settlementSnap = useMemo(() => {
-    const rows = settlementsQuery.data || [];
-    const authorized = rows.filter((r) => r.status === "authorized");
-    const settled = rows.filter((r) => r.status === "settled");
-    return {
-      readyCount: authorized.length,
-      readyValue: authorized.reduce((s, r) => s + (r.amountEtb || 0), 0),
-      settledCount: settled.length,
-      settledValue: settled.reduce((s, r) => s + (r.amountEtb || 0), 0),
-    };
-  }, [settlementsQuery.data]);
-
-  const approvalsAwaiting = decisions.length;
-  const approvalsLoading =
-    afesQuery.isLoading ||
-    rateCardsQuery.isLoading ||
-    afpQuery.isLoading ||
-    projectsQuery.isLoading ||
-    interventionsQuery.isLoading ||
-    monthlyQuery.isLoading ||
-    weeklyQuery.isLoading;
-  const approvalsHasError =
-    afesQuery.isError ||
-    rateCardsQuery.isError ||
-    afpQuery.isError ||
-    projectsQuery.isError ||
-    interventionsQuery.isError ||
-    monthlyQuery.isError ||
-    weeklyQuery.isError;
-  const approvalsReady = enabled && !approvalsLoading && !approvalsHasError;
-  const settlementReady =
-    enabled && !settlementsQuery.isLoading && !settlementsQuery.isError;
+const isLoading =
+    afesQuery.isLoading || rateCardsQuery.isLoading || afpQuery.isLoading || assessmentsQuery.isLoading;
+  const hasError =
+    afesQuery.isError || rateCardsQuery.isError || afpQuery.isError || assessmentsQuery.isError;
+  const approvalsReady = enabled && !isLoading && !hasError;
 
   return (
     <div className="cf-page space-y-6">
@@ -207,6 +131,29 @@ export function SilvaDeskHome() {
         </span>
       </header>
 
+      <section className="grid gap-3 sm:grid-cols-3">
+        <OwnerMetric
+          href={CROPFORT_ROUTES.farmAssessments}
+          label="Farm assessments awaiting review"
+          value={approvalsReady ? String(assessmentsQuery.data?.length ?? 0) : "—"}
+          icon={Leaf}
+          emphasis={approvalsReady && (assessmentsQuery.data?.length ?? 0) > 0}
+        />
+        <OwnerMetric
+          href={CROPFORT_ROUTES.approvals}
+          label="Approvals pending"
+          value={approvalsReady ? String(decisions.filter((d) => !d.id.startsWith("fa-")).length) : "—"}
+          icon={ClipboardCheck}
+          emphasis={approvalsReady && decisions.filter((d) => !d.id.startsWith("fa-")).length > 0}
+        />
+        <OwnerMetric
+          href={CROPFORT_ROUTES.coreOperations}
+          label="Core Operations"
+          value={approvalsReady ? String(afpQuery.data?.length ?? 0) : "—"}
+          icon={WalletCards}
+        />
+      </section>
+
       <AttentionPanel
         title="Items for your review"
         actionHref={CROPFORT_ROUTES.approvals}
@@ -214,9 +161,9 @@ export function SilvaDeskHome() {
         empty={
           !enabled
             ? "Select an estate to see items waiting for your review."
-            : approvalsLoading
+            : isLoading
               ? "Checking for items that need your review…"
-              : approvalsHasError
+              : hasError
                 ? "Review items could not be loaded. Please try again shortly."
                 : "You're all caught up. New submissions will appear here."
         }
@@ -231,29 +178,6 @@ export function SilvaDeskHome() {
           />
         ))}
       </AttentionPanel>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <OwnerMetric
-          href={CROPFORT_ROUTES.approvals}
-          label="Waiting for your review"
-          value={approvalsReady ? String(approvalsAwaiting) : "—"}
-          icon={ClipboardCheck}
-          emphasis={approvalsReady && approvalsAwaiting > 0}
-        />
-        <OwnerMetric
-          href={CROPFORT_ROUTES.settlements}
-          label="Ready to settle"
-          value={settlementReady ? fmtEtb(settlementSnap.readyValue) : "—"}
-          icon={WalletCards}
-          emphasis={settlementReady && settlementSnap.readyCount > 0}
-        />
-        <OwnerMetric
-          href={CROPFORT_ROUTES.settlements}
-          label="Paid to date"
-          value={settlementReady ? fmtEtb(settlementSnap.settledValue) : "—"}
-          icon={CheckCircle2}
-        />
-      </section>
     </div>
   );
 }

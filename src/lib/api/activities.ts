@@ -26,6 +26,9 @@ export type PlatformActivity = {
   nameAm?: string;
   unitOfMeasure: string;
   description?: string;
+  defaultAnnualFrequency?: number | null;
+  planningCategory?: string | null;
+  planningNotes?: string;
   active?: boolean;
   sortOrder?: number;
   createdAt: string;
@@ -36,6 +39,7 @@ export type ListActivitiesParams = {
   tier?: number | "";
   category?: string;
   q?: string;
+  includeInactive?: boolean;
 };
 
 export type CreateActivityInput = {
@@ -47,6 +51,9 @@ export type CreateActivityInput = {
   subgroup?: string;
   unitOfMeasure: string;
   description?: string;
+  defaultAnnualFrequency?: number | null;
+  planningCategory?: string;
+  planningNotes?: string;
   active?: boolean;
   sortOrder?: number;
 };
@@ -58,6 +65,7 @@ export const listActivities = (params: ListActivitiesParams = {}) => {
   if (params.tier != null && params.tier !== "") q.set("tier", String(params.tier));
   if (params.category) q.set("category", params.category);
   if (params.q) q.set("q", params.q);
+  if (params.includeInactive) q.set("includeInactive", "1");
   const qs = q.toString();
   return call<PlatformActivity[]>(`/activities${qs ? `?${qs}` : ""}`);
 };
@@ -87,3 +95,35 @@ export const deactivateActivities = (ids: string[]) =>
     method: "POST",
     body: { ids },
   });
+
+export type ActivityWorkbookImportRow = Omit<CreateActivityInput, "tier"> & {
+  tier: number | null;
+  sourceRow: number;
+};
+
+export type ActivityWorkbookImportPreview = {
+  newActivities: ActivityWorkbookImportRow[];
+  matches: (ActivityWorkbookImportRow & { existingId: string; existingActive: boolean })[];
+  conflicts: (ActivityWorkbookImportRow & {
+    existingId: string;
+    existing: Partial<PlatformActivity>;
+  })[];
+  invalid: (ActivityWorkbookImportRow & { reason: string })[];
+  aggregates: ActivityWorkbookImportRow[];
+};
+
+export function previewActivityWorkbookImport(file: File) {
+  const body = new FormData();
+  body.append("file", file);
+  return call<ActivityWorkbookImportPreview>("/activities/import/preview", {
+    method: "POST",
+    body,
+  });
+}
+
+export function commitActivityWorkbookImport(activities: CreateActivityInput[]) {
+  return call<{ importedCount: number }>("/activities/import/commit", {
+    method: "POST",
+    body: { activities },
+  });
+}

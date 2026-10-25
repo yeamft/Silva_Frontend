@@ -401,7 +401,7 @@ export function SectionCard({
 }) {
   const showHeader = Boolean(title || action);
   return (
-    <Card className={cn("flex flex-col", className)}>
+    <Card className={cn("flex flex-col shadow-sm", className)}>
       {showHeader ? (
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-border px-5 py-4">
           <div className="min-w-0 space-y-0.5">

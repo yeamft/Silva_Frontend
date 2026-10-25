@@ -1,11 +1,18 @@
 /** Core Operations annual plan (frontend types; persisted via /api/v1/programme-plans). */
 
 import type { PlanMonth } from "@/lib/cropfort/ethiopian-year";
+import type { AnnualPlanBudgetData } from "@/lib/annual-plan-budget";
 
 export type CoreOpsPlanStatus = "draft" | "finalized" | "submitted";
 export type ActivityScope = "block" | "off_block";
 export type MonthIntensity = "none" | "peak" | "active" | "light";
 export type ScheduleStatus = "not_scheduled" | "scheduled";
+export type RateReadiness =
+  | "approved"
+  | "benchmark_available"
+  | "missing"
+  | "expired"
+  | "awaiting_approval";
 export type AfpPromotionStatus = "auto_approved" | "pending_silva" | "approved" | "returned";
 export type CoreOpsStep = "setup" | "activities" | "calendar" | "review";
 
@@ -37,6 +44,8 @@ export type CoreOpsActivity = {
   /** Optional per-block split; sum should match plannedQty when used. */
   blockAllocations: BlockAllocation[];
   agreedRate: AgreedRateSnapshot | null;
+  rateReadiness?: RateReadiness;
+  rateStatus?: string;
   plannedCost: number;
   intensities: Record<PlanMonth, MonthIntensity>;
   /** Operating manual on the Platform (RB09.3) — required before submit. */
@@ -72,6 +81,7 @@ export type CoreOpsPlan = {
   totalHa: number;
   vendorLabel: string;
   notes: string;
+  annualPlanData?: AnnualPlanBudgetData | null;
   status: CoreOpsPlanStatus;
   statusRaw?: string;
   /** Block ids applicable to this plan (default: all for farm). */
@@ -95,12 +105,13 @@ export type EligibleRateActivity = {
   category: string;
   uom: string;
   costKind: string;
-  rateCardId: string;
+  rateCardId: string | null;
   unitRateEtb: number;
   normMdPerUnit: number | null;
   farmEstateId: string;
   farmEstateName: string | null;
   approvedAt: string | null;
+  rateReadiness: RateReadiness;
 };
 
 export type PlanBlockOption = {

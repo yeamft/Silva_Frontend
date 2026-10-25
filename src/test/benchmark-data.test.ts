@@ -64,6 +64,33 @@ describe("farm benchmark calculations", () => {
     expect(data.recommendedSource).toBe("six_farm_fallback");
   });
 
+  it("keeps an observed zero distinct from a missing farm value", () => {
+    const data = buildBenchmarkData(
+      [
+        {
+          name: "Zero observation",
+          includeInIndustryAverage: true,
+          costPerUnit: 0,
+          manDaysPerUnit: 2,
+          frequency: 0,
+        },
+        {
+          name: "Missing observation",
+          includeInIndustryAverage: true,
+          costPerUnit: null,
+          manDaysPerUnit: null,
+          frequency: null,
+        },
+      ],
+      "",
+    );
+
+    expect(data.industryAverage.farmsWithRate).toBe(1);
+    expect(data.industryAverage.costPerUnit).toBe(0);
+    expect(data.industryAverage.manDaysPerUnit).toBe(2);
+    expect(data.industryAverage.frequency).toBe(0);
+  });
+
   it("converts saved six-farm records for backward compatibility", () => {
     const farms = normalizeBenchmarkFarmInputs({
       Telli: { costPerUnit: 120, manDaysPerUnit: 2, frequency: 1 },

@@ -1265,7 +1265,17 @@ export async function createRateCardProposal(
     sourceSurveyId: survey.id,
     recommendedRate: recommended,
     proposedRate: proposed,
-    norm: input.norm !== undefined ? input.norm : act?.defaultNorm ?? null,
+    norm: input.norm !== undefined
+      ? input.norm
+      : (() => {
+          const bd = survey.benchmarkData;
+          if (!bd) return act?.defaultNorm ?? null;
+          const avg =
+            bd.recommendedSource === "industry_average"
+              ? bd.industryAverage
+              : bd.sixFarmAverage;
+          return avg?.manDaysPerUnit ?? act?.defaultNorm ?? null;
+        })(),
     fallbackRate:
       input.fallbackRate !== undefined
         ? input.fallbackRate

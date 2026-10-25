@@ -6,6 +6,7 @@ import { Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { SectionCard } from "@/components/cropfort/page-shell";
+import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,30 +14,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { queryKeys } from "@/lib/query/keys";
 import {
   getFarmAssessment, saveFarmAssessment, submitFarmAssessment,
-  decideFarmAssessment, downloadFarmAssessment, type FarmAssessment,
+  decideFarmAssessment, downloadFarmAssessment,
+  type FarmAssessment,
 } from "@/lib/api/farm-assessments";
 
-const STATUS_LABELS = {
+const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
   submitted: "Awaiting asset owner review",
   approved: "Approved",
   changes_requested: "Changes requested",
 };
 
-export function FarmAssessmentSection({
-  planId,
-  onContinue,
-}: {
-  planId: string;
-  onContinue?: () => void;
-}) {
+export function FarmAssessmentSection({ assessmentId }: { assessmentId: string }) {
   const { activeProgram, user } = useCropfortAuth();
   const queryClient = useQueryClient();
   const [reloadKey, setReloadKey] = useState(0);
-  const queryKey = ["farm-assessment", activeProgram?.id, user.id, planId];
+  const queryKey = ["farm-assessment", assessmentId];
+
   const query = useQuery({
     queryKey,
-    queryFn: () => getFarmAssessment(planId),
+    queryFn: () => getFarmAssessment(assessmentId),
     enabled: Boolean(activeProgram?.id),
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -44,7 +41,7 @@ export function FarmAssessmentSection({
 
   return (
     <section id="farm-assessment" aria-label="Farm Assessment" className="scroll-mt-24">
-      <SectionCard title="Farm Assessment">
+      <SectionCard title="Assessment">
         {query.isPending ? (
           <p className="text-sm text-muted-foreground" role="status">Loading assessment…</p>
         ) : query.isError ? (
@@ -54,16 +51,15 @@ export function FarmAssessmentSection({
           </div>
         ) : (
           <AssessmentForm
-            key={`${activeProgram?.id}-${user.id}-${planId}-${query.data.revision}-${reloadKey}`}
+            key={`${assessmentId}-${query.data.revision}-${reloadKey}`}
             assessment={query.data}
-            onUpdated={(assessment) => {
-              queryClient.setQueryData(queryKey, assessment);
+            onUpdated={(updated) => {
+              queryClient.setQueryData(queryKey, updated);
               void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
             }}
-            onReload={() => void query.refetch().then((result) => {
-              if (result.isSuccess) setReloadKey((key) => key + 1);
+            onReload={() => void query.refetch().then((r) => {
+              if (r.isSuccess) setReloadKey((k) => k + 1);
             })}
-            onContinue={onContinue}
           />
         )}
       </SectionCard>
@@ -71,51 +67,88 @@ export function FarmAssessmentSection({
   );
 }
 
-function AssessmentForm({ assessment, onUpdated, onReload, onContinue }: {
+function AssessmentForm({
+  assessment,
+  onUpdated,
+  onReload,
+}: {
   assessment: FarmAssessment;
-  onUpdated: (assessment: FarmAssessment) => void;
+  onUpdated: (a: FarmAssessment) => void;
   onReload: () => void;
-  onContinue?: () => void;
 }) {
   const id = useId();
   const [findings, setFindings] = useState(assessment.findings);
   const [report, setReport] = useState<File | null>(null);
   const [comment, setComment] = useState("");
   const dirty = findings !== assessment.findings || report !== null;
+
+  const canSubmit = Boolean(
+    !dirty &&
+    (assessment.findings.trim() || assessment.generalCondition || (assessment.recommendedOps?.length ?? 0) > 0),
+  );
+
   const mutation = useMutation({
     mutationFn: async (action: "save" | "submit" | "approve" | "request_changes") => {
-      if (action === "save") return saveFarmAssessment(assessment.planId, findings, assessment.revision, report);
-      if (action === "submit") return submitFarmAssessment(assessment.planId, assessment.revision);
-      return decideFarmAssessment(assessment.planId, assessment.revision, action, comment);
+      if (action === "save") {
+        return saveFarmAssessment(assessment.id, { findings, revision: assessment.revision }, report);
+      }
+      if (action === "submit") return submitFarmAssessment(assessment.id, assessment.revision);
+      return decideFarmAssessment(assessment.id, assessment.revision, action, comment);
     },
     onSuccess: (result, action) => {
       onUpdated(result);
-      toast.success(action === "save" ? "Assessment saved" : action === "submit" ? "Assessment submitted to asset owners" : action === "approve" ? "Assessment approved" : "Changes requested");
+      toast.success(
+        action === "save" ? "Assessment saved"
+          : action === "submit" ? "Assessment submitted to asset owners"
+          : action === "approve" ? "Assessment approved"
+          : "Changes requested",
+      );
     },
   });
+
   const download = useMutation({
-    mutationFn: () => downloadFarmAssessment(assessment.planId, assessment.reportName!),
-    onError: (error) => toast.error(error.message),
+    mutationFn: () => downloadFarmAssessment(assessment.id, assessment.reportName!),
+    onError: (err: Error) => toast.error(err.message),
   });
+
   const pending = mutation.isPending;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Record the farm’s condition, findings, and recommendations for the asset owner.</p>
-        <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium" role="status">{STATUS_LABELS[assessment.status]}</span>
+        <p className="text-sm text-muted-foreground">
+          Record the farm's condition, findings, and recommendations for the asset owner.
+        </p>
+        <StatusBadge status={assessment.status} label={STATUS_LABELS[assessment.status] ?? assessment.status} />
       </div>
+
+      {assessment.status === "changes_requested" && assessment.returnedComment ? (
+        <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
+          <p className="font-medium text-warning">Changes requested</p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-foreground/80">{assessment.returnedComment}</p>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor={`${id}-findings`}>Findings</Label>
           {assessment.canEdit ? (
-            <Textarea id={`${id}-findings`} rows={5} value={findings} maxLength={20000} disabled={pending}
+            <Textarea
+              id={`${id}-findings`}
+              rows={5}
+              value={findings}
+              maxLength={20000}
+              disabled={pending}
               onChange={(e) => setFindings(e.target.value)}
-              placeholder="Agronomic condition, infrastructure, labour, inputs, risks, and recommended actions…" />
+              placeholder="Agronomic condition, infrastructure, labour, inputs, risks, and recommended actions…"
+            />
           ) : (
-            <p className="whitespace-pre-wrap break-words rounded-lg border p-3 text-sm">{assessment.findings || "No findings added yet."}</p>
+            <p className="whitespace-pre-wrap break-words rounded-lg border p-3 text-sm">
+              {assessment.findings || "No findings added yet."}
+            </p>
           )}
         </div>
+
         <div className="space-y-3">
           <div className="space-y-2">
             <Label htmlFor={`${id}-report`}>Assessment report</Label>
@@ -124,13 +157,20 @@ function AssessmentForm({ assessment, onUpdated, onReload, onContinue }: {
                 <FileText className="size-4 shrink-0" aria-hidden />
                 <span className="min-w-0 flex-1 break-words text-sm">{assessment.reportName}</span>
                 <Button size="sm" variant="outline" onClick={() => download.mutate()} disabled={download.isPending}>
-                  <Download className="size-4" aria-hidden /> {download.isPending ? "Downloading…" : "Download report"}
+                  <Download className="size-4" aria-hidden />
+                  {download.isPending ? "Downloading…" : "Download report"}
                 </Button>
               </div>
-            ) : <p className="text-sm text-muted-foreground">No report uploaded yet.</p>}
+            ) : (
+              <p className="text-sm text-muted-foreground">No report uploaded yet.</p>
+            )}
             {assessment.canEdit ? (
               <>
-                <Input id={`${id}-report`} type="file" accept=".pdf,application/pdf" disabled={pending}
+                <Input
+                  id={`${id}-report`}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  disabled={pending}
                   aria-describedby={`${id}-report-help`}
                   onChange={(e) => {
                     const file = e.target.files?.[0] ?? null;
@@ -141,64 +181,117 @@ function AssessmentForm({ assessment, onUpdated, onReload, onContinue }: {
                       return;
                     }
                     setReport(file);
-                  }} />
-                <p id={`${id}-report-help`} className="text-xs text-muted-foreground">PDF, up to 5 MB. Selecting a new file replaces the saved report when you save the draft.</p>
+                  }}
+                />
+                <p id={`${id}-report-help`} className="text-xs text-muted-foreground">
+                  PDF, up to 5 MB. Optional — you can submit without a report.
+                </p>
               </>
             ) : null}
           </div>
+
           {assessment.canEdit ? (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" disabled={pending || (!dirty && assessment.revision > 0)} onClick={() => mutation.mutate("save")}>
+                <Button
+                  variant="outline"
+                  disabled={pending || (!dirty && assessment.revision > 0)}
+                  onClick={() => mutation.mutate("save")}
+                >
                   {pending && mutation.variables === "save" ? "Saving…" : "Save draft"}
                 </Button>
-                <Button disabled={pending || dirty || !assessment.findings.trim() || !assessment.reportName}
-                  onClick={() => mutation.mutate("submit")}>
+                <Button
+                  disabled={pending || dirty || !canSubmit}
+                  onClick={() => mutation.mutate("submit")}
+                  title={dirty ? "Save your changes first" : !canSubmit ? "Add at least one finding or condition before submitting" : undefined}
+                >
                   {pending && mutation.variables === "submit" ? "Submitting…" : "Submit to asset owner"}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Save your findings and report before submitting. Asset owners will be notified to review them.</p>
+              <p className="text-xs text-muted-foreground">
+                Save your findings before submitting. Asset owners will be notified to review them.
+              </p>
             </div>
           ) : null}
         </div>
       </div>
+
       {assessment.canReview ? (
         <div className="space-y-3 rounded-lg border p-3">
           <Label htmlFor={`${id}-comment`}>Review comments</Label>
-          <Textarea id={`${id}-comment`} rows={3} value={comment} maxLength={5000} disabled={pending}
-            onChange={(e) => setComment(e.target.value)} placeholder="Add your review. Comments are required when requesting changes." />
+          <Textarea
+            id={`${id}-comment`}
+            rows={3}
+            value={comment}
+            maxLength={5000}
+            disabled={pending}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Add your review. Comments are required when requesting changes."
+          />
           <div className="flex flex-wrap gap-2">
             <Button disabled={pending} onClick={() => mutation.mutate("approve")}>Approve assessment</Button>
-            <Button variant="outline" disabled={pending || !comment.trim()} onClick={() => mutation.mutate("request_changes")}>Request changes</Button>
+            <Button variant="outline" disabled={pending || !comment.trim()} onClick={() => mutation.mutate("request_changes")}>
+              Request changes
+            </Button>
           </div>
         </div>
       ) : null}
+
       {mutation.isError ? (
         <div role="alert" className="space-y-2">
           <p className="text-sm text-destructive">{mutation.error.message}</p>
-          <Button size="sm" variant="outline" disabled={pending} onClick={onReload}>Reload saved assessment</Button>
+          <Button size="sm" variant="outline" disabled={pending} onClick={onReload}>
+            Reload saved assessment
+          </Button>
           <p className="text-xs text-muted-foreground">Reloading discards unsaved changes.</p>
         </div>
       ) : null}
+
       {assessment.history.length > 0 ? (
         <details className="rounded-lg border p-3" open={assessment.status === "changes_requested"}>
           <summary className="cursor-pointer text-sm font-medium">Review history</summary>
           <ol className="mt-3 space-y-3">
             {[...assessment.history].reverse().map((event, index) => (
               <li key={`${event.at}-${index}`} className="border-l-2 border-border pl-3 text-sm">
-                <p className="font-medium">{event.actorName} · {event.action === "submitted" ? "Submitted" : STATUS_LABELS[event.action]}</p>
-                <time dateTime={event.at} className="text-xs text-muted-foreground">{new Date(event.at).toLocaleString()}</time>
+                <p className="font-medium">
+                  {event.actorName} · {event.action === "submitted" ? "Submitted" : STATUS_LABELS[event.action] ?? event.action}
+                </p>
+                <time dateTime={event.at} className="text-xs text-muted-foreground">
+                  {new Date(event.at).toLocaleString()}
+                </time>
                 {event.comment ? <p className="mt-1 whitespace-pre-wrap break-words">{event.comment}</p> : null}
               </li>
             ))}
           </ol>
         </details>
       ) : null}
-      {onContinue ? (
-        <div className="flex justify-end border-t border-border pt-4">
-          <Button variant="outline" onClick={onContinue}>Continue to Core Operations scope</Button>
-        </div>
-      ) : null}
     </div>
   );
+}
+
+// ── Legacy plan-scoped export (kept for backward compatibility) ────────────
+/** @deprecated Use FarmAssessmentSection with assessmentId instead. */
+export function FarmAssessmentSectionByPlanId({
+  planId,
+  onContinue,
+}: {
+  planId: string;
+  onContinue?: () => void;
+}) {
+  const { activeProgram } = useCropfortAuth();
+  const resolveQuery = useQuery({
+    queryKey: ["farm-assessment-resolve", planId],
+    queryFn: () => import("@/lib/api/farm-assessments").then((m) => m.resolveAssessmentByPlanId(planId)),
+    enabled: Boolean(activeProgram?.id),
+  });
+
+  const assessmentId = resolveQuery.data?.assessments?.[0]?.id;
+
+  if (resolveQuery.isPending) {
+    return <p className="text-sm text-muted-foreground" role="status">Loading assessment…</p>;
+  }
+  if (!assessmentId) {
+    return <p className="text-sm text-muted-foreground">No assessment linked to this plan.</p>;
+  }
+  return <FarmAssessmentSection assessmentId={assessmentId} />;
 }

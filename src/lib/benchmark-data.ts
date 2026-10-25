@@ -65,7 +65,9 @@ export function normalizeBenchmarkFarmInputs(input: unknown): BenchmarkFarmInput
       ...emptyFarm(),
       ...(values && typeof values === "object" ? values : {}),
       name,
-      includeInIndustryAverage: ["Telli", "Gawi", "Chetu"].includes(name),
+      includeInIndustryAverage: Boolean(
+        (values as { includeInIndustryAverage?: unknown } | null)?.includeInIndustryAverage,
+      ),
     }));
   }
   return [];

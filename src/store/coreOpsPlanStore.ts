@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/programme-plans";
 import { listProgramRateCardProposals } from "@/lib/api/rate-card-proposals";
 import { enrichActivityAxes } from "@/lib/cropfort/activity-axes";
+import { defaultAnnualPlanBudget } from "@/lib/annual-plan-budget";
 import { resolveManualRef, resolveServiceType } from "@/lib/cropfort/activity-manuals";
 import {
   PLAN_MONTHS,
@@ -150,6 +151,7 @@ function newEmptyPlan(
     totalHa: 0,
     vendorLabel: "",
     notes: "",
+    annualPlanData: defaultAnnualPlanBudget(),
     status: "draft",
     applicableBlockIds: blockIds,
     activityIds: [],
@@ -186,6 +188,7 @@ type CoreOpsPlanStore = {
         | "totalHa"
         | "vendorLabel"
         | "notes"
+        | "annualPlanData"
         | "budgetYearGc"
         | "budgetYearLabel"
         | "farmEstateId"
@@ -293,8 +296,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
               status: "approved",
               programWide: true,
             }).catch(() => [] as Awaited<ReturnType<typeof listProgramRateCardProposals>>),
-            listActivities({ tier: 1 })
-              .catch(() => listActivities({}).catch(() => [])),
+            listActivities({}).catch(() => []),
             getBlocks().catch(() => [] as Awaited<ReturnType<typeof getBlocks>>),
           ]);
 
@@ -315,35 +317,46 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
               )
               .map((a) => a.id),
           );
-          const taxById = new Map(taxonomy.map((a) => [a.id, a]));
-
-          const eligibleMap = new Map<string, EligibleRateActivity>();
+          const approvedByFarmActivity = new Map<string, (typeof approvedRes)[number]>();
           for (const card of approvedRes) {
             const farmId = card.farmEstateId || card.farmAreaId;
             if (!farmId) continue;
             if (coreOpsIds.size > 0 && !coreOpsIds.has(card.activityId)) continue;
             const key = `${farmId}:${card.activityId}`;
-            const prev = eligibleMap.get(key);
+            const prev = approvedByFarmActivity.get(key);
             if (prev && (prev.approvedAt || "") >= (card.approvedAt || "")) continue;
-            const tax = taxById.get(card.activityId);
-            const axes = tax ? enrichActivityAxes(tax) : null;
-            eligibleMap.set(key, {
-              activityId: card.activityId,
-              activityCode: card.activityCode || card.activityId,
-              activityName: card.activityName || tax?.name || card.activityId,
-              category: tax?.category || "Core Operations",
-              uom: card.activityUnit || tax?.unitOfMeasure || "unit",
-              costKind: card.kind || axes?.costKind || "labor",
-              rateCardId: card.id,
-              unitRateEtb: card.proposedRate,
-              normMdPerUnit: card.norm,
-              farmEstateId: farmId,
-              farmEstateName: card.farmEstateName || null,
-              approvedAt: card.approvedAt,
-            });
+            approvedByFarmActivity.set(key, card);
           }
 
-          const eligible = [...eligibleMap.values()].sort(
+          const eligible: EligibleRateActivity[] = taxonomy
+            .filter(
+              (activity) =>
+                activity.active !== false &&
+                (coreOpsIds.size === 0 || coreOpsIds.has(activity.id)),
+            )
+            .flatMap((activity) =>
+              farms.map((farm) => {
+                const card = approvedByFarmActivity.get(`${farm.id}:${activity.id}`);
+                const axes = enrichActivityAxes(activity);
+                return {
+                  activityId: activity.id,
+                  activityCode: activity.code,
+                  activityName: activity.name,
+                  category: activity.category || "Core Operations",
+                  uom: activity.unitOfMeasure || "unit",
+                  costKind: card?.kind || axes.costKind || "labor",
+                  rateCardId: card?.id || null,
+                  unitRateEtb: card?.proposedRate ?? 0,
+                  normMdPerUnit: card?.norm ?? null,
+                  farmEstateId: farm.id,
+                  farmEstateName: farm.name,
+                  approvedAt: card?.approvedAt ?? null,
+                  rateReadiness: card ? "approved" as const : "missing" as const,
+                };
+              }),
+            );
+
+          eligible.sort(
             (a, b) =>
               a.category.localeCompare(b.category) ||
               a.activityName.localeCompare(b.activityName),
@@ -517,13 +530,17 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
               activityName: e.activityName,
               uom: e.uom,
               category: e.category,
-              agreedRate: {
-                rateCardId: e.rateCardId,
-                unitRateEtb: e.unitRateEtb,
-                costKind: e.costKind,
-                normMdPerUnit: e.normMdPerUnit,
-                approvedAt: e.approvedAt,
-              },
+              agreedRate: e.rateCardId
+                ? {
+                    rateCardId: e.rateCardId,
+                    unitRateEtb: e.unitRateEtb,
+                    costKind: e.costKind,
+                    normMdPerUnit: e.normMdPerUnit,
+                    approvedAt: e.approvedAt,
+                  }
+                : null,
+              rateReadiness: e.rateReadiness,
+              rateStatus: e.rateCardId ? "VALID" : "MISSING",
             });
             continue;
           }
@@ -540,13 +557,17 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             included: false,
             plannedQty: 0,
             blockAllocations: [],
-            agreedRate: {
-              rateCardId: e.rateCardId,
-              unitRateEtb: e.unitRateEtb,
-              costKind: e.costKind,
-              normMdPerUnit: e.normMdPerUnit,
-              approvedAt: e.approvedAt,
-            },
+            agreedRate: e.rateCardId
+              ? {
+                  rateCardId: e.rateCardId,
+                  unitRateEtb: e.unitRateEtb,
+                  costKind: e.costKind,
+                  normMdPerUnit: e.normMdPerUnit,
+                  approvedAt: e.approvedAt,
+                }
+              : null,
+            rateReadiness: e.rateReadiness,
+            rateStatus: e.rateCardId ? "VALID" : "MISSING",
             plannedCost: 0,
             intensities: emptyIntensities(),
             manualsRef: resolveManualRef({
@@ -580,7 +601,6 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
         const plan = get().plan;
         if (!plan || !plan.activities[activityRowId]) return;
         const act = plan.activities[activityRowId];
-        if (included && !act.agreedRate) return;
         let next = { ...act, included };
         if (included && next.plannedQty <= 0) {
           const defaultQty =
@@ -614,7 +634,6 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
         for (const id of activityRowIds) {
           const act = activities[id];
           if (!act) continue;
-          if (included && !act.agreedRate) continue;
           if (act.included === included && !(included && act.plannedQty <= 0)) continue;
           let next = { ...act, included };
           if (included && next.plannedQty <= 0) {

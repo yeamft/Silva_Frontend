@@ -97,16 +97,23 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
     roles: ALL_PLAN,
     modules: [
       {
+        id: "farm-assessments",
+        label: "Farm Assessments",
+        href: CROPFORT_ROUTES.farmAssessments,
+        description: "Farm condition reports and asset owner review",
+      },
+      {
         id: "programme",
         label: "Core Operations",
         href: CROPFORT_ROUTES.programmePlans,
         description: "Core Operations plans register — multiple plans per workspace",
       },
       {
-        id: "farm-assessments",
-        label: "Farm Assessments",
-        href: CROPFORT_ROUTES.farmAssessments,
-        description: "Farm condition reports and asset owner review",
+        id: "annual-budget",
+        label: "Annual Budget Plan",
+        href: "/cropfort/planning/annual-budget",
+        description: "Benchmark-based activity budgets and category assumptions",
+        roles: ALL_PLAN,
       },
       {
         id: "programme-archive",

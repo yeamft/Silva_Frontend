@@ -234,9 +234,6 @@ export function MainNav() {
           </span>
           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
             <p className="truncate text-xs font-medium text-sidebar-foreground">{user.name}</p>
-            <p className="truncate text-[10px] text-sidebar-foreground/55">
-              {CROPFORT_ROLE_LABELS[user.role]}
-            </p>
           </div>
         </div>
         <Button

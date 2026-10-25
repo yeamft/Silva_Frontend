@@ -73,12 +73,14 @@ function enqueueRefresh() {
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...(options.headers || {}),
   };
 
-  if (options.body !== undefined) {
+  if (options.body !== undefined && !isFormData) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -96,7 +98,12 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const res = await fetch(`${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`, {
     method: options.method || (options.body !== undefined ? "POST" : "GET"),
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body:
+      options.body === undefined
+        ? undefined
+        : isFormData
+          ? (options.body as FormData)
+          : JSON.stringify(options.body),
   });
 
   if (res.status === 401 && options.auth !== false && !options.skipRefresh) {

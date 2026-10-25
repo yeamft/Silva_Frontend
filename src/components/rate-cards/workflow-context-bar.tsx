@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import {
   useEligibleChecker,
@@ -36,9 +36,13 @@ export function saveWorkflowContext(next: WorkflowContextFilters) {
 export function WorkflowContextBar({
   value,
   onChange,
+  links,
+  filters,
 }: {
   value: WorkflowContextFilters;
   onChange: (next: WorkflowContextFilters) => void;
+  /** Optional filter controls rendered inline after the context selects. */
+  filters?: ReactNode;
 }) {
   const { activeProgram } = useCropfortAuth();
   const programs = useWorkflowPrograms();
@@ -103,75 +107,57 @@ export function WorkflowContextBar({
   }, [areaOptions, value.farmAreaId]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">Program</p>
-          <Select
-            value={value.programId}
-            onValueChange={(programId) =>
-              onChange({ programId, budgetYearId: value.budgetYearId, farmAreaId: "all" })
-            }
-          >
-            <SelectTrigger className="h-9 w-[200px]" aria-label="Program">
-              <SelectValue placeholder="Program" />
-            </SelectTrigger>
-            <SelectContent>
-              {programList.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">Budget year</p>
-          <Select
-            value={value.budgetYearId}
-            onValueChange={(budgetYearId) => onChange({ ...value, budgetYearId })}
-          >
-            <SelectTrigger className="h-9 w-[140px]" aria-label="Budget year">
-              <SelectValue placeholder="Year" />
-            </SelectTrigger>
-            <SelectContent>
-              {yearOptions.map((y) => (
-                <SelectItem key={y.id} value={y.id}>
-                  {y.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">Farm</p>
-          <Select
-            value={value.farmAreaId}
-            onValueChange={(farmAreaId) =>
-              onChange({ ...value, farmAreaId: farmAreaId as WorkflowContextFilters["farmAreaId"] })
-            }
-          >
-            <SelectTrigger className="h-9 w-[180px]" aria-label="Farm area">
-              <SelectValue placeholder="Farm area" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All farms</SelectItem>
-              {areaOptions.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 dark:bg-card">
+      <Select
+        value={value.programId}
+        onValueChange={(programId) =>
+          onChange({ programId, budgetYearId: value.budgetYearId, farmAreaId: "all" })
+        }
+      >
+        <SelectTrigger className="w-[180px]" aria-label="Program">
+          <SelectValue placeholder="Program" />
+        </SelectTrigger>
+        <SelectContent>
+          {programList.map((p) => (
+            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={value.budgetYearId}
+        onValueChange={(budgetYearId) => onChange({ ...value, budgetYearId })}
+      >
+        <SelectTrigger className="w-[100px]" aria-label="Budget year">
+          <SelectValue placeholder="Year" />
+        </SelectTrigger>
+        <SelectContent>
+          {yearOptions.map((y) => (
+            <SelectItem key={y.id} value={y.id}>{y.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={value.farmAreaId}
+        onValueChange={(farmAreaId) =>
+          onChange({ ...value, farmAreaId: farmAreaId as WorkflowContextFilters["farmAreaId"] })
+        }
+      >
+        <SelectTrigger className="w-[150px]" aria-label="Farm area">
+          <SelectValue placeholder="Farm" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All farms</SelectItem>
+          {areaOptions.map((a) => (
+            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {filters}
       {checker.data ? (
-        <p className="text-xs text-muted-foreground sm:text-right">
-          <span className="font-medium text-foreground">Reviewer:</span> {checker.data.name}
-          <span className="text-muted-foreground">
-            {" "}
-            · {checker.data.orgName} · {checker.data.assignmentLabel}
-          </span>
+        <p className="ml-auto text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Reviewer:</span>{" "}
+          {checker.data.name}
+          {" "}·{" "}{checker.data.orgName}{" "}·{" "}{checker.data.assignmentLabel}
         </p>
       ) : null}
     </div>

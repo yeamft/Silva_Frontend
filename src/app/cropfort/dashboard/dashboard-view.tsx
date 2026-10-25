@@ -157,29 +157,26 @@ function SpxDashboardView() {
     }
     return [
       {
+        href: CROPFORT_ROUTES.farmAssessments,
+        title: "Farm Assessments",
+        icon: Leaf,
+      },
+      {
+        href: CROPFORT_ROUTES.rateCardProposals,
+        title: "Rate Cards",
+        icon: WalletCards,
+      },
+      {
+        href: CROPFORT_ROUTES.benchmarkSurveys,
+        title: "Surveys",
+        icon: ClipboardCheck,
+      },
+      {
         href: CROPFORT_ROUTES.coreOperations,
         title: "Core Operations",
         icon: Briefcase,
       },
-      {
-        href: CROPFORT_ROUTES.fieldTickets,
-        title: "Tickets",
-        icon: ClipboardCheck,
-        count: queues.vendor + queues.site + queues.asset,
-      },
-      {
-        href: CROPFORT_ROUTES.workOrders,
-        title: "Work orders",
-        icon: Wrench,
-        count: queues.openWo,
-      },
-      {
-        href: CROPFORT_ROUTES.afe,
-        title: "AFEs",
-        icon: WalletCards,
-        count: queues.afesPending,
-      },
-    ];a
+    ];
   }, [canRates, isOwner, queues, user.role]);
 
   return (

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, History, RotateCcw } from "lucide-react";
+import { AlertTriangle, Archive, History, RotateCcw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
@@ -23,7 +23,6 @@ import {
   canViewRateCard,
   canViewRateCardArchive,
 } from "@/lib/cropfortAccess";
-import { getBenchmarkSurvey, type BenchmarkSurvey } from "@/lib/api/benchmark-surveys";
 import { enrichRateCard } from "@/lib/mock-api/rate-card-workflow";
 import { useRateCardStore } from "@/store/rateCardStore";
 
@@ -32,9 +31,59 @@ function fmtEtb(n: number | null | undefined) {
   return `ETB ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-function fmtAvail(from: string, to: string | null) {
-  if (!from) return "—";
-  return to ? `${from} → ${to}` : `${from} → open`;
+function fmtDate(s: string | null | undefined) {
+  if (!s) return "—";
+  try {
+    return new Date(s).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return s;
+  }
+}
+
+function MetricTile({
+  label,
+  value,
+  sub,
+  highlight,
+  warn,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  highlight?: boolean;
+  warn?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg border p-4 ${
+        highlight
+          ? "border-primary/30 bg-primary/5"
+          : warn
+            ? "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
+            : "border-border bg-muted/30"
+      }`}
+    >
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={`mt-1 text-xl font-bold ${
+          highlight
+            ? "text-primary"
+            : warn
+              ? "text-amber-700 dark:text-amber-300"
+              : "text-foreground"
+        }`}
+      >
+        {value}
+      </p>
+      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
 }
 
 export default function RateCardProposalDetailView() {
@@ -58,8 +107,6 @@ export default function RateCardProposalDetailView() {
   const archive = useRateCardStore((s) => s.archive);
   const restore = useRateCardStore((s) => s.restore);
 
-  const [survey, setSurvey] = useState<BenchmarkSurvey | null>(null);
-  const [surveyLoading, setSurveyLoading] = useState(false);
   const [form, setForm] = useState<RateCardFormValues>({
     proposedRate: "",
     availableFrom: "",
@@ -93,40 +140,15 @@ export default function RateCardProposalDetailView() {
     });
   }, [selected, id]);
 
-  useEffect(() => {
-    const surveyId = selected?.sourceSurveyId;
-    if (!surveyId) {
-      setSurvey(null);
-      return;
-    }
-    let cancelled = false;
-    setSurveyLoading(true);
-    void getBenchmarkSurvey(surveyId)
-      .then((row) => {
-        if (!cancelled) setSurvey(row);
-      })
-      .catch(() => {
-        if (!cancelled) setSurvey(null);
-      })
-      .finally(() => {
-        if (!cancelled) setSurveyLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selected?.sourceSurveyId]);
-
   const card = selected && selected.id === id ? enrichRateCard(selected) : null;
 
   const rec = card?.recommendedRate;
   const prop = Number(form.proposedRate);
-  const liveVariance =
-    rec == null || !Number.isFinite(rec) || !Number.isFinite(prop) || rec === 0
-      ? { variancePct: null as number | null, flagged: false }
-      : (() => {
-          const variancePct = Math.round(((prop - rec) / rec) * 1000) / 10;
-          return { variancePct, flagged: Math.abs(variancePct) > 10 };
-        })();
+  const variance =
+    rec != null && Number.isFinite(rec) && Number.isFinite(prop) && rec > 0
+      ? ((prop - rec) / rec) * 100
+      : null;
+  const flagged = variance != null && Math.abs(variance) > 10;
 
   if (!canView) return <NotAuthorized title="Rate card" />;
   if (detailLoading && !card) {
@@ -155,6 +177,7 @@ export default function RateCardProposalDetailView() {
   const isAoReview = canDecide && card.status === "submitted";
   const showSpxEdit = canPropose && !canDecide;
   const busy = actionPending;
+  const uom = card.activity?.uom || "unit";
 
   const patch = {
     proposedRate: Number(form.proposedRate),
@@ -168,31 +191,51 @@ export default function RateCardProposalDetailView() {
     notes: form.notes,
   };
 
+  // Benchmark data from the enriched survey attached by enrichRateCard
+  const linkedSurvey = card.survey ?? null;
+  const benchmarkData = linkedSurvey?.benchmarkData ?? null;
+  const fromIndustry = benchmarkData?.recommendedSource === "industry_average";
+  const benchmarkAvg = fromIndustry
+    ? benchmarkData?.industryAverage
+    : benchmarkData?.sixFarmAverage;
+  const benchmarkNorm = card.norm ?? benchmarkAvg?.manDaysPerUnit ?? null;
+  const benchmarkWage = benchmarkAvg?.wagePerManDay ?? null;
+  const benchmarkFreq = benchmarkAvg?.frequency ?? null;
+
+  // Suspicious wage warning (< ETB 1/MD is likely a data issue)
+  const wageWarning =
+    benchmarkWage != null && benchmarkWage < 1
+      ? `Derived wage of ${fmtEtb(benchmarkWage)}/MD is unusually low — verify source data.`
+      : null;
+
+  const activityLabel = card.activity
+    ? [card.activity.code, card.activity.name].filter(Boolean).join(" · ")
+    : card.activityId;
+
   return (
     <PageContainer>
       <PageHeader
         eyebrow={activeProgram?.name || "Rates"}
-        title={card.activity?.name || "Rate card"}
+        title={activityLabel}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Rates", href: CROPFORT_ROUTES.rateCardProposals },
           {
-            label: isAoReview
-              ? "Pending review"
-              : canDecide && card.status === "approved"
-                ? "Approved"
-                : "Proposals",
+            label: isAoReview ? "Pending review" : "Rate cards",
             href: CROPFORT_ROUTES.rateCardProposals,
           },
-          { label: card.activity?.name || card.id },
+          { label: activityLabel },
         ]}
         meta={
           <>
             <StatusBadge status={card.status} />
             <StatusBadge status="draft" label={card.kind} />
-            {liveVariance.flagged || card.flagged ? (
-              <StatusBadge status="flagged" label="Variance flagged" />
+            {card.year?.name ? (
+              <span className="text-xs text-muted-foreground">
+                Budget year {card.year.name}
+              </span>
             ) : null}
+            {flagged ? <StatusBadge status="flagged" label="Variance flagged" /> : null}
           </>
         }
         actions={
@@ -242,146 +285,95 @@ export default function RateCardProposalDetailView() {
         }
       />
 
-      {card.returnComment ? (
-        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-          <span className="font-medium">Reject comment:</span> {card.returnComment}
-        </p>
-      ) : null}
-
-      <MakerCheckerPanel
-        status={card.status}
-        canSubmit={showSpxEdit}
-        canDecide={canDecide}
-        busy={busy}
-        entityLabel={`${card.kind} ${card.id} · ${fmtEtb(card.proposedRate)}`}
-        onSubmit={async () => {
-          try {
-            if (editable) await update(card.id, patch);
-            await submit(card.id);
-            toast.success("Rate card submitted for review");
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Submit failed");
-          }
-        }}
-        onApprove={async () => {
-          try {
-            await approve(card.id);
-            toast.success("Approved");
-            router.push(CROPFORT_ROUTES.rateCardProposals);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Approve failed");
-          }
-        }}
-        onReturn={async (comment) => {
-          try {
-            await reject(card.id, comment);
-            toast.success("Rejected — returned to SPX");
-            router.push(CROPFORT_ROUTES.rateCardProposals);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Reject failed");
-          }
-        }}
-      />
-
-      <SectionCard
-        title="Rate overview"
-        description="Review the proposed rate and the activity details before saving or submitting."
-      >
+      {/* ── Section 1: Rate summary ── */}
+      <SectionCard title="Rate summary">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-4 sm:col-span-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Proposed rate
-            </p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-              {fmtEtb(Number(form.proposedRate) || card.proposedRate)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">
-                / {card.activity?.uom || "unit"}
-              </span>
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Benchmark recommendation:{" "}
-              <span className="font-medium text-foreground">{fmtEtb(card.recommendedRate)}</span>
-            </p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Variance
-            </p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">
-              {liveVariance.variancePct != null
-                ? `${liveVariance.variancePct.toFixed(1)}%`
-                : "—"}
-            </p>
-            {liveVariance.flagged ? (
-              <StatusBadge status="flagged" label="Review needed" className="mt-2" />
-            ) : null}
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Status
-            </p>
-            <div className="mt-2">
-              <StatusBadge status={card.status} />
-            </div>
-          </div>
+          <MetricTile
+            label="Proposed rate"
+            value={fmtEtb(Number(form.proposedRate) || card.proposedRate)}
+            sub={`per ${uom}`}
+            highlight
+          />
+          <MetricTile
+            label="Benchmark"
+            value={fmtEtb(card.recommendedRate)}
+            sub={`per ${uom}`}
+          />
+          <MetricTile
+            label="Variance"
+            value={variance != null ? `${variance > 0 ? "+" : ""}${variance.toFixed(1)}%` : "—"}
+            warn={flagged}
+          />
+          <MetricTile
+            label="Labor norm"
+            value={benchmarkNorm != null ? `${benchmarkNorm} MD` : "—"}
+            sub={`per ${uom}`}
+          />
         </div>
 
-        <div className="mt-4 grid gap-x-6 gap-y-4 rounded-lg bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <p className="cf-label">Activity code</p>
-            <p className="cf-data font-mono text-xs">{card.activity?.code ?? "—"}</p>
+        {wageWarning && (
+          <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            {wageWarning}
           </div>
+        )}
+
+        {card.returnComment ? (
+          <div className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+            <span className="font-medium">Returned:</span> {card.returnComment}
+          </div>
+        ) : null}
+      </SectionCard>
+
+      {/* ── Section 2: Rate details ── */}
+      <SectionCard title="Rate details">
+        <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <p className="cf-label">Activity</p>
-            <p className="cf-data font-medium">{card.activity?.name ?? card.activityId}</p>
-          </div>
-          <div>
-            <p className="cf-label">Scope</p>
-            <p className="cf-data">{card.block?.name || card.farmArea?.name || "Program"}</p>
+            <p className="cf-data font-medium">{activityLabel}</p>
           </div>
           <div>
             <p className="cf-label">Unit</p>
-            <p className="cf-data">{card.activity?.uom ?? "—"}</p>
+            <p className="cf-data">{uom}</p>
           </div>
           <div>
-            <p className="cf-label">Norm</p>
-            <p className="cf-data tabular-nums">{card.norm ?? "—"}</p>
+            <p className="cf-label">Farm area</p>
+            <p className="cf-data">{card.block?.name || card.farmArea?.name || "Program"}</p>
           </div>
           <div>
-            <p className="cf-label">Fallback rate</p>
-            <p className="cf-data tabular-nums">{fmtEtb(card.fallbackRate)}</p>
+            <p className="cf-label">Effective from</p>
+            <p className="cf-data">{fmtDate(card.availableFrom)}</p>
           </div>
           <div>
-            <p className="cf-label">Effective period</p>
-            <p className="cf-data">{fmtAvail(card.availableFrom, card.availableTo)}</p>
+            <p className="cf-label">Effective until</p>
+            <p className="cf-data">{card.availableTo ? fmtDate(card.availableTo) : "Open-ended"}</p>
           </div>
-          <div className="sm:col-span-2 lg:col-span-2">
+          <div>
             <p className="cf-label">Source / basis</p>
             <p className="cf-data">{card.sourceBasis || "—"}</p>
           </div>
+          {card.justificationNote ? (
+            <div className="sm:col-span-2 lg:col-span-3">
+              <p className="cf-label">Variance justification</p>
+              <p className="cf-data">{card.justificationNote}</p>
+            </div>
+          ) : null}
+          {card.notes ? (
+            <div className="sm:col-span-2 lg:col-span-3">
+              <p className="cf-label">Notes</p>
+              <p className="cf-data text-muted-foreground">{card.notes}</p>
+            </div>
+          ) : null}
         </div>
 
-        {card.justificationNote ? (
-          <div className="mt-3 rounded-md border border-border px-3 py-2 text-sm">
-            <p className="cf-label">Variance justification</p>
-            <p className="cf-data">{card.justificationNote}</p>
-          </div>
-        ) : null}
-
-        {card.notes ? (
-          <div className="mt-3 text-sm">
-            <p className="cf-label">Notes</p>
-            <p className="cf-data text-muted-foreground">{card.notes}</p>
-          </div>
-        ) : null}
-
         {showSpxEdit && editable ? (
-          <div className="mt-4">
+          <div className="mt-5 border-t border-border pt-5">
+            <p className="mb-3 text-sm font-medium">Edit rate card</p>
             <DirectRateCardForm
               values={form}
               onChange={setForm}
-              flagged={liveVariance.flagged || card.flagged}
-              uom={card.activity?.uom}
+              flagged={flagged}
+              uom={uom}
               disabled={false}
             />
             <Button
@@ -403,151 +395,186 @@ export default function RateCardProposalDetailView() {
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Benchmark survey">
-        {survey ? (
-          <div className="grid gap-4 text-sm">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* ── Section 3: Benchmark evidence ── */}
+      <SectionCard title="Benchmark evidence">
+        {linkedSurvey ? (
+          <div className="space-y-4">
+            {/* Source farms */}
+            {benchmarkData?.farms?.filter((f) => f.name.trim()).length ? (
               <div>
-                <p className="cf-label">Survey</p>
-                <p className="cf-data">
-                  <Link
-                    className="underline-offset-2 hover:underline"
-                    href={`${CROPFORT_ROUTES.benchmarkSurveys}/${survey.id}`}
-                  >
-                    {survey.id}
-                  </Link>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Source farms
                 </p>
-              </div>
-              <div>
-                <p className="cf-label">Kind</p>
-                <p className="cf-data capitalize">{survey.kind || "—"}</p>
-              </div>
-              <div>
-                <p className="cf-label">Scope</p>
-                <p className="cf-data">Farm</p>
-              </div>
-              <div>
-                <p className="cf-label">Activity</p>
-                <p className="cf-data">
-                  {survey.activityName || survey.activityId}
-                </p>
-              </div>
-              <div>
-                <p className="cf-label">Locked</p>
-                <p className="cf-data">
-                  {survey.lockedAt ? survey.lockedAt.slice(0, 10) : "Not locked"}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Recommended rate
-                </p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">
-                  {fmtEtb(survey.recommendedRate)}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">
-                    / {survey.activityUnit || "unit"}
-                  </span>
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Average source
-                </p>
-                <p className="mt-1 font-medium">
-                  {survey.benchmarkData?.recommendedSource === "industry_average"
-                    ? "Selected farms"
-                    : survey.benchmarkData?.recommendedSource === "six_farm_fallback"
-                      ? "All farms with rates"
-                      : "Survey average"}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {survey.benchmarkData?.recommendedSource === "six_farm_fallback"
-                    ? `${survey.benchmarkData.sixFarmAverage.farmsWithRate} farms with rates`
-                    : survey.benchmarkData?.industryAverage?.farmsWithRate != null
-                      ? `${survey.benchmarkData.industryAverage.farmsWithRate} farms included`
-                      : "Farm count unavailable"}
-                </p>
-              </div>
-            </div>
-
-            {survey.benchmarkData?.farms?.length ? (
-              <div>
-                <h3 className="mb-2 text-sm font-medium">Farm rates</h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {survey.benchmarkData.farms
-                    .filter((farm) => farm.name.trim())
+                  {benchmarkData.farms
+                    .filter((f) => f.name.trim())
                     .map((farm) => (
-                      <div key={farm.name} className="rounded-lg border border-border p-3">
+                      <div
+                        key={farm.name}
+                        className="rounded-lg border border-border bg-card p-3"
+                      >
                         <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium">{farm.name}</p>
+                          <p className="font-medium text-foreground">{farm.name}</p>
                           {farm.includeInIndustryAverage ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                              Included in average
+                            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                              In industry avg
                             </span>
                           ) : null}
                         </div>
                         <p className="mt-2 text-base font-semibold tabular-nums">
                           {fmtEtb(farm.costPerUnit)}
                           <span className="ml-1 text-xs font-normal text-muted-foreground">
-                            / {survey.activityUnit || "unit"}
+                            /{uom}
                           </span>
                         </p>
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                          {farm.manDaysPerUnit != null ? (
-                            <span>{farm.manDaysPerUnit} man-days / unit</span>
-                          ) : null}
-                          {farm.frequency != null ? <span>{farm.frequency} times / year</span> : null}
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                          {farm.manDaysPerUnit != null && (
+                            <span>{farm.manDaysPerUnit} MD/{uom}</span>
+                          )}
+                          {farm.frequency != null && (
+                            <span>{farm.frequency} times/yr</span>
+                          )}
                         </div>
                       </div>
                     ))}
                 </div>
               </div>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {[
-                  { name: survey.neighbor1Name, rate: survey.neighbor1Rate },
-                  { name: survey.neighbor2Name, rate: survey.neighbor2Rate },
-                ]
-                  .filter((entry) => entry.name || entry.rate != null)
-                  .map((entry, index) => (
-                    <div
-                      key={`${entry.name || "legacy-farm"}-${index}`}
-                      className="rounded-lg border border-border p-3"
-                    >
-                      <p className="text-xs text-muted-foreground">Farm</p>
-                      <p className="mt-1 font-medium">{entry.name || "Unnamed farm"}</p>
-                      <p className="mt-1 tabular-nums">{fmtEtb(entry.rate)}</p>
-                    </div>
-                  ))}
-              </div>
-            )}
+            ) : null}
 
+            {/* Calculation summary */}
             <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="cf-label">Source / evidence</p>
-                <p className="cf-data">{survey.sourceEvidence || "—"}</p>
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {fromIndustry ? "Industry average" : "All-farm fallback"}
+                </p>
+                <p className="font-semibold">
+                  {fmtEtb(benchmarkAvg?.costPerUnit)} /{uom}
+                  {benchmarkNorm != null ? ` · ${benchmarkNorm} MD/${uom}` : ""}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {benchmarkWage != null ? `${fmtEtb(benchmarkWage)}/MD` : "—"}
+                  {benchmarkFreq != null ? ` · ${benchmarkFreq} times/yr` : ""}
+                  {" · "}
+                  {benchmarkAvg?.farmsWithRate ?? 0} farm
+                  {(benchmarkAvg?.farmsWithRate ?? 0) !== 1 ? "s" : ""}
+                </p>
               </div>
-              <div>
-                <p className="cf-label">Notes</p>
-                <p className="cf-data text-muted-foreground">{survey.notes || "—"}</p>
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Survey reference
+                </p>
+                <p className="font-medium">
+                  <Link
+                    href={`${CROPFORT_ROUTES.benchmarkSurveys}/${linkedSurvey.id}`}
+                    className="underline-offset-2 hover:underline"
+                  >
+                    {linkedSurvey.id}
+                  </Link>
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Locked {linkedSurvey.lockedAt ? fmtDate(linkedSurvey.lockedAt) : "—"}
+                  {linkedSurvey.sourceEvidence ? ` · ${linkedSurvey.sourceEvidence}` : ""}
+                </p>
               </div>
             </div>
+
+            {!fromIndustry && (
+              <p className="text-xs text-muted-foreground">
+                {(benchmarkData?.industryAverage.farmsWithRate ?? 0) === 0
+                  ? `${benchmarkData?.sixFarmAverage.farmsWithRate ?? 0} source farm${(benchmarkData?.sixFarmAverage.farmsWithRate ?? 0) !== 1 ? "s" : ""} contributed to the fallback recommendation. The industry average currently has no eligible observations.`
+                  : "Fallback used — industry average farms had no rates."}
+              </p>
+            )}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
             {card.sourceSurveyId
-              ? `Benchmark ${card.sourceSurveyId}${surveyLoading ? " · Loading…" : ""}`
-              : "No linked benchmark (created via rate card import)."}
+              ? `Linked to benchmark ${card.sourceSurveyId}.`
+              : "No linked benchmark — created via rate card import."}
           </p>
         )}
       </SectionCard>
 
+      {/* ── Section 4: Approval ── */}
+      <SectionCard title="Approval">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div>
+              <p className="cf-label">Current status</p>
+              <div className="mt-1">
+                <StatusBadge status={card.status} />
+              </div>
+            </div>
+            {card.approvedAt ? (
+              <div>
+                <p className="cf-label">Approved</p>
+                <p className="cf-data">{fmtDate(card.approvedAt)}</p>
+              </div>
+            ) : null}
+            {card.approvedByName ? (
+              <div>
+                <p className="cf-label">Approved by</p>
+                <p className="cf-data">{card.approvedByName}</p>
+              </div>
+            ) : null}
+          </div>
+
+          {card.status === "submitted" && !canDecide && (
+            <p className="text-sm text-muted-foreground">
+              Awaiting reviewer decision.
+            </p>
+          )}
+
+          <MakerCheckerPanel
+            status={card.status}
+            canSubmit={showSpxEdit}
+            canDecide={canDecide}
+            busy={busy}
+            entityLabel={`${card.kind} · ${activityLabel} · ${fmtEtb(card.proposedRate)}`}
+            onSubmit={async () => {
+              try {
+                if (editable) await update(card.id, patch);
+                await submit(card.id);
+                toast.success("Rate card submitted for review");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Submit failed");
+              }
+            }}
+            onApprove={async () => {
+              try {
+                await approve(card.id);
+                toast.success("Approved");
+                router.push(CROPFORT_ROUTES.rateCardProposals);
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Approve failed");
+              }
+            }}
+            onReturn={async (comment) => {
+              try {
+                await reject(card.id, comment);
+                toast.success("Returned to SPX for revision");
+                router.push(CROPFORT_ROUTES.rateCardProposals);
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Reject failed");
+              }
+            }}
+          />
+
+          {card.status === "approved" && (
+            <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+              <TrendingUp className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <p className="text-sm text-foreground">
+                This rate is approved and eligible for rate resolution within its effective
+                period.
+              </p>
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
       <AuditTimelineDrawer
         entityId={auditOpen ? card.id : null}
-        entityLabel={card.activity?.name || card.id}
+        entityLabel={activityLabel}
         open={auditOpen}
         onOpenChange={setAuditOpen}
       />

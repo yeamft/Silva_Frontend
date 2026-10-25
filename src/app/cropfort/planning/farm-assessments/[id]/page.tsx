@@ -2,41 +2,53 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { FarmAssessmentSection } from "@/components/cropfort/farm-assessment";
+import { useQuery } from "@tanstack/react-query";
 import { PageContainer, PageHeader } from "@/components/cropfort/page-shell";
 import { Button } from "@/components/ui/button";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
-import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
+import { getFarmAssessment } from "@/lib/api/farm-assessments";
+import { FarmAssessmentSection } from "@/components/cropfort/farm-assessment";
 
-export default function FarmAssessmentPage({
+export default function FarmAssessmentDetailPage({
   params,
 }: {
-  params: Promise<{ planId: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const { planId } = use(params);
+  const { id } = use(params);
   const { activeProgram } = useCropfortAuth();
-  const plansQuery = useProgrammePlans(Boolean(activeProgram?.id));
-  const plan = plansQuery.data?.find((item) => item.id === planId);
+
+  const query = useQuery({
+    queryKey: ["farm-assessment", id],
+    queryFn: () => getFarmAssessment(id),
+    enabled: Boolean(activeProgram?.id),
+  });
+
+  const assessment = query.data;
+  const title = assessment?.title || "Farm Assessment";
+  const description = [
+    assessment?.farmEstateId ? null : null, // farmName resolved in component
+    assessment?.cycleLabel,
+  ].filter(Boolean).join(" · ") || "Farm condition report and asset owner review";
 
   return (
     <PageContainer>
       <PageHeader
         eyebrow={activeProgram?.name || "Workspace"}
-        title={plan?.name || "Farm Assessment"}
-        description={plan ? `${plan.farmName || "Farm"} · ${plan.planningCycleLabel || plan.budgetYearLabel}` : "Farm condition report and asset owner review"}
+        title={title}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Farm Assessments", href: CROPFORT_ROUTES.farmAssessments },
           { label: "Assessment" },
         ]}
+        meta={description ? <span>{description}</span> : undefined}
         actions={
           <Button variant="outline" asChild>
             <Link href={CROPFORT_ROUTES.farmAssessments}>All assessments</Link>
           </Button>
         }
       />
-      <FarmAssessmentSection key={`${activeProgram?.id}-${planId}`} planId={planId} />
+      <FarmAssessmentSection assessmentId={id} />
     </PageContainer>
   );
 }

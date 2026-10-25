@@ -219,7 +219,7 @@ export default function ProgrammePlansRegisterView({
   return (
     <PageContainer>
       <PageHeader
-        eyebrow="State Program"
+        eyebrow={activeProgram?.name || "Workspace"}
         title={archiveMode ? "Archive" : "Core Operations plans"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
