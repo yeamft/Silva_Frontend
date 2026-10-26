@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { CheckCircle2, History, Lock, Plus, Upload } from "lucide-react";
 import {
   createColumnHelper,
@@ -11,6 +10,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { toast } from "sonner";
+import { TableToolbar } from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
 import { OpsDeskHeader, OpsDeskPage } from "@/components/cropfort/ops-desk";
@@ -101,25 +101,40 @@ export default function BenchmarkSurveysListView() {
   const [notes, setNotes] = useState("");
   const benchmarkSummary = buildBenchmarkData(farmInputs, notes);
 
+  // The farm area chosen in the context bar narrows the list; "all" means program-wide
+  const listFilters = useMemo(() => {
+    const farmEstateId = ctx.farmAreaId && ctx.farmAreaId !== "all" ? ctx.farmAreaId : undefined;
+    return {
+      status,
+      kind: kindFilter,
+      programWide: !farmEstateId,
+      farmEstateId,
+      programId: ctx.programId || activeProgram?.id,
+      budgetYearId: ctx.budgetYearId,
+    };
+  }, [status, kindFilter, ctx.farmAreaId, ctx.programId, ctx.budgetYearId, activeProgram?.id]);
+
   useEffect(() => {
     if (!canView) return;
     if (!USE_RATE_CARD_MOCK && !activeProgram?.id) return;
     if (USE_RATE_CARD_MOCK && !ctx.programId) return;
-    void loadList({
-      status,
-      kind: kindFilter,
-      programWide: true,
-      programId: ctx.programId || activeProgram?.id,
-      budgetYearId: ctx.budgetYearId,
-    });
-  }, [canView, activeProgram?.id, status, kindFilter, ctx.programId, ctx.budgetYearId, loadList]);
+    void loadList(listFilters);
+  }, [canView, activeProgram?.id, ctx.programId, listFilters, loadList]);
 
   useEffect(() => {
     if (!open) return;
     void loadActivities(kind, category || undefined);
   }, [open, kind, category, loadActivities]);
 
-  const rows = useMemo(() => items.map((s) => enrichSurvey(s)), [items]);
+  const [search, setSearch] = useState("");
+  const allRows = useMemo(() => items.map((s) => enrichSurvey(s)), [items]);
+  const rows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return allRows;
+    return allRows.filter((r) =>
+      `${r.activity?.code ?? ""} ${r.activity?.name ?? ""} ${r.activity?.category ?? ""}`.toLowerCase().includes(term),
+    );
+  }, [allRows, search]);
 
   const columns = useMemo(
     () => [
@@ -183,36 +198,25 @@ export default function BenchmarkSurveysListView() {
                     : "text-amber-600 dark:text-amber-400"
                 }`}
               >
-                {fromIndustry ? "Industry average" : "All-farm fallback"}
+                {fromIndustry ? "Industry average" : "All-farm average"}
               </span>
             </div>
           );
         },
       }),
-      col.accessor((r) => r.benchmarkData?.sixFarmAverage.farmsWithRate ?? 0, {
-        id: "farms",
-        header: "Farms",
-        size: 90,
-        cell: (c) => {
-          const row = c.row.original;
-          const bd = row.benchmarkData;
-          const fromIndustry = bd?.recommendedSource === "industry_average";
-          const farmCount = fromIndustry
-            ? bd?.industryAverage.farmsWithRate
-            : bd?.sixFarmAverage.farmsWithRate;
-          const industryCount = bd?.industryAverage.farmsWithRate ?? 0;
-          return (
-            <div className="flex flex-col items-center gap-0.5 text-center">
-              <span className="text-sm font-semibold tabular-nums text-foreground">
-                {farmCount ?? "—"}
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                {industryCount} in avg
-              </span>
-            </div>
-          );
+      col.accessor(
+        (r) =>
+          (r.benchmarkData?.recommendedSource === "industry_average"
+            ? r.benchmarkData?.industryAverage.farmsWithRate
+            : r.benchmarkData?.sixFarmAverage.farmsWithRate) ?? 0,
+        {
+          id: "farms",
+          header: "Farms used",
+          size: 100,
+          meta: { align: "right" },
+          cell: (c) => <span className="tabular-nums">{c.getValue() || "—"}</span>,
         },
-      }),
+      ),
       col.accessor("status", {
         header: "Status",
         size: 160,
@@ -234,15 +238,12 @@ export default function BenchmarkSurveysListView() {
       }),
       col.display({
         id: "actions",
-        header: "Actions",
-        size: 100,
+        header: () => <span className="sr-only">History</span>,
+        size: 56,
         cell: (c) => {
           const row = c.row.original;
           return (
-            <div className="flex items-center justify-end gap-1 pr-2">
-              <Button variant="ghost" size="sm" asChild>
-                <Link href={`${CROPFORT_ROUTES.benchmarkSurveys}/${row.id}`}>View</Link>
-              </Button>
+            <div className="flex items-center justify-end pr-2" onClick={(e) => e.stopPropagation()}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -359,14 +360,16 @@ export default function BenchmarkSurveysListView() {
       />
 
       <SectionCard flush>
+        <div className="border-b px-4 py-3">
+          <TableToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search activity, code or category" />
+        </div>
         <DataTable
           table={table}
           loading={listLoading}
-          emptyTitle="No benchmark surveys found"
-          emptyDescription="Try changing your filters or create a new survey."
+          onRowClick={(row) => router.push(`${CROPFORT_ROUTES.benchmarkSurveys}/${row.original.id}`)}
+          emptyTitle={search ? "No surveys match" : "No benchmark surveys found"}
+          emptyDescription={search ? "Try another activity name or code." : "Try changing your filters or create a new survey."}
           pageSizeOptions={[10, 25, 50]}
-          className="[&_thead_tr]:border-b [&_thead_tr]:bg-muted/40 [&_thead_th]:h-11 [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.06em] [&_tbody_tr:nth-child(even)]:bg-muted/10 [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-primary/[0.04] [&_tbody_td]:py-3.5"
-          containerClassName="rounded-none border-0"
         />
       </SectionCard>
 
@@ -513,7 +516,7 @@ export default function BenchmarkSurveysListView() {
                   toast.success("Draft created — lock it, then create a rate card");
                   setOpen(false);
                   router.push(`${CROPFORT_ROUTES.benchmarkSurveys}/${created.id}`);
-                  void loadList({ status, kind: kindFilter, programWide: true, programId: ctx.programId || activeProgram?.id, budgetYearId: ctx.budgetYearId }, { force: true });
+                  void loadList(listFilters, { force: true });
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "Create failed");
                 }
@@ -531,7 +534,7 @@ export default function BenchmarkSurveysListView() {
         kinds={["benchmark_survey"]}
         defaultKind="benchmark_survey"
         ctx={ctx}
-        onImported={() => { void loadList({ status, kind: kindFilter, programWide: true }, { force: true }); }}
+        onImported={() => { void loadList(listFilters, { force: true }); }}
       />
     </OpsDeskPage>
   );

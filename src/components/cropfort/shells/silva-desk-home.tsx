@@ -23,11 +23,15 @@ import { fmtEtb } from "@/lib/cropfort/planning-helpers";
 
 type Decision = {
   id: string;
+  type: string;
   title: string;
   meta: string;
   detail?: string;
-  href?: string;
+  href: string;
 };
+
+const reviewHref = (kind: string, id: string) =>
+  `${CROPFORT_ROUTES.approvals}/review/${kind}/${encodeURIComponent(id)}`;
 
 function OwnerMetric({
   href,
@@ -89,6 +93,7 @@ export function SilvaDeskHome() {
     for (const a of assessmentsQuery.data || []) {
       rows.push({
         id: `fa-${a.id}`,
+        type: "Farm assessment",
         title: a.title || "Farm Assessment",
         meta: [a.farmName, a.cycleLabel].filter(Boolean).join(" · "),
         href: `${CROPFORT_ROUTES.farmAssessments}/${a.id}`,
@@ -97,21 +102,27 @@ export function SilvaDeskHome() {
     for (const p of afpQuery.data || []) {
       rows.push({
         id: `afp-${p.id}`,
-        title: p.farmName ? `${p.farmName} Core Operations` : p.name || "Core Operations plan",
-        meta: p.budgetYearLabel || "",
+        type: "Core Operations plan",
+        title: p.name || (p.farmName ? `${p.farmName} Core Operations plan` : "Core Operations plan"),
+        meta: [p.farmName, p.budgetYearLabel].filter(Boolean).join(" · "),
+        detail: p.plannedCostEtb ? fmtEtb(p.plannedCostEtb) : undefined,
+        href: reviewHref("afp", p.id),
       });
     }
     for (const a of afesQuery.data || []) {
       rows.push({
         id: `afe-${a.id}`,
+        type: "Spending request",
         title: a.title,
         meta: `Band ${a.band}`,
         detail: fmtEtb(a.amountEtb),
+        href: reviewHref("afe", a.id),
       });
     }
     for (const card of rateCardsQuery.data || []) {
       rows.push({
         id: `rate-card-${card.id}`,
+        type: "Rate card",
         title: card.activityName || card.activityCode || "Rate card",
         meta: [card.kind, card.farmEstateName].filter(Boolean).join(" · "),
         detail: fmtEtb(card.proposedRate),
@@ -121,11 +132,11 @@ export function SilvaDeskHome() {
     return rows;
   }, [assessmentsQuery.data, afpQuery.data, afesQuery.data, rateCardsQuery.data]);
 
-const isLoading =
-  afesQuery.isLoading ||
-  rateCardsQuery.isLoading ||
-  afpQuery.isLoading ||
-  assessmentsQuery.isLoading;
+  const isLoading =
+    afesQuery.isLoading ||
+    rateCardsQuery.isLoading ||
+    afpQuery.isLoading ||
+    assessmentsQuery.isLoading;
   const hasError =
     afesQuery.isError || rateCardsQuery.isError || afpQuery.isError || assessmentsQuery.isError;
   const approvalsReady = enabled && !isLoading && !hasError;
@@ -153,31 +164,34 @@ const isLoading =
       <section className="grid gap-3 sm:grid-cols-3">
         <OwnerMetric
           href={CROPFORT_ROUTES.farmAssessments}
-          label="Farm assessments awaiting review"
+          label="Farm assessments to review"
           value={approvalsReady ? String(assessmentsQuery.data?.length ?? 0) : "—"}
           icon={Leaf}
           emphasis={approvalsReady && (assessmentsQuery.data?.length ?? 0) > 0}
         />
         <OwnerMetric
           href={CROPFORT_ROUTES.approvals}
-          label="Approvals pending"
-          value={approvalsReady ? String(decisions.filter((d) => !d.id.startsWith("fa-")).length) : "—"}
+          label="Plans & spending to approve"
+          value={approvalsReady ? String((afpQuery.data?.length ?? 0) + (afesQuery.data?.length ?? 0)) : "—"}
           icon={ClipboardCheck}
-          emphasis={approvalsReady && decisions.filter((d) => !d.id.startsWith("fa-")).length > 0}
+          emphasis={approvalsReady && (afpQuery.data?.length ?? 0) + (afesQuery.data?.length ?? 0) > 0}
         />
         <OwnerMetric
-          href={CROPFORT_ROUTES.coreOperations}
-          label="Core Operations"
-          value={approvalsReady ? String(afpQuery.data?.length ?? 0) : "—"}
+          href={CROPFORT_ROUTES.approvals}
+          label="Rate cards to approve"
+          value={approvalsReady ? String(rateCardsQuery.data?.length ?? 0) : "—"}
           icon={WalletCards}
+          emphasis={approvalsReady && (rateCardsQuery.data?.length ?? 0) > 0}
         />
       </section>
 
       <Card>
         <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
           <div className="space-y-1">
-            <CardTitle>Items for your review</CardTitle>
-            <CardDescription>Submissions waiting for an asset-owner decision.</CardDescription>
+            <CardTitle>Waiting for your review</CardTitle>
+            <CardDescription>
+              {decisions.length > 5 ? `Showing 5 of ${decisions.length} — see the rest in Approvals.` : "Submissions waiting for your decision."}
+            </CardDescription>
           </div>
           <Button asChild variant="outline" size="sm" className="shrink-0">
             <Link href={CROPFORT_ROUTES.approvals}>View all</Link>
@@ -188,20 +202,22 @@ const isLoading =
             <ul className="space-y-3">
               {decisions.slice(0, 5).map((row) => (
                 <li key={row.id}>
-                  <Card className="transition-colors hover:border-primary/30 hover:bg-muted/20">
-                    <CardContent className="flex items-center justify-between gap-4 p-4">
-                      <div className="min-w-0 space-y-1">
-                        <CardTitle className="truncate text-sm">{row.title}</CardTitle>
-                        {row.meta ? <CardDescription>{row.meta}</CardDescription> : null}
-                        {row.detail ? <CardDescription>{row.detail}</CardDescription> : null}
-                      </div>
-                      <Button asChild variant="link" size="sm" className="shrink-0">
-                        <Link href={row.href || CROPFORT_ROUTES.approvals}>
-                          Review <ArrowRight aria-hidden />
-                        </Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
+                  <Link
+                    href={row.href}
+                    className="group flex items-center justify-between gap-4 rounded-lg border border-border p-4 transition-colors hover:border-primary/30 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="min-w-0 space-y-1">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">{row.type}</span>
+                      <span className="block truncate text-sm font-semibold text-foreground">{row.title}</span>
+                      {row.meta ? <span className="block truncate text-xs text-muted-foreground">{row.meta}</span> : null}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-3">
+                      {row.detail ? <span className="cf-numeric hidden text-sm font-semibold tabular-nums sm:block">{row.detail}</span> : null}
+                      <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
+                        Review <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                      </span>
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

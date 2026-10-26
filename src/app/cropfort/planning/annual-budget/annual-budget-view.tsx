@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -26,16 +25,22 @@ import {
   BUDGET_SCENARIOS,
   METRIC_DEFINITIONS,
   PLAN_CATEGORIES,
+  PLAN_MONTH_NAMES,
   SCENARIO_LABELS,
   defaultAnnualPlanBudget,
+  resolveMetrics,
+  resolveSettings,
   summarizeAnnualBudget,
+  summarizeCategories,
+  summarizeMonthly,
   type AnnualPlanActivityInput,
   type AnnualPlanBudgetData,
   type AnnualPlanMetrics,
-  type BudgetScenario,
+  type AnnualPlanSettings,
   type PlanBasis,
   type PlanCategory,
 } from "@/lib/annual-plan-budget";
+import { cn } from "@/lib/utils";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
 import { usePlanningContextStore } from "@/store/planningContextStore";
@@ -46,57 +51,14 @@ function currentData(planData: AnnualPlanBudgetData | null | undefined, version?
     ...defaultAnnualPlanBudget(version || ""),
     ...planData,
     benchmarkVersion: planData?.benchmarkVersion || version || "",
+    settings: { ...planData?.settings },
     planBasis: { ...planData?.planBasis },
     categoryMetrics: { ...planData?.categoryMetrics },
     activityInputs: { ...planData?.activityInputs },
   };
 }
 
-function scenarioTotal(
-  rows: ReturnType<typeof summarizeAnnualBudget>,
-  category: PlanCategory,
-  scenario: BudgetScenario,
-) {
-  const included = rows.filter(
-    (row) =>
-      row.activity.category === category &&
-      row.included &&
-      row.quantityPerRound != null &&
-      row.quantityPerRound > 0,
-  );
-  if (!included.length) return null;
-  let total = 0;
-  for (const row of included) {
-    const actualScenario = row.hasIndustryRate ? scenario : "expert_input";
-    const cost = row.scenarios[actualScenario].totalBudget;
-    if (cost == null) return null;
-    total += cost;
-  }
-  return total;
-}
-
-function scenarioManDays(
-  rows: ReturnType<typeof summarizeAnnualBudget>,
-  category: PlanCategory,
-  scenario: BudgetScenario,
-) {
-  const included = rows.filter(
-    (row) =>
-      row.activity.category === category &&
-      row.included &&
-      row.quantityPerRound != null &&
-      row.quantityPerRound > 0,
-  );
-  if (!included.length) return null;
-  let total = 0;
-  for (const row of included) {
-    const actualScenario = row.hasIndustryRate ? scenario : "expert_input";
-    const days = row.scenarios[actualScenario].totalManDays;
-    if (row.scenarios[actualScenario].manDaysPerUnit == null || days == null) return null;
-    total += days;
-  }
-  return total;
-}
+const fmtNum = (n: number, digits = 1) => n.toLocaleString(undefined, { maximumFractionDigits: digits });
 
 export default function AnnualBudgetView() {
   const { user, activeProgram } = useCropfortAuth();
@@ -140,7 +102,14 @@ export default function AnnualBudgetView() {
     [data, benchmarkSet?.activities],
   );
 
+  const summary = useMemo(() => summarizeCategories(rows, data), [rows, data]);
+  const monthly = useMemo(() => summarizeMonthly(rows, data), [rows, data]);
+  const settings = resolveSettings(data);
+  const [phasingOpen, setPhasingOpen] = useState<string | null>(null);
+
   if (!canEdit && !plan) return <NotAuthorized title="Annual budget plan" />;
+
+  const locked = !canEdit || plan?.status === "submitted";
 
   const updateData = (next: AnnualPlanBudgetData) => updatePlanMeta({ annualPlanData: next });
   const updateMetric = (category: PlanCategory, key: keyof AnnualPlanMetrics, value: string) => {
@@ -154,13 +123,29 @@ export default function AnnualBudgetView() {
       },
     });
   };
+  const updateSetting = <K extends keyof AnnualPlanSettings>(key: K, value: AnnualPlanSettings[K]) =>
+    updateData({ ...data, settings: { ...data.settings, [key]: value } });
+  const updatePercentSetting = (key: "band1Pct" | "band2Pct", value: string) => {
+    const pct = Number(value);
+    if (value.trim() === "" || !Number.isFinite(pct) || pct < 0) return;
+    updateSetting(key, pct / 100);
+  };
+  const updatePhasing = (code: string, phasing: number[], month: number, value: string) => {
+    const pct = value.trim() === "" ? 0 : Number(value);
+    if (!Number.isFinite(pct) || pct < 0) return;
+    const next = [...phasing];
+    next[month] = pct / 100;
+    updateData({
+      ...data,
+      activityInputs: { ...data.activityInputs, [code]: { ...data.activityInputs[code], phasing: next } },
+    });
+  };
   const updateActivity = (
     code: string,
-    field: keyof AnnualPlanActivityInput,
-    value: string | boolean,
+    field: Exclude<keyof AnnualPlanActivityInput, "phasing" | "included">,
+    value: string,
   ) => {
-    const parsed =
-      typeof value === "boolean" ? value : value.trim() === "" ? null : Number(value);
+    const parsed = value.trim() === "" ? null : Number(value);
     if (typeof parsed === "number" && (!Number.isFinite(parsed) || parsed < 0)) return;
     updateData({
       ...data,
@@ -236,17 +221,79 @@ export default function AnnualBudgetView() {
         </SectionCard>
       ) : (
         <>
-          <SectionCard title="Benchmark and plan basis" description={`${benchmarkSet.sourceFile || "Benchmark source"} · ${benchmarkSet.version} · ${benchmarkSet.activities.length} activities`}>
-            <p className="mb-3 text-sm text-muted-foreground">
-              Benchmarks are historical B-Agro budgets, not actual costs. Zero observations remain distinct from missing observations. Activities without an industry rate always use Expert input.
+          <SectionCard title="Settings" description="Values used across the plan, as on the template's Settings tab.">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <label className="grid gap-1 text-xs">
+                <span className="text-muted-foreground">Farm</span>
+                <Input
+                  value={settings.farmName}
+                  placeholder={plan.farmName || "Farm name"}
+                  disabled={locked}
+                  onChange={(e) => updateSetting("farmName", e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-xs">
+                <span className="text-muted-foreground">Plan year</span>
+                <Input
+                  value={settings.planYearLabel}
+                  placeholder={plan.budgetYearLabel || "e.g. 2019 EFY (2026/27)"}
+                  disabled={locked}
+                  onChange={(e) => updateSetting("planYearLabel", e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-xs">
+                <span className="text-muted-foreground">Band 1 above industry (%)</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={fmtNum(settings.band1Pct * 100, 2)}
+                  disabled={locked}
+                  onChange={(e) => updatePercentSetting("band1Pct", e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-xs">
+                <span className="text-muted-foreground">Band 2 above industry (%)</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={fmtNum(settings.band2Pct * 100, 2)}
+                  disabled={locked}
+                  onChange={(e) => updatePercentSetting("band2Pct", e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-xs">
+                <span className="text-muted-foreground">Working days per month</span>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={settings.workingDaysPerMonth}
+                  disabled={locked}
+                  onChange={(e) => {
+                    const days = Number(e.target.value);
+                    if (Number.isInteger(days) && days > 0) updateSetting("workingDaysPerMonth", days);
+                  }}
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Bands raise the wage per man-day; man-days stay the same. The scenario labels stay &quot;+25%&quot; and &quot;+50%&quot; if you change them.
             </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          </SectionCard>
+
+          <SectionCard title="Plan basis" description={`${benchmarkSet.sourceFile || "Benchmark source"} · ${benchmarkSet.version} · ${benchmarkSet.activities.length} activities`}>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Sets the Chaka Buna plan row for every activity in the category. Activities with no industry-average rate always use Expert input. Benchmarks are B-Agro budgets, not actual costs.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {PLAN_CATEGORIES.map((category) => (
                 <label key={category} className="grid gap-1.5 text-sm">
-                  <span className="font-medium">{category} basis</span>
+                  <span className="font-medium">{category}</span>
                   <Select
                     value={data.planBasis[category] || "industry_average"}
-                    disabled={!canEdit || plan.status === "submitted"}
+                    disabled={locked}
                     onValueChange={(value) => updateBasis(category, value as PlanBasis)}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -261,83 +308,138 @@ export default function AnnualBudgetView() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Category metrics" description="Farm and production assumptions for the plan year.">
+          <SectionCard title="Category metrics" description="Activity quantities link to these, as in the template's General information blocks.">
             <div className="grid gap-5 lg:grid-cols-2">
-              {PLAN_CATEGORIES.map((category) => (
-                <section key={category} className="min-w-0">
-                  <h3 className="mb-2 text-sm font-semibold">{category}</h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {METRIC_DEFINITIONS.filter((metric) => metric.category === category).map((metric) => (
-                      <label key={`${category}-${metric.key}-${metric.label}`} className="grid gap-1 text-xs">
-                        <span className="text-muted-foreground">{metric.label} ({metric.unit})</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={data.categoryMetrics[category]?.[metric.key] ?? ""}
-                          disabled={!canEdit || plan.status === "submitted"}
-                          onChange={(event) => updateMetric(category, metric.key, event.target.value)}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </section>
-              ))}
+              {PLAN_CATEGORIES.map((category) => {
+                const resolved = resolveMetrics(data, category);
+                return (
+                  <section key={category} className="min-w-0">
+                    <h3 className="mb-2 text-sm font-semibold">{category}</h3>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {METRIC_DEFINITIONS.filter((metric) => metric.category === category).map((metric) => (
+                        <label key={`${category}-${metric.key}`} className="grid gap-1 text-xs">
+                          <span className="text-muted-foreground">
+                            {metric.label} ({metric.unit})
+                            {metric.derived ? <span className="ml-1 text-primary">· calculated</span> : null}
+                          </span>
+                          {metric.derived ? (
+                            <p className="flex h-10 items-center rounded-md border border-dashed px-3 text-sm tabular-nums text-muted-foreground">
+                              {resolved[metric.key] != null ? fmtNum(resolved[metric.key] as number, 2) : "—"}
+                            </p>
+                          ) : (
+                            <Input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={data.categoryMetrics[category]?.[metric.key] ?? ""}
+                              disabled={locked}
+                              onChange={(event) => updateMetric(category, metric.key, event.target.value)}
+                            />
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           </SectionCard>
 
-          <SectionCard title="Budget by scenario" flush>
+          <SectionCard
+            title="Summary"
+            description="Chaka Buna plan totals per category, with each scenario's budget for comparison."
+            flush
+          >
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Basis</TableHead>
-                    <TableHead className="text-right">Industry avg</TableHead>
-                    <TableHead className="text-right">+25%</TableHead>
-                    <TableHead className="text-right">+50%</TableHead>
-                    <TableHead className="text-right">Expert input</TableHead>
-                    <TableHead className="text-right">Selected MD</TableHead>
-                    <TableHead className="text-right">Selected budget</TableHead>
+                    <TableHead>Plan basis</TableHead>
+                    <TableHead className="text-right">Plan man-days</TableHead>
+                    <TableHead className="text-right">Plan budget</TableHead>
+                    {BUDGET_SCENARIOS.map((scenario) => (
+                      <TableHead key={scenario} className="text-right">{SCENARIO_LABELS[scenario]}</TableHead>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {PLAN_CATEGORIES.map((category) => {
-                    const basis = data.planBasis[category] || "industry_average";
-                    const categoryRows = rows.filter((row) => row.activity.category === category);
-                    return (
-                      <TableRow key={category}>
-                        <TableCell className="font-medium">{category}</TableCell>
-                        <TableCell className="text-right text-xs">{SCENARIO_LABELS[basis]}</TableCell>
-                        {BUDGET_SCENARIOS.map((scenario) => (
-                          <TableCell key={scenario} className="text-right tabular-nums">
-                            {scenarioTotal(rows, category, scenario) == null
-                              ? "—"
-                              : fmtEtb(scenarioTotal(rows, category, scenario))}
-                          </TableCell>
-                        ))}
-                        <TableCell className="text-right tabular-nums">
-                          {scenarioManDays(rows, category, basis) == null ? "—" : scenarioManDays(rows, category, basis)?.toFixed(1)}
+                  {summary.categories.map((c) => (
+                    <TableRow key={c.category}>
+                      <TableCell className="font-medium">
+                        {c.category}
+                        {c.missingRates ? (
+                          <span className="ml-2 text-[11px] font-normal text-destructive">
+                            {c.missingRates} without a rate
+                          </span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-xs">{SCENARIO_LABELS[c.basis]}</TableCell>
+                      <TableCell className="text-right tabular-nums">{c.activityCount ? fmtNum(c.planManDays) : "—"}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{c.activityCount ? fmtEtb(c.planBudget) : "—"}</TableCell>
+                      {BUDGET_SCENARIOS.map((scenario) => (
+                        <TableCell key={scenario} className="text-right tabular-nums text-muted-foreground">
+                          {c.activityCount ? fmtEtb(c.scenarioBudgets[scenario]) : "—"}
                         </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
-                          {scenarioTotal(rows, category, basis) == null ? "—" : fmtEtb(scenarioTotal(rows, category, basis))}
-                        </TableCell>
-                        <TableCell className="sr-only">{categoryRows.length} benchmark lines</TableCell>
-                      </TableRow>
-                    );
-                  })}
+                      ))}
+                    </TableRow>
+                  ))}
                   <TableRow className="border-t-2 font-semibold">
-                    <TableCell>Total – All field work</TableCell>
+                    <TableCell>Total – all field work</TableCell>
                     <TableCell />
-                    {BUDGET_SCENARIOS.map((scenario) => {
-                      const totals = PLAN_CATEGORIES.map((category) => scenarioTotal(rows, category, scenario));
-                      return (
-                        <TableCell key={scenario} className="text-right tabular-nums">
-                          {totals.some((value) => value == null) ? "—" : fmtEtb(totals.reduce<number>((sum, value) => sum + (value || 0), 0))}
-                        </TableCell>
-                      );
-                    })}
-                    <TableCell />
+                    <TableCell className="text-right tabular-nums">{fmtNum(summary.total.planManDays)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmtEtb(summary.total.planBudget)}</TableCell>
+                    {BUDGET_SCENARIOS.map((scenario) => (
+                      <TableCell key={scenario} className="text-right tabular-nums">
+                        {fmtEtb(summary.total.scenarioBudgets[scenario])}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Monthly"
+            description={`Plan man-days and cost by month from each activity's phasing · workers needed = man-days ÷ ${settings.workingDaysPerMonth} working days.`}
+            flush
+          >
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead />
+                    {monthly.map((m) => (
+                      <TableHead key={m.name} className="text-right">{m.name}</TableHead>
+                    ))}
+                    <TableHead className="text-right">Year</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-medium">Man-days</TableCell>
+                    {monthly.map((m) => (
+                      <TableCell key={m.name} className="text-right tabular-nums">{fmtNum(m.manDays, 0)}</TableCell>
+                    ))}
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {fmtNum(monthly.reduce((s, m) => s + m.manDays, 0), 0)}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Cost (birr)</TableCell>
+                    {monthly.map((m) => (
+                      <TableCell key={m.name} className="text-right tabular-nums">{fmtNum(m.cost, 0)}</TableCell>
+                    ))}
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {fmtNum(monthly.reduce((s, m) => s + m.cost, 0), 0)}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Workers needed</TableCell>
+                    {monthly.map((m) => (
+                      <TableCell key={m.name} className="text-right tabular-nums">{fmtNum(m.workers, 0)}</TableCell>
+                    ))}
                     <TableCell />
                   </TableRow>
                 </TableBody>
@@ -345,73 +447,146 @@ export default function AnnualBudgetView() {
             </div>
           </SectionCard>
 
-          {PLAN_CATEGORIES.map((category) => (
-            <details key={category} open className="group border-b border-border">
-              <summary className="cursor-pointer list-none py-3 text-sm font-semibold">
-                {category} activity rates <span className="ml-2 text-xs font-normal text-muted-foreground">{rows.filter((row) => row.activity.category === category).length} activities</span>
-              </summary>
-              <div className="overflow-x-auto pb-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="sticky left-0 bg-background">Include · activity</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead className="text-right">Qty / round</TableHead>
-                      <TableHead className="text-right">Industry / unit</TableHead>
-                      <TableHead className="text-right">Industry MD / unit</TableHead>
-                      <TableHead className="text-right">Expert MD / unit</TableHead>
-                      <TableHead className="text-right">Expert wage / MD</TableHead>
-                      <TableHead className="text-right">Expert frequency</TableHead>
-                      <TableHead className="text-right">Selected cost</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.filter((row) => row.activity.category === category).map((row) => {
-                      const activityInput = data.activityInputs[row.activity.code] || {};
-                      const expert = row.scenarios.expert_input;
-                      return (
-                        <TableRow key={row.activity.code}>
-                          <TableCell className="sticky left-0 min-w-[15rem] bg-background">
-                            <label className="flex items-start gap-2">
-                              <Checkbox
-                                checked={row.included}
-                                disabled={!canEdit || plan.status === "submitted"}
-                                aria-label={`Include ${row.activity.activity} in annual budget`}
-                                onCheckedChange={(checked) => updateActivity(row.activity.code, "included", checked === true)}
-                              />
-                              <span className="min-w-0">
-                                <span className="block font-medium">{row.activity.activity}</span>
-                            <p className="font-mono text-[11px] text-muted-foreground">{row.activity.code} · {row.activity.subgroup}</p>
-                            <p className="text-[11px] text-muted-foreground">
-                              {row.hasIndustryRate ? `${row.industryFarmsWithRate} industry farms` : row.sixFarmFallbackAvailable ? "Six-farm fallback" : "Expert rate required"}
-                            </p>
-                              </span>
-                            </label>
-                          </TableCell>
-                          <TableCell>{row.activity.unit}</TableCell>
-                          <TableCell>
-                            <Input type="number" min={0} step="any" className="h-8 w-24 text-right" value={activityInput.quantityPerRound ?? ""} disabled={!canEdit || plan.status === "submitted"} onChange={(event) => updateActivity(row.activity.code, "quantityPerRound", event.target.value)} aria-label={`${row.activity.code} quantity per round`} />
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">{row.scenarios.industry_average.costPerUnit == null ? "—" : fmtEtb(row.scenarios.industry_average.costPerUnit)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{row.scenarios.industry_average.manDaysPerUnit?.toFixed(3) ?? "—"}</TableCell>
-                          <TableCell>
-                            <Input type="number" min={0} step="any" className="h-8 w-24 text-right" value={activityInput.expertManDaysPerUnit ?? expert.manDaysPerUnit ?? ""} disabled={!canEdit || plan.status === "submitted"} onChange={(event) => updateActivity(row.activity.code, "expertManDaysPerUnit", event.target.value)} aria-label={`${row.activity.code} expert man-days per unit`} />
-                          </TableCell>
-                          <TableCell>
-                            <Input type="number" min={0} step="any" className="h-8 w-28 text-right" value={activityInput.expertWagePerManDay ?? expert.wagePerManDay ?? ""} disabled={!canEdit || plan.status === "submitted"} onChange={(event) => updateActivity(row.activity.code, "expertWagePerManDay", event.target.value)} aria-label={`${row.activity.code} expert wage per man-day`} />
-                          </TableCell>
-                          <TableCell>
-                            <Input type="number" min={0} step="any" className="h-8 w-20 text-right" value={activityInput.expertFrequency ?? expert.frequency ?? ""} disabled={!canEdit || plan.status === "submitted"} onChange={(event) => updateActivity(row.activity.code, "expertFrequency", event.target.value)} aria-label={`${row.activity.code} expert frequency`} />
-                          </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">{row.selected.costPerUnit == null ? "—" : fmtEtb(row.selected.costPerUnit)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </details>
-          ))}
+          {PLAN_CATEGORIES.map((category) => {
+            const categoryRows = rows.filter((row) => row.activity.category === category);
+            const counted = categoryRows.filter((row) => row.counts).length;
+            const phasingIssues = categoryRows.filter((row) => !row.phasingOk).length;
+            return (
+              <details key={category} open className="group border-b border-border">
+                <summary className="cursor-pointer list-none py-3 text-sm font-semibold">
+                  {category} activities
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {categoryRows.length} activities · {counted} with a quantity
+                    {phasingIssues ? <span className="text-destructive"> · {phasingIssues} phasing not 100%</span> : null}
+                  </span>
+                </summary>
+                <div className="overflow-x-auto pb-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="sticky left-0 bg-background">Activity</TableHead>
+                        <TableHead>Unit</TableHead>
+                        <TableHead className="text-right">Qty / round</TableHead>
+                        <TableHead className="text-right">Industry cost / unit</TableHead>
+                        <TableHead className="text-right">Expert MD / unit</TableHead>
+                        <TableHead className="text-right">Expert wage / MD</TableHead>
+                        <TableHead className="text-right">Expert freq.</TableHead>
+                        <TableHead className="text-right">Plan cost / unit</TableHead>
+                        <TableHead className="text-right">Plan total</TableHead>
+                        <TableHead>Phasing</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {categoryRows.map((row) => {
+                        const code = row.activity.code;
+                        const activityInput = data.activityInputs[code] || {};
+                        const expert = row.scenarios.expert_input;
+                        const open = phasingOpen === code;
+                        return (
+                          <Fragment key={code}>
+                            <TableRow className={cn(!row.counts && "text-muted-foreground")}>
+                              <TableCell className="sticky left-0 min-w-[15rem] bg-background">
+                                <span className="block font-medium text-foreground">{row.activity.activity}</span>
+                                <span className="block font-mono text-[11px] text-muted-foreground">{code} · {row.activity.subgroup}</span>
+                                <span className={cn("block text-[11px]", row.missingRate ? "text-destructive" : "text-muted-foreground")}>
+                                  {row.hasIndustryRate
+                                    ? `${row.industryFarmsWithRate} industry farms · plan uses ${SCENARIO_LABELS[row.selectedBasis]}`
+                                    : row.sixFarmFallbackAvailable
+                                      ? "No industry rate · Expert input pre-filled from six farms"
+                                      : "No B-Agro rate · enter it on Expert input"}
+                                </span>
+                              </TableCell>
+                              <TableCell>{row.activity.unit}</TableCell>
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="any"
+                                  className={cn("ml-auto h-8 w-24 text-right", row.quantitySource === "metric" && "border-primary/40 bg-primary/[0.04]")}
+                                  value={activityInput.quantityPerRound ?? ""}
+                                  placeholder={row.quantitySource === "metric" ? fmtNum(row.quantityPerRound, 2) : "0"}
+                                  disabled={locked}
+                                  onChange={(event) => updateActivity(code, "quantityPerRound", event.target.value)}
+                                  aria-label={`${code} quantity per round`}
+                                />
+                                {row.linkedMetric ? (
+                                  <span className="mt-0.5 block text-[10px] text-primary">
+                                    {row.quantitySource === "typed" ? "Overrides " : "From "}
+                                    {row.linkedMetric.label.toLowerCase()}
+                                  </span>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {row.scenarios.industry_average.costPerUnit == null ? "—" : fmtEtb(row.scenarios.industry_average.costPerUnit)}
+                              </TableCell>
+                              <TableCell>
+                                <Input type="number" min={0} step="any" className="h-8 w-24 text-right" value={activityInput.expertManDaysPerUnit ?? expert.manDaysPerUnit ?? ""} disabled={locked} onChange={(event) => updateActivity(code, "expertManDaysPerUnit", event.target.value)} aria-label={`${code} expert man-days per unit`} />
+                              </TableCell>
+                              <TableCell>
+                                <Input type="number" min={0} step="any" className="h-8 w-28 text-right" value={activityInput.expertWagePerManDay ?? expert.wagePerManDay ?? ""} disabled={locked} onChange={(event) => updateActivity(code, "expertWagePerManDay", event.target.value)} aria-label={`${code} expert wage per man-day`} />
+                              </TableCell>
+                              <TableCell>
+                                <Input type="number" min={0} step={1} className="h-8 w-20 text-right" value={activityInput.expertFrequency ?? expert.frequency ?? ""} disabled={locked} onChange={(event) => updateActivity(code, "expertFrequency", event.target.value)} aria-label={`${code} expert frequency`} />
+                              </TableCell>
+                              <TableCell className="text-right font-medium tabular-nums">
+                                {row.selected.costPerUnit == null ? "—" : fmtEtb(row.selected.costPerUnit)}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold tabular-nums">
+                                {row.counts ? (row.selected.totalBudget == null ? "—" : fmtEtb(row.selected.totalBudget)) : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className={cn("h-8 px-2 text-xs tabular-nums", !row.phasingOk && "text-destructive")}
+                                  aria-expanded={open}
+                                  onClick={() => setPhasingOpen(open ? null : code)}
+                                >
+                                  {fmtNum(row.phasingTotal * 100, 0)}%
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                            {open ? (
+                              <TableRow className="hover:bg-transparent">
+                                <TableCell colSpan={10} className="bg-muted/20 px-4 py-3">
+                                  <p className="mb-2 text-xs text-muted-foreground">
+                                    Share of {code}&apos;s annual total per month (pre-filled from B-Agro&apos;s seasonal timing).{" "}
+                                    <span className={cn("font-medium", row.phasingOk ? "text-foreground" : "text-destructive")}>
+                                      Total {fmtNum(row.phasingTotal * 100, 1)}%{row.phasingOk ? "" : " — must add up to 100%"}
+                                    </span>
+                                  </p>
+                                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-12">
+                                    {PLAN_MONTH_NAMES.map((name, month) => (
+                                      <label key={name} className="grid gap-1 text-[11px]">
+                                        <span className="text-muted-foreground">{name}</span>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          max={100}
+                                          step="any"
+                                          className="h-8 text-right"
+                                          value={row.phasing[month] ? fmtNum(row.phasing[month] * 100, 2) : ""}
+                                          placeholder="0"
+                                          disabled={locked}
+                                          onChange={(e) => updatePhasing(code, row.phasing, month, e.target.value)}
+                                          aria-label={`${code} ${name} phasing %`}
+                                        />
+                                      </label>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </details>
+            );
+          })}
         </>
       )}
     </PageContainer>

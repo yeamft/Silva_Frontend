@@ -47,6 +47,7 @@ import {
   canViewRateCardArchive,
 } from "@/lib/cropfortAccess";
 import { enrichRateCard } from "@/lib/mock-api/rate-card-workflow";
+import { useWorkflowFarmAreas } from "@/lib/query/hooks/use-rate-card-workflow";
 import { useRateCardStore } from "@/store/rateCardStore";
 import type {
   StandingKind,
@@ -101,6 +102,9 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [sourceSurveyId, setSourceSurveyId] = useState("");
+  // Locked benchmarks are listed per farm area, so the dialog always works against one farm
+  const [dialogFarmId, setDialogFarmId] = useState("");
+  const farmAreas = useWorkflowFarmAreas(ctx.programId || activeProgram?.id || "").data ?? [];
 
   const effectiveStatus: WorkflowStatus | "all" = archiveMode ? "archived" : status;
   const programWide =
@@ -124,6 +128,15 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
       budgetYear: programWide || !farmEstateId ? undefined : budgetYearOf(ctx.budgetYearId),
     });
   }, [canView, activeProgram?.id, effectiveStatus, kind, programWide, ctx.programId, ctx.farmAreaId, ctx.budgetYearId, loadList]);
+
+  useEffect(() => {
+    if (!open || !dialogFarmId) return;
+    setSourceSurveyId("");
+    const farmName = farmAreas.find((f) => f.id === dialogFarmId)?.name;
+    void loadLocked(dialogFarmId, farmName, { programId: ctx.programId, budgetYearId: ctx.budgetYearId });
+    // farmAreas only supplies a display name; reloading on it would discard the selection
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, dialogFarmId, ctx.programId, ctx.budgetYearId, loadLocked]);
 
   const rows = useMemo(() => items.map((r) => enrichRateCard(r)), [items]);
 
@@ -169,11 +182,28 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
         header: "Proposed rate",
         meta: { align: "right" },
         cell: (c) => {
-          const uom = c.row.original.activity?.uom || "unit";
+          const row = c.row.original;
+          const uom = row.activity?.uom || "unit";
+          const bench = row.recommendedRate;
+          const variance =
+            bench != null && Number.isFinite(bench) && bench !== 0
+              ? ((row.proposedRate - bench) / bench) * 100
+              : null;
           return (
             <span className="flex flex-col items-end gap-0.5 tabular-nums">
-              <span className="font-semibold text-foreground">{fmtEtb(c.getValue())}</span>
-              <span className="text-[11px] text-muted-foreground">per {uom}</span>
+              <span className="font-semibold text-foreground">
+                {fmtEtb(c.getValue())}
+                <span className="ml-1 text-[11px] font-normal text-muted-foreground">/{uom}</span>
+              </span>
+              {variance != null ? (
+                <span
+                  className={`text-[11px] font-medium ${Math.abs(variance) > 10 ? "text-warning" : "text-muted-foreground"}`}
+                  title={`Benchmark ${fmtEtb(bench)}`}
+                >
+                  {variance > 0 ? "+" : ""}
+                  {variance.toFixed(1)}% vs benchmark
+                </span>
+              ) : null}
             </span>
           );
         },
@@ -181,42 +211,7 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
       col.accessor("recommendedRate", {
         header: "Benchmark",
         meta: { align: "right" },
-        cell: (c) => (
-          <span className="tabular-nums text-muted-foreground">{fmtEtb(c.getValue())}</span>
-        ),
-      }),
-      col.accessor("norm", {
-        header: "Norm",
-        size: 90,
-        meta: { align: "right" },
-        cell: (c) => (
-          <span className="tabular-nums text-muted-foreground">
-            {c.getValue() != null ? `${c.getValue()} MD` : "—"}
-          </span>
-        ),
-      }),
-      col.accessor((r) => {
-        if (r.recommendedRate == null || !Number.isFinite(r.recommendedRate) || r.recommendedRate === 0) return null;
-        return ((r.proposedRate - r.recommendedRate) / r.recommendedRate) * 100;
-      }, {
-        id: "variance",
-        header: "Variance",
-        size: 90,
-        meta: { align: "right" },
-        cell: (c) => {
-          const v = c.getValue();
-          if (v == null) return <span className="text-muted-foreground">—</span>;
-          const flagged = Math.abs(v) > 10;
-          return (
-            <span
-              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold tabular-nums ${
-                flagged ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
-              }`}
-            >
-              {v > 0 ? "+" : ""}{v.toFixed(1)}%
-            </span>
-          );
-        },
+        cell: (c) => <span className="tabular-nums text-muted-foreground">{fmtEtb(c.getValue())}</span>,
       }),
       col.accessor("availableFrom", {
         header: "Effective",
@@ -243,21 +238,17 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
       }),
       col.display({
         id: "actions",
-        header: "Actions",
+        header: () => <span className="sr-only">Actions</span>,
         size: 110,
         cell: (c) => {
           const row = c.row.original;
           return (
-            <div className="flex items-center justify-end gap-1 pr-2">
-              <Button
-                variant={row.status === "submitted" && isAssetOwner ? "default" : "ghost"}
-                size="sm"
-                asChild
-              >
-                <Link href={`${CROPFORT_ROUTES.rateCardProposals}/${row.id}`}>
-                  {row.status === "submitted" && isAssetOwner ? "Review" : "View"}
-                </Link>
-              </Button>
+            <div className="flex items-center justify-end gap-1 pr-2" onClick={(e) => e.stopPropagation()}>
+              {row.status === "submitted" && isAssetOwner ? (
+                <Button size="sm" asChild>
+                  <Link href={`${CROPFORT_ROUTES.rateCardProposals}/${row.id}`}>Review</Link>
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 size="icon"
@@ -319,8 +310,7 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
                 size="sm"
                 onClick={() => {
                   setSourceSurveyId("");
-                  const farmId = ctx.farmAreaId !== "all" ? ctx.farmAreaId : "all";
-                  void loadLocked(farmId, undefined, { programId: ctx.programId, budgetYearId: ctx.budgetYearId });
+                  setDialogFarmId(ctx.farmAreaId !== "all" ? ctx.farmAreaId : farmAreas[0]?.id || "");
                   setOpen(true);
                 }}
               >
@@ -398,8 +388,7 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
           emptyTitle={isAssetOwner ? "No rate cards for this filter" : "No rate cards — create one from a locked benchmark"}
           emptyDescription="Adjust the filters or open a benchmark survey to create a rate card."
           pageSizeOptions={[10, 25, 50]}
-          className="[&_thead_tr]:border-b [&_thead_tr]:bg-muted/50 [&_thead_th]:h-11 [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.06em] [&_tbody_tr]:border-b [&_tbody_tr:nth-child(even)]:bg-muted/20 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-primary/[0.04] [&_tbody_td]:py-3.5"
-          containerClassName="rounded-none border-0"
+          onRowClick={(row) => router.push(`${CROPFORT_ROUTES.rateCardProposals}/${row.original.id}`)}
         />
       </SectionCard>
 
@@ -418,22 +407,40 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
           </DialogHeader>
           <div className="grid gap-3">
             <FormField
+              label="Farm area"
+              required
+              render={({ id }) => (
+                <Select value={dialogFarmId} onValueChange={setDialogFarmId}>
+                  <SelectTrigger id={id}>
+                    <SelectValue placeholder="Select farm area" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {farmAreas.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <FormField
               label="Benchmark survey"
               required
               render={() => (
-                <Select value={sourceSurveyId} onValueChange={setSourceSurveyId}>
+                <Select value={sourceSurveyId} onValueChange={setSourceSurveyId} disabled={!dialogFarmId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select locked benchmark" />
                   </SelectTrigger>
                   <SelectContent>
-                    {locked.length === 0 ? (
+                    {dialogFarmId && locked.length === 0 ? (
                       <SelectItem value="__none" disabled>
-                        No unused locked benchmarks — lock a survey first
+                        No unused locked benchmarks for this farm area
                       </SelectItem>
                     ) : (
                       locked.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
-                          {s.activityName || s.activityId} · {s.farmAreaName || "Farm"} · rec {fmtEtb(s.recommendedRate)}
+                          {s.activityName || s.activityId} · recommended {fmtEtb(s.recommendedRate)}
                         </SelectItem>
                       ))
                     )}
@@ -441,7 +448,7 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
                 </Select>
               )}
             />
-            {locked.length === 0 ? (
+            {dialogFarmId && locked.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 Lock a benchmark survey first, then return here — or open the survey and use{" "}
                 <Link href={CROPFORT_ROUTES.benchmarkSurveys} className="underline underline-offset-2">
@@ -457,11 +464,10 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button
-              disabled={actionPending || !sourceSurveyId || (!USE_RATE_CARD_MOCK && ctx.farmAreaId === "all")}
+              disabled={actionPending || !sourceSurveyId || !dialogFarmId}
               onClick={async () => {
                 try {
-                  const farmId = ctx.farmAreaId !== "all" ? ctx.farmAreaId : "fa-tumi";
-                  const card = await createFromSurvey(farmId, { sourceSurveyId, budgetYear: budgetYearOf(ctx.budgetYearId) });
+                  const card = await createFromSurvey(dialogFarmId, { sourceSurveyId, budgetYear: budgetYearOf(ctx.budgetYearId) });
                   toast.success("Draft rate card created from benchmark");
                   setOpen(false);
                   router.push(`${CROPFORT_ROUTES.rateCardProposals}/${card.id}`);

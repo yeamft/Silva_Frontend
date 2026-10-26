@@ -285,8 +285,8 @@ export default function InterventionsView() {
       {!blocks.length ? (
         <p className="mb-3 rounded-lg border px-3 py-2 text-sm text-muted-foreground">
           No blocks available. Add blocks under{" "}
-          <Link className="underline" href={CROPFORT_ROUTES.blocks}>
-            Administration → Blocks
+          <Link className="underline" href={CROPFORT_ROUTES.farmAreas}>
+            Administration → Farm areas
           </Link>
           .
         </p>

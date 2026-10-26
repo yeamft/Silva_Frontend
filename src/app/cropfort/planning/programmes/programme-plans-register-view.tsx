@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ClipboardList, MoreHorizontal, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import {
   TableMessageRow,
   TablePagination,
+  TableSkeleton,
 } from "@/components/cropfort/data-table";
 import {
   PageContainer,
@@ -66,14 +68,7 @@ import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 
 const PAGE_SIZES = [10, 25, 50];
 
-type StatusFilter =
-  | "all"
-  | "draft"
-  | "ready_for_review"
-  | "submitted"
-  | "returned"
-  | "approved"
-  | "active";
+type StatusFilter = "all" | "draft" | "submitted" | "returned" | "approved";
 
 function statusLabel(raw?: string) {
   if (!raw) return "draft";
@@ -105,11 +100,8 @@ export default function ProgrammePlansRegisterView({
   const [name, setName] = useState("");
   const [farmEstateId, setFarmEstateId] = useState("");
   const [planYear, setPlanYear] = useState(String(new Date().getFullYear()));
-  const [planningCycle, setPlanningCycle] = useState(
-    `${new Date().getFullYear()} Core Operations`,
-  );
   const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
+  const [archiveTarget, setArchiveTarget] = useState<ProgrammePlanDto | null>(null);
 
   const farmsQuery = useQuery({
     queryKey: ["farms", "programme-register", activeProgram?.id],
@@ -123,9 +115,8 @@ export default function ProgrammePlansRegisterView({
     includeArchived: archiveMode,
     farmEstateId: farmFilter !== "all" ? farmFilter : undefined,
     planYear: yearFilter !== "all" ? Number(yearFilter) : undefined,
-    q: query.trim() || undefined,
   });
-  const allPlans = plansQuery.data || [];
+  const allPlans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
   const createMut = useCreateProgrammePlan();
   const duplicateMut = useDuplicateProgrammePlan();
   const archiveMut = useArchiveProgrammePlan();
@@ -174,11 +165,8 @@ export default function ProgrammePlansRegisterView({
   const openCreate = () => {
     setName("");
     setFarmEstateId(farms[0]?.id || "");
-    const y = new Date().getFullYear();
-    setPlanYear(String(y));
-    setPlanningCycle(`${y} Core Operations`);
+    setPlanYear(String(new Date().getFullYear()));
     setDescription("");
-    setNotes("");
     setCreateOpen(true);
   };
 
@@ -192,15 +180,19 @@ export default function ProgrammePlansRegisterView({
       return;
     }
     const year = Number(planYear);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      toast.error("Enter a valid budget year, e.g. 2027");
+      return;
+    }
     try {
       const row = await createMut.mutateAsync({
         name: name.trim(),
         farmEstateId,
         planYear: year,
-        planningCycleLabel: planningCycle.trim() || `${year} Core Operations`,
+        planningCycleLabel: `${year} Core Operations`,
         budgetYearLabel: budgetYearLabel(year).label,
         description: description.trim(),
-        notes: notes.trim(),
+        notes: "",
       });
       setCreateOpen(false);
       toast.success(`Created ${row.name}`);
@@ -237,7 +229,7 @@ export default function ProgrammePlansRegisterView({
             {canCreate ? (
               <Button size="sm" onClick={openCreate}>
                 <Plus className="h-3.5 w-3.5" />
-                New
+                New plan
               </Button>
             ) : null}
           </div>
@@ -280,11 +272,9 @@ export default function ProgrammePlansRegisterView({
                   <SelectContent>
                     <SelectItem value="all">All statuses</SelectItem>
                     <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="ready_for_review">Ready for review</SelectItem>
                     <SelectItem value="submitted">Submitted</SelectItem>
                     <SelectItem value="returned">Returned</SelectItem>
                     <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
                   </SelectContent>
                 </Select>
               ) : null}
@@ -352,26 +342,21 @@ export default function ProgrammePlansRegisterView({
           <Table aria-label={archiveMode ? "Archived Core Operations plans" : "Core Operations plans"}>
             <TableHeader>
               <TableRow>
-                <TableHead className="h-12 w-14 bg-muted/50 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">#</TableHead>
-                <TableHead className="h-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Core Operations plan</TableHead>
-                <TableHead className="h-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Farm area</TableHead>
-                <TableHead className="h-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Budget year</TableHead>
-                <TableHead className="h-12 bg-muted/50 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity plan</TableHead>
-                <TableHead className="h-12 bg-muted/50 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Budget</TableHead>
-                <TableHead className="h-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</TableHead>
-                <TableHead className="h-11 w-12 bg-muted/40" />
+                <TableHead>Plan</TableHead>
+                <TableHead>Farm area</TableHead>
+                <TableHead>Budget year</TableHead>
+                <TableHead className="text-right">Activities scheduled</TableHead>
+                <TableHead className="text-right">Budget</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {plansQuery.isLoading ? (
-                <TableMessageRow
-                  colSpan={8}
-                  icon={ClipboardList}
-                  title="Loading Core Operations plans…"
-                />
+                <TableSkeleton rows={5} columns={7} />
               ) : paged.length === 0 ? (
                 <TableMessageRow
-                  colSpan={8}
+                  colSpan={7}
                   icon={ClipboardList}
                   title={
                     !hasActiveFilters
@@ -411,13 +396,12 @@ export default function ProgrammePlansRegisterView({
                   }
                 />
               ) : (
-                paged.map((row, index) => {
+                paged.map((row) => {
                   const included = row.includedCount ?? 0;
                   const scheduled = row.scheduledCount ?? 0;
                   return (
                     <TableRow
                       key={row.id}
-                      className="cursor-pointer border-b-border/70 odd:bg-background even:bg-muted/15 transition-colors hover:bg-primary/5"
                       onClick={(event) => {
                         const target = event.target as HTMLElement;
                         // Let links and menu actions handle their own navigation.
@@ -429,9 +413,6 @@ export default function ProgrammePlansRegisterView({
                         router.push(planHref(row.id));
                       }}
                     >
-                      <TableCell className="w-14 text-center text-xs font-medium tabular-nums text-muted-foreground">
-                        {(safePage - 1) * pageSize + index + 1}
-                      </TableCell>
                       <TableCell className="h-auto min-w-[250px] py-4">
                         <Link
                           href={planHref(row.id)}
@@ -515,11 +496,6 @@ export default function ProgrammePlansRegisterView({
                             <DropdownMenuItem asChild>
                               <Link href={planHref(row.id)}>Open</Link>
                             </DropdownMenuItem>
-                            {canEditRow(row) ? (
-                              <DropdownMenuItem asChild>
-                                <Link href={planHref(row.id)}>Edit</Link>
-                              </DropdownMenuItem>
-                            ) : null}
                             {canDuplicate ? (
                               <DropdownMenuItem
                                 onClick={() =>
@@ -570,18 +546,7 @@ export default function ProgrammePlansRegisterView({
                             row.statusRaw !== "submitted" ? (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    void archiveMut
-                                      .mutateAsync(row.id)
-                                      .then(() => toast.message("Archived"))
-                                      .catch((e) =>
-                                        toast.error(
-                                          e instanceof Error ? e.message : "Archive failed",
-                                        ),
-                                      )
-                                  }
-                                >
+                                <DropdownMenuItem className="text-destructive" onClick={() => setArchiveTarget(row)}>
                                   Archive
                                 </DropdownMenuItem>
                               </>
@@ -617,8 +582,10 @@ export default function ProgrammePlansRegisterView({
           </DialogHeader>
           <div className="grid gap-3">
             <div className="space-y-1">
-              <Label>Core Operations plan name *</Label>
+              <Label htmlFor="plan-name">Plan name *</Label>
               <Input
+                id="plan-name"
+                autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. 2027 Annual Coffee Operations"
@@ -626,64 +593,79 @@ export default function ProgrammePlansRegisterView({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label>Planning cycle *</Label>
-                <Input
-                  value={planningCycle}
-                  onChange={(e) => setPlanningCycle(e.target.value)}
-                  placeholder="2027 Core Operations"
-                />
+                <Label htmlFor="plan-farm">Farm area *</Label>
+                <Select value={farmEstateId} onValueChange={setFarmEstateId}>
+                  <SelectTrigger id="plan-farm">
+                    <SelectValue placeholder={farms.length ? "Select farm area" : "No farm areas yet"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {farms.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!farmsQuery.isLoading && farms.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    <Link href={CROPFORT_ROUTES.farmAreas} className="text-primary underline-offset-2 hover:underline">
+                      Add a farm area
+                    </Link>{" "}
+                    first.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1">
-                <Label>Budget year (GC) *</Label>
+                <Label htmlFor="plan-year">Budget year (GC) *</Label>
                 <Input
+                  id="plan-year"
                   type="number"
+                  inputMode="numeric"
                   value={planYear}
-                  onChange={(e) => {
-                    setPlanYear(e.target.value);
-                    const y = Number(e.target.value);
-                    if (Number.isFinite(y)) setPlanningCycle(`${y} Core Operations`);
-                  }}
+                  onChange={(e) => setPlanYear(e.target.value)}
                 />
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Farm / estate *</Label>
-              <Select value={farmEstateId} onValueChange={setFarmEstateId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select farm area" />
-                </SelectTrigger>
-                <SelectContent>
-                  {farms.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>
-                      {f.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Description</Label>
+              <Label htmlFor="plan-description">Description</Label>
               <Textarea
+                id="plan-description"
                 rows={2}
+                placeholder="Optional — scope or goals for this plan"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void onCreate()} disabled={createMut.isPending}>
-              Create Core Operations plan
+            <Button onClick={() => void onCreate()} disabled={createMut.isPending || !name.trim() || !farmEstateId}>
+              {createMut.isPending ? "Creating…" : "Create plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(o) => !o && setArchiveTarget(null)}
+        title={`Archive ${archiveTarget?.name || "this plan"}?`}
+        description="It moves to Archived plans. You can duplicate it into a new draft later."
+        confirmLabel="Archive"
+        loading={archiveMut.isPending}
+        onConfirm={async () => {
+          if (!archiveTarget) return;
+          try {
+            await archiveMut.mutateAsync(archiveTarget.id);
+            toast.message("Archived");
+            setArchiveTarget(null);
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Archive failed");
+          }
+        }}
+      />
     </PageContainer>
   );
 }

@@ -20,26 +20,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -106,9 +93,6 @@ const APPROVAL_TYPES: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "rates", label: "Rate cards", icon: WalletCards },
 ];
 
-const OWNER_STATUS_TYPES = APPROVAL_TYPES.filter(
-  ({ id }) => id === "afp" || id === "rates",
-);
 
 function ProjectDetail({ project }: { project: ProjectDto }) {
   const done = project.milestones.filter((m) => m.done).length;
@@ -611,7 +595,7 @@ export default function ApprovalsView({
     enabled: isSilva && Boolean(activeProgram?.id),
     refetchInterval: 15_000,
   });
-  const submittedAssessments = farmAssessmentsQuery.data ?? [];
+  const submittedAssessments = useMemo(() => farmAssessmentsQuery.data ?? [], [farmAssessmentsQuery.data]);
   const rateCardsQuery = useQuery({
     queryKey: ["approval-rate-cards", activeProgram?.id],
     queryFn: () => listProgramRateCardProposals({ status: "submitted", programWide: true }),
@@ -650,6 +634,8 @@ export default function ApprovalsView({
   const [tab, setTab] = useState<Tab>(initialKind ?? "afp");
   const [selectedId, setSelectedId] = useState<string | null>(initialId ?? null);
   const [decisionNote, setDecisionNote] = useState("");
+  const [listFilter, setListFilter] = useState<Tab | "assessments" | "all">("all");
+  const [confirmApprove, setConfirmApprove] = useState(false);
 
   useEffect(() => {
     if (!initialKind || !initialId) return;
@@ -676,7 +662,7 @@ export default function ApprovalsView({
       return {
         id: p.id,
         kind: "afp" as const,
-        title: p.farmName ? `${p.farmName} AFP` : "AFP",
+        title: p.name || (p.farmName ? `${p.farmName} Core Operations plan` : "Core Operations plan"),
         meta: `${p.budgetYearLabel ?? ""} · Band ${band} · ${included} lines`,
         amount: p.plannedCostEtb ?? 0,
         risk: `Band ${band} · Silva`,
@@ -834,16 +820,65 @@ export default function ApprovalsView({
     }
   };
 
-  const waitingTotal = APPROVAL_TYPES.reduce((s, t) => s + queues[t.id].length, 0);
+  // One list of everything awaiting a decision: farm assessments (owner desk) + every queue
+  const listTypes = useMemo(
+    () => [
+      ...(isSilva ? [{ id: "assessments" as const, label: "Farm assessments", icon: Leaf }] : []),
+      ...APPROVAL_TYPES,
+    ],
+    [isSilva],
+  );
 
+  const allRows = useMemo(() => {
+    const assessmentRows = submittedAssessments.map((a) => ({
+      id: a.id,
+      kind: "assessments" as const,
+      title: a.title || "Farm assessment",
+      meta: [a.farmName, a.cycleLabel].filter(Boolean).join(" · "),
+      amount: null as number | null,
+      risk: undefined as string | undefined,
+      href: `${CROPFORT_ROUTES.farmAssessments}/${encodeURIComponent(a.id)}`,
+    }));
+    const queueRows = APPROVAL_TYPES.flatMap((t) =>
+      queues[t.id].map((r) => ({
+        ...r,
+        amount: r.amount as number | null,
+        href: `${CROPFORT_ROUTES.approvals}/review/${r.kind}/${encodeURIComponent(r.id)}`,
+      })),
+    );
+    return [...assessmentRows, ...queueRows];
+  }, [submittedAssessments, queues]);
+
+  const countsByType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of allRows) counts[r.kind] = (counts[r.kind] ?? 0) + 1;
+    return counts;
+  }, [allRows]);
+
+  const visibleRows = listFilter === "all" ? allRows : allRows.filter((r) => r.kind === listFilter);
+
+  // A filter whose queue emptied (e.g. after deciding the last item) falls back to "All"
   useEffect(() => {
-    if (detailRoute || queues[tab].length > 0 || waitingTotal === 0) return;
-    const firstQueueWithWork = APPROVAL_TYPES.find((item) => queues[item.id].length > 0);
-    if (firstQueueWithWork) {
-      setTab(firstQueueWithWork.id);
-      setSelectedId(null);
-    }
-  }, [detailRoute, queues, tab, waitingTotal]);
+    if (listFilter !== "all" && !countsByType[listFilter]) setListFilter("all");
+  }, [listFilter, countsByType]);
+
+  const listLoading =
+    (isSilva && farmAssessmentsQuery.isLoading) ||
+    (canDecideRateCards && rateCardsQuery.isLoading) ||
+    afesQuery.isLoading ||
+    afpPlansQuery.isLoading ||
+    projectsQuery.isLoading ||
+    interventionsQuery.isLoading ||
+    monthlyQuery.isLoading ||
+    weeklyQuery.isLoading;
+
+  const failedSources: { label: string; retry: () => Promise<unknown> }[] = [];
+  if (isSilva && farmAssessmentsQuery.isError) {
+    failedSources.push({ label: "farm assessments", retry: () => farmAssessmentsQuery.refetch() });
+  }
+  if (canDecideRateCards && rateCardsQuery.isError) {
+    failedSources.push({ label: "rate cards", retry: () => rateCardsQuery.refetch() });
+  }
 
   const detailLoading = {
     afe: afesQuery.isLoading,
@@ -854,6 +889,10 @@ export default function ApprovalsView({
     weekly: weeklyQuery.isLoading,
     rates: rateCardsQuery.isLoading,
   }[tab];
+
+  const waitingLabel = listLoading && allRows.length === 0
+    ? "Checking for requests…"
+    : `${allRows.length} ${allRows.length === 1 ? "request" : "requests"} waiting for ${canDecide ? "your decision" : "a decision"}`;
 
   return (
     <PageContainer className={cn(isSilva && "gap-5")}>
@@ -870,426 +909,129 @@ export default function ApprovalsView({
               {selected?.title || "Review request"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Review the request details and record your decision.
+              {APPROVAL_TYPES.find((t) => t.id === tab)?.label} · check the details, then approve or request changes.
             </p>
           </div>
         </header>
       ) : isSilva ? (
         <header className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Approvals</h1>
-          <p className="text-sm text-muted-foreground">
-            {waitingTotal + submittedAssessments.length} awaiting your decision
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Review one request at a time, then approve it or request changes.
-          </p>
+          <p className="text-sm text-muted-foreground" aria-live="polite">{waitingLabel}</p>
         </header>
       ) : (
         <PageHeader
           eyebrow={activeProgram?.name || "Control"}
           title={area.label}
-          description="Review one request at a time, then approve it or return it with clear instructions."
+          description="Everything waiting for an asset-owner decision, in one list."
           breadcrumbs={[
             { label: "Home", href: CROPFORT_ROUTES.dashboard },
             { label: "Control" },
             { label: area.label },
           ]}
-          meta={
-            <span className="text-xs text-muted-foreground">
-              {waitingTotal} awaiting decision
-            </span>
-          }
+          meta={<span className="text-xs text-muted-foreground">{waitingLabel}</span>}
         />
       )}
 
-      {!detailRoute && isSilva ? (
-        <section aria-label="Approval status" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Card
-            className={cn(
-              "overflow-hidden transition-[border-color,background-color,box-shadow] duration-150",
-              submittedAssessments.length > 0
-                ? "border-primary/50 bg-primary/[0.03] shadow-sm"
-                : "hover:border-primary/30 hover:shadow-sm",
-            )}
-          >
-            <Button
-              asChild
-              variant="ghost"
-              className="h-full min-h-32 w-full flex-col items-stretch justify-between gap-4 whitespace-normal rounded-lg p-4 text-left hover:bg-transparent focus-visible:ring-inset"
-            >
-              <Link href={CROPFORT_ROUTES.farmAssessments} aria-label="Open submitted farm assessments">
-                <span className="flex w-full items-center justify-between gap-3">
-                  <span
-                    className={cn(
-                      "flex size-10 shrink-0 items-center justify-center rounded-lg",
-                      submittedAssessments.length > 0
-                        ? "bg-primary/10 text-primary"
-                        : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    <Leaf className="size-5" aria-hidden />
-                  </span>
-                  <span
-                    className={cn(
-                      "cf-numeric text-3xl font-semibold leading-none tabular-nums tracking-tight",
-                      submittedAssessments.length > 0 ? "text-primary" : "text-muted-foreground",
-                    )}
-                  >
-                    {(farmAssessmentsQuery.isLoading || farmAssessmentsQuery.isError) &&
-                    submittedAssessments.length === 0
-                      ? "—"
-                      : submittedAssessments.length}
-                  </span>
-                </span>
-                <span className="block w-full">
-                  <span className="block text-sm font-semibold leading-snug text-foreground">
-                    Farm assessments
-                  </span>
-                  <span
-                    className={cn(
-                      "mt-1 block text-xs",
-                      submittedAssessments.length > 0
-                        ? "font-medium text-primary"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {farmAssessmentsQuery.isError
-                      ? "Could not load assessments"
-                      : submittedAssessments.length > 0
-                      ? `${submittedAssessments.length} ${submittedAssessments.length === 1 ? "item" : "items"} need your review`
-                      : "No items waiting"}
-                  </span>
-                </span>
-              </Link>
-            </Button>
-          </Card>
-          {OWNER_STATUS_TYPES.map((item) => {
-            const count = queues[item.id].length;
-            const active = tab === item.id;
-            const Icon = item.icon;
-            return (
-              <Card
-                key={item.id}
-                className={cn(
-                  "overflow-hidden transition-[border-color,background-color,box-shadow] duration-150",
-                  active
-                    ? "border-primary/50 bg-primary/[0.03] shadow-sm"
-                    : "hover:border-primary/30 hover:shadow-sm",
-                )}
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setTab(item.id);
-                    setSelectedId(null);
-                  }}
-                  aria-pressed={active}
-                  className="h-full min-h-32 w-full flex-col items-stretch justify-between gap-4 whitespace-normal rounded-lg p-4 text-left hover:bg-transparent focus-visible:ring-inset"
-                >
-                  <span className="flex w-full items-center justify-between gap-3">
-                    <span
-                      className={cn(
-                        "flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors",
-                        count > 0
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      <Icon className="size-5" aria-hidden />
-                    </span>
-                    <span
-                      className={cn(
-                        "cf-numeric text-3xl font-semibold leading-none tabular-nums tracking-tight",
-                        count > 0 ? "text-primary" : "text-muted-foreground",
-                      )}
-                    >
-                      {count}
-                    </span>
-                  </span>
-                  <span className="block w-full">
-                    <span className="block text-sm font-semibold leading-snug text-foreground">
-                      {item.label}
-                    </span>
-                    <span
-                      className={cn(
-                        "mt-1 block text-xs",
-                        count > 0 ? "font-medium text-primary" : "text-muted-foreground",
-                      )}
-                    >
-                      {count > 0
-                        ? `${count} ${count === 1 ? "item" : "items"} need your review`
-                        : "No items waiting"}
-                    </span>
-                  </span>
-                </Button>
-              </Card>
-            );
-          })}
-        </section>
-      ) : null}
-
-      {!detailRoute && isSilva && farmAssessmentsQuery.isError ? (
-        <SectionCard>
-          <div className="flex flex-col gap-2 py-5 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-destructive">
-              Could not load submitted farm assessments.{" "}
-              {farmAssessmentsQuery.error instanceof Error
-                ? farmAssessmentsQuery.error.message
-                : ""}
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void farmAssessmentsQuery.refetch()}
-            >
-              Try again
-            </Button>
-          </div>
-        </SectionCard>
-      ) : null}
-
-      {!detailRoute && isSilva && submittedAssessments.length > 0 ? (
-        <SectionCard
-          title={`Farm assessments awaiting review (${submittedAssessments.length})`}
-          description="Submitted assessments are listed here so you can open each one and review it."
-          flush
-        >
-          <ul className="divide-y divide-border">
-            {submittedAssessments.map((assessment) => (
-              <li key={assessment.id}>
-                <Link
-                  href={`${CROPFORT_ROUTES.farmAssessments}/${encodeURIComponent(assessment.id)}`}
-                  className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">
-                      {assessment.title || "Farm Assessment"}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {[assessment.farmName, assessment.cycleLabel].filter(Boolean).join(" · ")}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs font-medium text-primary">Review →</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
-      ) : null}
-
-      {!detailRoute && canDecideRateCards && rateCardsQuery.isError ? (
-        <SectionCard>
-          <div className="flex flex-col gap-2 py-5 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-destructive">
-              Could not load submitted rate cards.{" "}
-              {rateCardsQuery.error instanceof Error ? rateCardsQuery.error.message : ""}
-            </p>
-            <Button size="sm" variant="outline" onClick={() => void rateCardsQuery.refetch()}>
-              Try again
-            </Button>
-          </div>
-        </SectionCard>
-      ) : null}
-
-      {!detailRoute && canDecideRateCards && rateCardsQuery.isLoading && pendingRateCards.length === 0 ? (
-        <SectionCard>
-          <p className="py-5 text-center text-sm text-muted-foreground">
-            Checking for submitted rate cards…
+      {!detailRoute && failedSources.length > 0 ? (
+        <div role="alert" className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden />
+            Couldn&apos;t load {failedSources.map((f) => f.label).join(" and ")} — the list may be incomplete.
           </p>
-        </SectionCard>
-      ) : null}
-
-      {!detailRoute && canDecideRateCards && pendingRateCards.length > 0 ? (
-        <SectionCard
-          title={`Rate cards awaiting approval (${pendingRateCards.length})`}
-          description="Submitted rate cards are listed here so they stay visible alongside other approval queues."
-          flush
-        >
-          <ul className="divide-y divide-border">
-            {pendingRateCards.map((card) => (
-              <li key={card.id}>
-                <Link
-                  href={`${CROPFORT_ROUTES.rateCardProposals}/${card.id}`}
-                  className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">
-                      {card.activityName || card.activityCode || "Rate card"}
-                    </span>
-                    <span className="mt-0.5 block text-xs capitalize text-muted-foreground">
-                      {[card.kind, card.farmEstateName, card.activityCode]
-                        .filter(Boolean)
-                        .join(" · ")}
-                      {card.submittedAt
-                        ? ` · Submitted ${new Date(card.submittedAt).toLocaleDateString()}`
-                        : ""}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-                    <span className="text-xs text-muted-foreground">Proposed</span>
-                    <span className="cf-numeric text-sm font-semibold tabular-nums">
-                      {fmtEtb(card.proposedRate)}
-                    </span>
-                    <span className="text-xs font-medium text-primary">Review →</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
-      ) : null}
-
-      {!detailRoute && waitingTotal > 0 ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <label className="text-sm font-medium" htmlFor="approval-review-type">Review type</label>
-            <p className="text-xs text-muted-foreground">Choose the kind of request you want to review.</p>
-          </div>
-          <Select
-            value={tab}
-            onValueChange={(value) => {
-              setTab(value as Tab);
-              setSelectedId(null);
-            }}
-          >
-            <SelectTrigger id="approval-review-type" className="w-full sm:w-[260px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {APPROVAL_TYPES.filter((item) => queues[item.id].length > 0).map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.label} ({queues[item.id].length})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Button size="sm" variant="outline" onClick={() => failedSources.forEach((f) => void f.retry())}>
+            Try again
+          </Button>
         </div>
       ) : null}
 
-      {!detailRoute && waitingTotal === 0 && !rateCardsQuery.isLoading && !rateCardsQuery.isError ? (
-        <SectionCard>
-          <div className="py-10 text-center">
-            <CheckCircle2 className="mx-auto mb-3 size-9 text-success" aria-hidden />
-            <p className="font-medium">You’re all caught up</p>
-            <p className="mt-1 text-sm text-muted-foreground">There are no requests waiting for your decision.</p>
-          </div>
-        </SectionCard>
-      ) : !detailRoute && waitingTotal === 0 ? null : !detailRoute && rows.length === 0 ? (
-        <SectionCard>
-          <p className="py-8 text-center text-sm text-muted-foreground">Nothing waiting in this category.</p>
-        </SectionCard>
-      ) : (
-        <div className="space-y-4">
-          {!detailRoute ? (
-            <SectionCard
-              title="Awaiting your decision"
-              description="Select a request to view its details and decision options."
-              action={
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                <span className="size-1.5 rounded-full bg-primary" aria-hidden />
-                {rows.length} {rows.length === 1 ? "request" : "requests"}
-              </span>
-              }
-              flush
-            >
-              <Table
-              containerClassName="max-h-[32rem]"
-              className="min-w-[720px]"
-            >
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Request</TableHead>
-                  <TableHead>Reference / details</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-24 text-right">Review</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const type = APPROVAL_TYPES.find((item) => item.id === row.kind);
-                  const TypeIcon = type?.icon ?? ClipboardList;
+      {!detailRoute ? (
+        <SectionCard flush title="Awaiting your decision">
+          {allRows.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5 border-b border-border px-4 py-3" role="group" aria-label="Filter by type">
+              {[{ id: "all" as const, label: "All", icon: ClipboardList }, ...listTypes]
+                .filter((t) => t.id === "all" || countsByType[t.id])
+                .map((t) => {
+                  const selectedChip = listFilter === t.id;
+                  const count = t.id === "all" ? allRows.length : countsByType[t.id];
                   return (
-                    <TableRow
-                      key={row.id}
-                      aria-label={`Review ${row.title}`}
-                      tabIndex={0}
+                    <button
+                      key={t.id}
+                      type="button"
+                      aria-pressed={selectedChip}
+                      onClick={() => setListFilter(t.id)}
                       className={cn(
-                        "group cursor-pointer border-l-2 border-l-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring hover:border-l-primary/40 hover:bg-muted/40",
+                        "cf-focus inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors",
+                        selectedChip
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
                       )}
-                      onClick={() =>
-                        router.push(
-                          `${CROPFORT_ROUTES.approvals}/review/${row.kind}/${encodeURIComponent(row.id)}`,
-                        )
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          router.push(
-                            `${CROPFORT_ROUTES.approvals}/review/${row.kind}/${encodeURIComponent(row.id)}`,
-                          );
-                        }
-                      }}
                     >
-                      <TableCell>
-                        <span className="flex min-w-0 items-center gap-3 py-2">
-                          <span
-                            className={cn(
-                              "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
-                              "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
-                            )}
-                          >
-                            <TypeIcon className="size-4" aria-hidden />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate font-medium leading-snug text-foreground">
-                              {row.title}
-                            </span>
-                            <span className="mt-1 block text-[11px] font-medium text-muted-foreground">
-                              {type?.label ?? "Request"}
-                            </span>
-                          </span>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="flex flex-col gap-1 py-2">
-                          <span className="text-xs text-muted-foreground">
-                            {row.meta || "No additional reference"}
-                          </span>
+                      {t.label}
+                      <span className={cn("tabular-nums", selectedChip ? "text-primary-foreground/80" : "text-muted-foreground/80")}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+          ) : null}
+
+          {allRows.length === 0 ? (
+            listLoading ? (
+              <p className="py-10 text-center text-sm text-muted-foreground" role="status">
+                Checking for requests…
+              </p>
+            ) : (
+              <div className="py-12 text-center">
+                <CheckCircle2 className="mx-auto mb-3 size-9 text-success" aria-hidden />
+                <p className="font-medium">You&apos;re all caught up</p>
+                <p className="mt-1 text-sm text-muted-foreground">New submissions will appear here.</p>
+              </div>
+            )
+          ) : (
+            <ul className="divide-y divide-border">
+              {visibleRows.map((row) => {
+                const type = listTypes.find((t) => t.id === row.kind);
+                const TypeIcon = type?.icon ?? ClipboardList;
+                return (
+                  <li key={`${row.kind}-${row.id}`}>
+                    <Link
+                      href={row.href}
+                      className="cf-focus group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40"
+                    >
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <TypeIcon className="size-4" aria-hidden />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{row.title}</span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground/70">{type?.label ?? "Request"}</span>
+                          {row.meta ? <span className="truncate">{row.meta}</span> : null}
                           {row.risk ? (
-                            <span className="w-fit rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                            <span className="rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
                               {row.risk}
                             </span>
                           ) : null}
                         </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="cf-numeric whitespace-nowrap text-sm font-semibold tabular-nums">
+                      </span>
+                      {row.amount != null ? (
+                        <span className="cf-numeric hidden shrink-0 text-sm font-semibold tabular-nums sm:block">
                           {fmtEtb(row.amount)}
                         </span>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status="submitted" />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 text-xs font-semibold transition-colors",
-                            "text-muted-foreground group-hover:text-primary",
-                          )}
-                        >
-                          Review <ChevronRight className="size-3.5" aria-hidden />
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-              </Table>
-            </SectionCard>
-          ) : null}
-
+                      ) : null}
+                      <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-primary">
+                        Review
+                        <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </SectionCard>
+      ) : (
+        <div className="space-y-4">
           {selected ? (
             <SectionCard
               title={selected.title}
@@ -1387,7 +1129,7 @@ export default function ApprovalsView({
 
                 {canDecide ? (
                   <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-border bg-card pt-3">
-                    <Button size="sm" onClick={() => decideRow("approved")}>
+                    <Button size="sm" onClick={() => setConfirmApprove(true)}>
                       Approve
                     </Button>
                     <Button
@@ -1406,7 +1148,7 @@ export default function ApprovalsView({
                 )}
               </div>
             </SectionCard>
-          ) : detailRoute ? (
+          ) : (
             <SectionCard>
               <p className="py-5 text-center text-sm text-muted-foreground">
                 {detailLoading
@@ -1414,19 +1156,26 @@ export default function ApprovalsView({
                   : "This request is no longer awaiting a decision, or it could not be found."}
               </p>
             </SectionCard>
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center">
-              <span className="mb-3 flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <ClipboardList className="size-5" aria-hidden />
-              </span>
-              <p className="text-sm font-semibold">Choose a request to review</p>
-              <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
-                Select any row above to see its details and available decision actions.
-              </p>
-            </div>
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmApprove}
+        onOpenChange={setConfirmApprove}
+        destructive={false}
+        title={`Approve ${selected?.title ?? "this request"}?`}
+        description={
+          selected
+            ? `${APPROVAL_TYPES.find((t) => t.id === selected.kind)?.label ?? "Request"} · ${fmtEtb(selected.amount)}${decisionNote.trim() ? " · your note is sent with it" : ""}`
+            : undefined
+        }
+        confirmLabel="Approve"
+        onConfirm={async () => {
+          setConfirmApprove(false);
+          await decideRow("approved");
+        }}
+      />
     </PageContainer>
   );
 }

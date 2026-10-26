@@ -28,6 +28,7 @@ import type {
   AssetOwner,
   EntityStatus,
   FarmArea,
+  FarmAreaInput,
   OrganizationType,
   VendorRecord,
 } from "@/types/cropfort-modules";
@@ -156,7 +157,7 @@ export function useDeleteOrganization() {
 export function useCreateFarmArea() {
   const invalidate = useInvalidateOrgMap();
   return useMutation({
-    mutationFn: (input: Omit<FarmArea, "id" | "createdAt">) => createFarmArea(input),
+    mutationFn: (input: FarmAreaInput) => createFarmArea(input),
     onSuccess: () => invalidate(),
   });
 }
@@ -164,8 +165,7 @@ export function useCreateFarmArea() {
 export function useUpdateFarmArea() {
   const invalidate = useInvalidateOrgMap();
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: Omit<FarmArea, "id" | "createdAt"> }) =>
-      updateFarmArea(id, input),
+    mutationFn: ({ id, input }: { id: string; input: FarmAreaInput }) => updateFarmArea(id, input),
     onSuccess: () => invalidate(),
   });
 }

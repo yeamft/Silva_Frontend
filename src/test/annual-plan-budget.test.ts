@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultAnnualPlanBudget,
+  resolveMetrics,
   summarizeAnnualBudget,
+  summarizeCategories,
+  summarizeMonthly,
   type BenchmarkActivity,
 } from "@/lib/annual-plan-budget";
 
@@ -95,5 +98,80 @@ describe("annual plan benchmark budgets", () => {
 
   it("uses only the supplied benchmark set", () => {
     expect(summarizeAnnualBudget(defaultAnnualPlanBudget(), activities)).toHaveLength(3);
+  });
+
+  it("rounds benchmark frequency to whole rounds, at least one, as the template does", () => {
+    const rounds = (freqs: (number | null)[]): BenchmarkActivity => ({
+      code: "NU-14",
+      category: "Nursery",
+      subgroup: "Seedbed & sowing",
+      activity: "Mulch material preparation & transport",
+      unit: "load",
+      farms: Object.fromEntries(
+        ["Telli", "Gawi", "Chetu", "Ephrata", "Kamisse", "Shakisso"].map((name, i) => [
+          name,
+          { costPerUnit: freqs[i] == null ? null : 100, manDaysPerUnit: 1, frequency: freqs[i] },
+        ]),
+      ),
+    });
+    const data = defaultAnnualPlanBudget();
+    // Telli 1, Gawi 5, Chetu 1 → 2.33 → 2 (the workbook shows 2, not 2.33)
+    expect(summarizeAnnualBudget(data, [rounds([1, 5, 1, 1, 5, 3])])[0].scenarios.industry_average.frequency).toBe(2);
+    // No industry farms, six-farm 2.5 → 3 for the Expert input pre-fill
+    expect(summarizeAnnualBudget(data, [rounds([null, null, null, 2, 3, null])])[0].scenarios.expert_input.frequency).toBe(3);
+  });
+
+  it("takes the wage bands from Settings", () => {
+    const data = defaultAnnualPlanBudget();
+    data.settings = { band1Pct: 0.1, band2Pct: 0.2 };
+    const row = summarizeAnnualBudget(data, activities).find((item) => item.activity.code === "NU-01")!;
+    expect(row.scenarios.plus_25.wagePerManDay).toBeCloseTo((row.scenarios.industry_average.wagePerManDay ?? 0) * 1.1);
+    expect(row.scenarios.plus_50.wagePerManDay).toBeCloseTo((row.scenarios.industry_average.wagePerManDay ?? 0) * 1.2);
+  });
+
+  it("fills the quantity from the linked category metric unless one is typed", () => {
+    const data = defaultAnnualPlanBudget();
+    data.categoryMetrics.Nursery = { nurserySiteArea: 2 };
+    let row = summarizeAnnualBudget(data, activities).find((item) => item.activity.code === "NU-01")!;
+    expect(row.linkedMetric?.key).toBe("nurserySiteArea");
+    expect(row.quantitySource).toBe("metric");
+    expect(row.selected.totalBudget).toBeCloseTo(2 * 1 * (11000 / 3));
+
+    data.activityInputs["NU-01"] = { quantityPerRound: 5 };
+    row = summarizeAnnualBudget(data, activities).find((item) => item.activity.code === "NU-01")!;
+    expect(row.quantitySource).toBe("typed");
+    expect(row.quantityPerRound).toBe(5);
+  });
+
+  it("calculates the template's derived metrics", () => {
+    const data = defaultAnnualPlanBudget();
+    data.categoryMetrics["Young Coffee"] = { totalTrees: 5000, grossArea: 2 };
+    data.categoryMetrics["Harvesting & Related"] = { grossPlantationArea: 10, averageProductivity: 6 };
+    expect(resolveMetrics(data, "Young Coffee").averageTreesPerHa).toBe(2500);
+    expect(resolveMetrics(data, "Harvesting & Related").totalCleanCoffeeProduction).toBe(60);
+  });
+
+  it("counts every activity with a quantity and phases it across the months", () => {
+    const data = defaultAnnualPlanBudget();
+    data.activityInputs["NU-01"] = { quantityPerRound: 1 };
+    const rows = summarizeAnnualBudget(data, activities);
+    const nu01 = rows.find((item) => item.activity.code === "NU-01")!;
+    expect(nu01.counts).toBe(true);
+    expect(nu01.phasingOk).toBe(true);
+
+    const months = summarizeMonthly(rows, data);
+    // Template phases land clearing 100% in Hidar
+    expect(months[1].cost).toBeCloseTo(nu01.selected.totalBudget ?? 0);
+    expect(months[1].workers).toBeCloseTo((nu01.selected.totalManDays ?? 0) / 26);
+  });
+
+  it("flags a missing rate without blanking the whole category", () => {
+    const data = defaultAnnualPlanBudget();
+    data.activityInputs["NU-01"] = { quantityPerRound: 1 };
+    data.activityInputs["NU-33"] = { quantityPerRound: 4 };
+    const rows = summarizeAnnualBudget(data, activities);
+    const nursery = summarizeCategories(rows, data).categories.find((c) => c.category === "Nursery")!;
+    expect(nursery.missingRates).toBe(1);
+    expect(nursery.planBudget).toBeCloseTo(rows.find((r) => r.activity.code === "NU-01")!.selected.totalBudget ?? 0);
   });
 });

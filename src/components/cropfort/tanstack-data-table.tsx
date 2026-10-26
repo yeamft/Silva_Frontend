@@ -1,7 +1,8 @@
 "use client";
 
-import { flexRender, type Table as TanStackTable } from "@tanstack/react-table";
-import { SearchX } from "lucide-react";
+import { useEffect } from "react";
+import { flexRender, type Row, type Table as TanStackTable } from "@tanstack/react-table";
+import { ArrowDown, ArrowUp, ChevronsUpDown, SearchX } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -23,6 +24,8 @@ type DataTableProps<TData> = {
   pageSizeOptions?: number[];
   className?: string;
   containerClassName?: string;
+  /** Makes rows clickable (and Enter/Space-activatable), e.g. to open a detail drawer. */
+  onRowClick?: (row: Row<TData>) => void;
 };
 
 /**
@@ -38,6 +41,7 @@ export function DataTable<TData>({
   pageSizeOptions = [10, 25, 50],
   className,
   containerClassName,
+  onRowClick,
 }: DataTableProps<TData>) {
   const rows = table.getRowModel().rows;
   const colCount = table.getVisibleLeafColumns().length;
@@ -51,6 +55,11 @@ export function DataTable<TData>({
   } catch {
     filtered = table.getCoreRowModel().rows.length;
   }
+
+  // Filtering can shrink the row set below the current page — pull back to the last real page
+  useEffect(() => {
+    if (pageCount > 0 && pagination.pageIndex > pageCount - 1) table.setPageIndex(pageCount - 1);
+  }, [pageCount, pagination.pageIndex, table]);
 
   return (
     <div className={cn("space-y-0", className)}>
@@ -93,9 +102,13 @@ export function DataTable<TData>({
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        <span className="text-[10px] opacity-60" aria-hidden>
-                          {sorted === "asc" ? "↑" : sorted === "desc" ? "↓" : "↕"}
-                        </span>
+                        {sorted === "asc" ? (
+                          <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        ) : sorted === "desc" ? (
+                          <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        ) : (
+                          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />
+                        )}
                       </button>
                     ) : (
                       flexRender(header.column.columnDef.header, header.getContext())
@@ -106,7 +119,7 @@ export function DataTable<TData>({
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody>
+        <TableBody key={pagination.pageIndex} className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
           {loading ? (
             <TableSkeleton rows={5} columns={colCount || 4} />
           ) : rows.length === 0 ? (
@@ -118,7 +131,24 @@ export function DataTable<TData>({
             />
           ) : (
             rows.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined}>
+              <TableRow
+                key={row.id}
+                data-state={row.getIsSelected() ? "selected" : undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (e) => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onRowClick(row);
+                        }
+                      }
+                    : undefined
+                }
+                tabIndex={onRowClick ? 0 : undefined}
+                className={cn(onRowClick && "cf-focus focus-visible:bg-muted/40")}
+              >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell
                     key={cell.id}

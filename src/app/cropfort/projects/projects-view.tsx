@@ -284,7 +284,7 @@ export default function ProjectsView() {
       {!blocks.length ? (
         <p className="mb-3 rounded-lg border px-3 py-2 text-sm text-muted-foreground">
           No blocks.{" "}
-          <Link className="underline" href={CROPFORT_ROUTES.blocks}>
+          <Link className="underline" href={CROPFORT_ROUTES.farmAreas}>
             Blocks
           </Link>
         </p>

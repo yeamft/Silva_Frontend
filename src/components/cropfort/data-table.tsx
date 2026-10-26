@@ -52,10 +52,26 @@ export function TableToolbar({
           type="search"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && search) {
+              e.preventDefault();
+              onSearchChange("");
+            }
+          }}
           placeholder={searchPlaceholder}
           aria-label={searchPlaceholder}
-          className="h-11 pl-8 sm:h-9"
+          className="h-11 pl-8 pr-9 sm:h-9 [&::-webkit-search-cancel-button]:hidden"
         />
+        {search ? (
+          <button
+            type="button"
+            onClick={() => onSearchChange("")}
+            aria-label="Clear search"
+            className="cf-focus absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ) : null}
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
@@ -138,7 +154,7 @@ export function TablePagination({
           </label>
         ) : null}
 
-        <div className="flex items-center gap-1">
+        <nav className="flex items-center gap-1" aria-label="Pagination">
           <Button
             variant="outline"
             size="icon-sm"
@@ -148,9 +164,30 @@ export function TablePagination({
           >
             <ChevronLeft className="h-4 w-4" aria-hidden />
           </Button>
-          <span className="px-2 text-xs text-muted-foreground">
+          <span className="px-2 text-xs text-muted-foreground sm:hidden">
             Page <span className="cf-numeric font-medium text-foreground">{page}</span> of{" "}
             <span className="cf-numeric font-medium text-foreground">{Math.max(pageCount, 1)}</span>
+          </span>
+          <span className="hidden items-center gap-1 sm:flex">
+            {pageWindow(page, Math.max(pageCount, 1)).map((item, i) =>
+              item === "gap" ? (
+                <span key={`gap-${i}`} className="w-6 text-center text-xs text-muted-foreground" aria-hidden>
+                  …
+                </span>
+              ) : (
+                <Button
+                  key={item}
+                  variant={item === page ? "default" : "ghost"}
+                  size="icon-sm"
+                  className="cf-numeric w-auto min-w-8 px-2 text-xs"
+                  aria-label={`Page ${item}`}
+                  aria-current={item === page ? "page" : undefined}
+                  onClick={() => onPageChange(item)}
+                >
+                  {item}
+                </Button>
+              ),
+            )}
           </span>
           <Button
             variant="outline"
@@ -161,10 +198,25 @@ export function TablePagination({
           >
             <ChevronRight className="h-4 w-4" aria-hidden />
           </Button>
-        </div>
+        </nav>
       </div>
     </div>
   );
+}
+
+/** Page numbers to show: first, last, and a window around the current page, with gaps between. */
+export function pageWindow(page: number, pageCount: number): Array<number | "gap"> {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i + 1);
+  const pages = new Set([1, pageCount, page - 1, page, page + 1]);
+  if (page <= 3) [2, 3, 4].forEach((p) => pages.add(p));
+  if (page >= pageCount - 2) [pageCount - 3, pageCount - 2, pageCount - 1].forEach((p) => pages.add(p));
+  const sorted = [...pages].filter((p) => p >= 1 && p <= pageCount).sort((a, b) => a - b);
+  const out: Array<number | "gap"> = [];
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) out.push("gap");
+    out.push(p);
+  });
+  return out;
 }
 
 /** Skeleton rows so tables don't collapse while data loads. */
@@ -175,7 +227,10 @@ export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; column
         <TableRow key={r} className="hover:bg-transparent">
           {Array.from({ length: columns }).map((__, c) => (
             <TableCell key={c}>
-              <Skeleton className={cn("h-4", c === 0 ? "w-40" : "w-20")} />
+              <Skeleton
+                className="h-4"
+                style={{ width: c === 0 ? `${55 + ((r * 17) % 30)}%` : `${35 + (((r + 1) * (c + 3) * 13) % 40)}%` }}
+              />
             </TableCell>
           ))}
         </TableRow>

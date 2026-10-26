@@ -371,9 +371,6 @@ export default function FarmMapPage() {
                 <Button asChild variant="outline" size="sm">
                   <Link href={CROPFORT_ROUTES.farmAreas}>Open farm areas</Link>
                 </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link href={CROPFORT_ROUTES.blocks}>Open blocks</Link>
-                </Button>
               </div>
             </div>
           ) : null}

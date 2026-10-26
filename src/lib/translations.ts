@@ -281,7 +281,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     pos_each: "each",
     pos_remaining: "Remaining",
     login_tagline: "Coffee Farm OS",
-    login_welcomeTitle: "Welcome back",
+    login_welcomeTitle: "Sign in",
     login_passwordLabel: "Password",
     login_showPassword: "Show password",
     login_hidePassword: "Hide password",

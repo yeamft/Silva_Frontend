@@ -5,6 +5,7 @@ import type {
   AssetOwner,
   EntityStatus,
   FarmArea,
+  FarmAreaInput,
   FarmBlockRef,
   FarmMapRow,
   OrganizationType,
@@ -84,14 +85,11 @@ export async function getFarmAreas(): Promise<FarmArea[]> {
   return call("/org-map/farm-areas");
 }
 
-export async function createFarmArea(input: Omit<FarmArea, "id" | "createdAt">): Promise<FarmArea> {
+export async function createFarmArea(input: FarmAreaInput): Promise<FarmArea> {
   return call("/org-map/farm-areas", { method: "POST", body: input });
 }
 
-export async function updateFarmArea(
-  id: string,
-  input: Omit<FarmArea, "id" | "createdAt">,
-): Promise<FarmArea> {
+export async function updateFarmArea(id: string, input: FarmAreaInput): Promise<FarmArea> {
   return call(`/org-map/farm-areas/${id}`, { method: "PATCH", body: input });
 }
 

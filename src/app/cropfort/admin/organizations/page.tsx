@@ -1,10 +1,7 @@
-import dynamic from "next/dynamic";
-import { PageSkeleton } from "@/components/cropfort/page-skeleton";
+import { redirect } from "next/navigation";
+import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 
-const View = dynamic(() => import("./organizations-view"), {
-  loading: () => <PageSkeleton cards={2} />,
-});
-
-export default function OrganizationsPage() {
-  return <View />;
+/** Blocks and organizations are managed from Farm areas now; keep old links working. */
+export default function LegacyAdminPage() {
+  redirect(CROPFORT_ROUTES.farmAreas);
 }

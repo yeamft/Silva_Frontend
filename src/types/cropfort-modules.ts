@@ -181,6 +181,25 @@ export interface FarmArea {
   createdAt: string;
 }
 
+/** One block row edited inline in the farm area form; rows without an id are created. */
+export interface FarmAreaBlockInput {
+  id?: string;
+  code: string;
+  name?: string;
+  hectares?: number | null;
+}
+
+/** Create/update payload. The server assigns the estate owner when no organization is given. */
+export interface FarmAreaInput {
+  name: string;
+  organizationId?: string;
+  totalHectares: number;
+  status: EntityStatus;
+  blocks?: FarmAreaBlockInput[];
+  vendorIds: string[];
+  assetOwnerIds: string[];
+}
+
 export interface VendorRecord {
   id: string;
   name: string;

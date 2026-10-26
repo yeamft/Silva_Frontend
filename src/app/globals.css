@@ -195,6 +195,12 @@
     @apply border-border;
   }
 
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans, var(--font-plus-jakarta)), ui-sans-serif, system-ui, sans-serif;

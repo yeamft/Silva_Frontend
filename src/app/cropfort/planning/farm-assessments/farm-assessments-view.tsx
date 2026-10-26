@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, FileEdit, Plus, Search, ThumbsUp, Clock } from "lucide-react";
+import { AlertCircle, ClipboardCheck, FileEdit, Plus, Search, ThumbsUp, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { CompactSummaryCards, PageContainer, PageHeader, SectionCard, EmptyState } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CROPFORT_ROUTES } from "@/config/navigation";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import {
   listFarmAssessments, getAssessmentCounts, createFarmAssessment,
@@ -55,11 +56,12 @@ export default function FarmAssessmentsView() {
     search: string;
   }>({ status: "", search: "" });
 
+  const search = useDebouncedValue(filters.search.trim(), 300);
   const listQuery = useQuery({
-    queryKey: ["farm-assessments", activeProgram?.id, filters],
+    queryKey: ["farm-assessments", activeProgram?.id, filters.status, search],
     queryFn: () => listFarmAssessments({
       status: filters.status || undefined,
-      search: filters.search || undefined,
+      search: search || undefined,
     }),
     enabled,
   });
@@ -87,11 +89,19 @@ export default function FarmAssessmentsView() {
 
       <CompactSummaryCards
         label="Assessment summary"
-        items={[
-          { id: "draft", label: "Draft", value: String(countsQuery.data?.draft ?? "—"), icon: FileEdit, onClick: () => setFilters((f) => ({ ...f, status: f.status === "draft" ? "" : "draft" })) },
-          { id: "submitted", label: "Awaiting review", value: String(countsQuery.data?.submitted ?? "—"), icon: Clock, onClick: () => setFilters((f) => ({ ...f, status: f.status === "submitted" ? "" : "submitted" })) },
-          { id: "approved", label: "Approved", value: String(countsQuery.data?.approved ?? "—"), icon: ThumbsUp, onClick: () => setFilters((f) => ({ ...f, status: f.status === "approved" ? "" : "approved" })) },
-        ]}
+        items={(
+          [
+            { id: "draft", label: "Draft", icon: FileEdit },
+            { id: "submitted", label: "Awaiting review", icon: Clock },
+            { id: "changes_requested", label: "Changes requested", icon: AlertCircle },
+            { id: "approved", label: "Approved", icon: ThumbsUp },
+          ] as const
+        ).map((card) => ({
+          ...card,
+          value: String(countsQuery.data?.[card.id] ?? "—"),
+          active: filters.status === card.id,
+          onClick: () => setFilters((f) => ({ ...f, status: f.status === card.id ? "" : card.id })),
+        }))}
       />
 
       <SectionCard
@@ -103,7 +113,7 @@ export default function FarmAssessmentsView() {
               <Input
                 value={filters.search}
                 onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-                placeholder="Search assessments…"
+                placeholder="Search title or farm"
                 className="h-8 w-52 pl-9 text-sm"
                 aria-label="Search farm assessments"
               />
@@ -112,7 +122,7 @@ export default function FarmAssessmentsView() {
               value={filters.status || "all"}
               onValueChange={(v) => setFilters((f) => ({ ...f, status: v === "all" ? "" : v as AssessmentStatus }))}
             >
-              <SelectTrigger className="h-8 w-40 text-sm">
+              <SelectTrigger className="h-8 w-40 text-sm" aria-label="Filter by status">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -137,8 +147,8 @@ export default function FarmAssessmentsView() {
         ) : listQuery.data?.length === 0 ? (
           <EmptyState
             icon={ClipboardCheck}
-            title="No farm assessments yet"
-            description="Create an assessment to record farm conditions and operational recommendations."
+            title={filters.status || search ? "No matching assessments" : "No farm assessments yet"}
+            description={filters.status || search ? "No assessments match these filters." : "Create an assessment to record farm conditions and operational recommendations."}
             action={canCreateAssessment(user.role) ? (
               <Button size="sm" onClick={() => setCreateOpen(true)}>
                 <Plus className="size-4" aria-hidden />
@@ -168,58 +178,49 @@ export default function FarmAssessmentsView() {
 
 function AssessmentTable({ rows, onOpen }: { rows: FarmAssessmentSummary[]; onOpen: (id: string) => void }) {
   return (
-    <div className="cf-table-scroll rounded-lg">
-      <Table aria-label="Farm assessments">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="h-11 w-12 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">#</TableHead>
-            <TableHead className="h-11 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assessment</TableHead>
-            <TableHead className="h-11 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Farm area</TableHead>
-            <TableHead className="h-11 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Planning cycle</TableHead>
-            <TableHead className="h-11 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-right">Area (ha)</TableHead>
-            <TableHead className="h-11 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-right">Recs</TableHead>
-            <TableHead className="h-11 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</TableHead>
-            <TableHead className="h-11 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Linked plan</TableHead>
-            <TableHead className="h-11 w-20 bg-muted/50" />
+    <Table aria-label="Farm assessments">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Assessment</TableHead>
+          <TableHead>Farm area</TableHead>
+          <TableHead className="text-right">Area (ha)</TableHead>
+          <TableHead className="text-right">Recommendations</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Linked plan</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow
+            key={row.id}
+            className="cursor-pointer"
+            tabIndex={0}
+            onClick={() => onOpen(row.id)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(row.id); } }}
+          >
+            <TableCell className="min-w-[220px] py-3">
+              <p className="font-medium leading-snug text-foreground">{row.title || "Untitled assessment"}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {[
+                  row.assessmentPurpose ? PURPOSE_LABELS[row.assessmentPurpose] ?? row.assessmentPurpose : null,
+                  row.cycleLabel,
+                  row.assessmentDate ? new Date(row.assessmentDate).toLocaleDateString() : null,
+                ].filter(Boolean).join(" · ")}
+              </p>
+            </TableCell>
+            <TableCell className="min-w-[140px]">{row.farmName || "—"}</TableCell>
+            <TableCell className="text-right tabular-nums text-muted-foreground">
+              {row.assessedAreaHa != null ? row.assessedAreaHa.toFixed(1) : "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums text-muted-foreground">{row.recommendationsCount}</TableCell>
+            <TableCell className="min-w-[140px]">
+              <StatusBadge status={row.status} label={STATUS_LABELS[row.status]} />
+            </TableCell>
+            <TableCell className="min-w-[160px] text-sm text-muted-foreground">{row.planName || "—"}</TableCell>
           </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, i) => (
-            <TableRow
-              key={row.id}
-              className="cursor-pointer border-b-border/70 odd:bg-background even:bg-muted/15 transition-colors hover:bg-primary/5"
-              tabIndex={0}
-              onClick={() => onOpen(row.id)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(row.id); } }}
-            >
-              <TableCell className="w-12 py-3.5 text-sm tabular-nums text-muted-foreground">{i + 1}</TableCell>
-              <TableCell className="min-w-[220px] py-3.5">
-                <p className="font-semibold text-foreground leading-snug">{row.title || "Untitled assessment"}</p>
-                {row.assessmentDate ? (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {new Date(row.assessmentDate).toLocaleDateString()}
-                    {row.assessmentPurpose ? ` · ${PURPOSE_LABELS[row.assessmentPurpose] ?? row.assessmentPurpose}` : ""}
-                  </p>
-                ) : null}
-              </TableCell>
-              <TableCell className="min-w-[140px] font-medium text-foreground/85">{row.farmName || "—"}</TableCell>
-              <TableCell className="min-w-[140px] text-sm text-muted-foreground">{row.cycleLabel || "—"}</TableCell>
-              <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
-                {row.assessedAreaHa != null ? row.assessedAreaHa.toFixed(1) : "—"}
-              </TableCell>
-              <TableCell className="text-right text-sm tabular-nums text-muted-foreground">{row.recommendationsCount}</TableCell>
-              <TableCell className="min-w-[140px]">
-                <StatusBadge status={row.status} label={STATUS_LABELS[row.status]} />
-              </TableCell>
-              <TableCell className="min-w-[160px] text-sm text-muted-foreground">{row.planName || <span className="text-muted-foreground/50">None</span>}</TableCell>
-              <TableCell className="text-right">
-                <span className="text-sm font-medium text-primary">Open →</span>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 

@@ -5,7 +5,13 @@ import Link from "next/link";
 import { MoreHorizontal, Plus, SearchX, UserCheck, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
-import { TableMessageRow, TablePagination, TableSkeleton, TableToolbar } from "@/components/cropfort/data-table";
+import {
+  MultiSelectFilter,
+  TableMessageRow,
+  TablePagination,
+  TableSkeleton,
+  TableToolbar,
+} from "@/components/cropfort/data-table";
 import { FormField } from "@/components/cropfort/form-field";
 import { MultiCheck } from "@/components/cropfort/multi-check";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
@@ -310,7 +316,7 @@ export default function UsersAdminPage() {
       />
 
       <SectionCard flush>
-        <div className="space-y-3 border-b px-4 py-3">
+        <div className="border-b px-4 py-3">
           <TableToolbar
             search={search}
             onSearchChange={setSearch}
@@ -323,45 +329,45 @@ export default function UsersAdminPage() {
               setPage(1);
             }}
             filters={
-              <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-                <SelectTrigger className="h-11 min-w-[8.5rem] shrink-0 sm:h-9 sm:w-[140px]" aria-label="Filter by status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="invited">Invited</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                </SelectContent>
-              </Select>
+              <>
+                <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                  <SelectTrigger className="h-11 min-w-[8.5rem] shrink-0 sm:h-8 sm:w-[140px]" aria-label="Filter by status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="invited">Invited</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                  </SelectContent>
+                </Select>
+                <MultiSelectFilter
+                  label="Role"
+                  options={ROLE_OPTIONS}
+                  selected={roleFilter}
+                  onChange={(v) => setRoleFilter(v as CropfortRole[])}
+                />
+                {programs.length > 1 ? (
+                  <MultiSelectFilter
+                    label="Program"
+                    options={programs.map((t) => ({ value: t.tenantId, label: t.tenantName }))}
+                    selected={tenantFilter}
+                    onChange={setTenantFilter}
+                  />
+                ) : null}
+              </>
             }
           />
-          <div className="grid gap-3 lg:grid-cols-2">
-            <MultiCheck
-              legend="Role"
-              options={ROLE_OPTIONS}
-              values={roleFilter}
-              onChange={(v) => setRoleFilter(v as CropfortRole[])}
-            />
-            <MultiCheck
-              legend="Program"
-              options={programs.map((t) => ({ value: t.tenantId, label: t.tenantName }))}
-              values={tenantFilter}
-              onChange={setTenantFilter}
-            />
-          </div>
         </div>
 
         <Table>
           <TableHeader>
             <TableRow>
               <SortableHead label="User" column="name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <SortableHead label="Email" column="email" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <TableHead scope="col">Organization</TableHead>
-              <TableHead scope="col">Access roles</TableHead>
+              <TableHead scope="col">Roles</TableHead>
               <TableHead scope="col">Programs</TableHead>
-              <SortableHead label="Account status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <SortableHead label="Created" column="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead label="Status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead label="Last login" column="lastLoginAt" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <TableHead scope="col" className="text-right">
                 Actions
@@ -370,9 +376,9 @@ export default function UsersAdminPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableSkeleton rows={8} columns={9} />
+              <TableSkeleton rows={8} columns={7} />
             ) : paged.length === 0 ? (
-              <TableMessageRow colSpan={9} icon={SearchX} title="No users match" />
+              <TableMessageRow colSpan={7} icon={SearchX} title="No users match" />
             ) : (
               paged.map((u) => (
                 <TableRow key={u.id} className="group">
@@ -394,9 +400,6 @@ export default function UsersAdminPage() {
                         <p className="truncate text-xs text-muted-foreground">{u.email}</p>
                       </div>
                     </div>
-                  </TableCell>
-                  <TableCell className="max-w-[16rem] truncate text-muted-foreground" title={u.email}>
-                    {u.email}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -460,35 +463,11 @@ export default function UsersAdminPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-col items-start gap-1">
-                      <StatusBadge
-                        status={u.status}
-                        label={
-                          u.status === "invited"
-                            ? "Invitation pending"
-                            : u.status === "active"
-                              ? "Active"
-                              : "Suspended"
-                        }
-                        className="whitespace-nowrap"
-                      />
-                      <span className="text-[11px] leading-tight text-muted-foreground">
-                        {u.status === "invited"
-                          ? "Awaiting activation"
-                          : u.status === "active"
-                            ? "Sign-in enabled"
-                            : "Sign-in blocked"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    <time dateTime={u.createdAt}>
-                      {new Date(u.createdAt).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </time>
+                    <StatusBadge
+                      status={u.status}
+                      label={u.status === "invited" ? "Invited" : u.status === "active" ? "Active" : "Suspended"}
+                      className="whitespace-nowrap"
+                    />
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                     {u.lastLoginAt ? (
