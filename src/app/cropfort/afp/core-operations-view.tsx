@@ -497,6 +497,11 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
     <PageContainer>
       <PageHeader
         title="Core Operations"
+        breadcrumbs={[
+          { label: "Home", href: CROPFORT_ROUTES.dashboard },
+          { label: "Planning", href: CROPFORT_ROUTES.coreOperations },
+          { label: "Core Operations" },
+        ]}
       />
 
       {/* Steps */}

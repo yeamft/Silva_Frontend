@@ -2,15 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useNavigation } from "@/hooks/use-navigation";
-import { useCropfortAuth } from "@/components/navigation/auth-context";
-import { CROPFORT_ROLE_LABELS } from "@/types/cropfort";
-import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -49,7 +45,12 @@ function WorkspaceLinks() {
       <SidebarGroupContent>
         <SidebarMenu>
           {workspaces
-            .filter((workspace) => workspace.id !== "execution" && workspace.id !== "performance")
+            .filter(
+              (workspace) =>
+                workspace.id !== "overview" &&
+                workspace.id !== "execution" &&
+                workspace.id !== "performance",
+            )
             .map((workspace) => {
               const active = isWorkspaceActive(workspace.id);
               const Icon = workspace.icon;
@@ -189,10 +190,6 @@ function WorkspaceLinks() {
 }
 
 export function MainNav() {
-  const { user } = useCropfortAuth();
-  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
-  const collapsed = state === "collapsed";
-
   return (
     <Sidebar
       collapsible="icon"
@@ -220,54 +217,6 @@ export function MainNav() {
       <SidebarContent className="cf-scroll gap-0 bg-sidebar">
         <WorkspaceLinks />
       </SidebarContent>
-
-      <SidebarFooter className="border-t border-sidebar-border bg-sidebar-accent/10 p-2">
-        <div className="mb-1 flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 group-data-[collapsible=icon]:justify-center">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-[11px] font-semibold text-sidebar-accent-foreground">
-            {user.name
-              .split(/\s+/)
-              .filter(Boolean)
-              .map((part) => part[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase()}
-          </span>
-          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-xs font-medium text-sidebar-foreground">{user.name}</p>
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => (isMobile ? setOpenMobile(false) : toggleSidebar())}
-          aria-label={
-            isMobile
-              ? "Close navigation"
-              : collapsed
-                ? "Expand sidebar"
-                : "Collapse sidebar"
-          }
-          title={
-            isMobile
-              ? "Close navigation"
-              : collapsed
-                ? "Expand sidebar"
-                : "Collapse sidebar"
-          }
-          className="h-10 w-full justify-start gap-3 rounded-lg px-3 text-xs font-medium text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-        >
-          {isMobile ? (
-            <PanelLeftClose className="h-4 w-4" aria-hidden />
-          ) : collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" aria-hidden />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" aria-hidden />
-          )}
-          <span className="group-data-[collapsible=icon]:hidden">
-            {isMobile ? "Close navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          </span>
-        </Button>
-      </SidebarFooter>
     </Sidebar>
   );
 }

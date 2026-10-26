@@ -184,6 +184,7 @@ const LEGACY_COLOR_MAP: Record<string, WorkspaceColorId> = {
 export const ROLE_WORKSPACE_COLOR: Record<CropfortRole, WorkspaceColorId> = {
   bagro_office: "light-green",
   farm_owner: "light-green",
+  farm_owner_viewer: "light-green",
   field_supervisor: "light-green",
   spx_validator: "light-green",
   spx_platform_admin: "light-green",

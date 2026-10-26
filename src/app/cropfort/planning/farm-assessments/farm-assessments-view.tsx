@@ -73,7 +73,7 @@ export default function FarmAssessmentsView() {
         title="Farm Assessments"
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Planning" },
+          { label: "Planning", href: CROPFORT_ROUTES.coreOperations },
           { label: "Farm Assessments" },
         ]}
         meta={undefined}
@@ -259,7 +259,7 @@ function NewAssessmentDialog({
   const autoTitle = useMemo(() => {
     const farm = selectedFarm?.name || "";
     const cycle = planYear ? `${planYear} Programme` : "";
-    if (farm && cycle) return `${farm} Annual Farm Assessment — ${cycle}`;
+    if (farm && cycle) return `${farm} Annual Farm Assessment ${cycle}`;
     if (farm) return `${farm} Annual Farm Assessment`;
     return "";
   }, [selectedFarm, planYear]);

@@ -33,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { canManageUsers } from "@/lib/cropfortAccess";
@@ -52,7 +53,7 @@ import { CROPFORT_ROLE_LABELS, type CropfortRole } from "@/types/cropfort";
 import type { AccountStatus, AdminUser, UserOrgKind } from "@/types/cropfort-modules";
 import { USER_ORG_LABELS } from "@/types/cropfort-modules";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const ROLE_OPTIONS = (Object.keys(CROPFORT_ROLE_LABELS) as CropfortRole[]).map((value) => ({
   value,
@@ -141,6 +142,7 @@ export default function UsersAdminPage() {
   const [sortKey, setSortKey] = useState("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
@@ -199,12 +201,16 @@ export default function UsersAdminPage() {
     });
   }, [rows, debouncedSearch, status, roleFilter, tenantFilter, sortKey, sortDir]);
 
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+  const paged = visible.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, status, roleFilter, tenantFilter]);
+  }, [debouncedSearch, status, roleFilter, tenantFilter, sortKey, sortDir]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
 
   const onSort = (column: string) => {
     if (sortKey === column) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -280,6 +286,7 @@ export default function UsersAdminPage() {
     <PageContainer>
       <PageHeader
         title="Users"
+        description="Find accounts, review access, and manage program assignments."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button variant="outline" size="sm" className="h-11 w-full sm:h-9 sm:w-auto" asChild>
@@ -313,6 +320,7 @@ export default function UsersAdminPage() {
               setStatus("all");
               setRoleFilter([]);
               setTenantFilter([]);
+              setPage(1);
             }}
             filters={
               <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
@@ -347,12 +355,12 @@ export default function UsersAdminPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <SortableHead label="Name" column="name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead label="User" column="name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead label="Email" column="email" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <TableHead scope="col">Organization</TableHead>
-              <TableHead scope="col">Roles</TableHead>
-              <TableHead scope="col">Tenants</TableHead>
-              <SortableHead label="Status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <TableHead scope="col">Access roles</TableHead>
+              <TableHead scope="col">Programs</TableHead>
+              <SortableHead label="Account status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead label="Created" column="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead label="Last login" column="lastLoginAt" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <TableHead scope="col" className="text-right">
@@ -367,39 +375,143 @@ export default function UsersAdminPage() {
               <TableMessageRow colSpan={9} icon={SearchX} title="No users match" />
             ) : (
               paged.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                  <TableCell>{USER_ORG_LABELS[u.organization]}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {u.roles.map((r) => (
-                        <RoleBadge key={r} role={r} />
-                      ))}
+                <TableRow key={u.id} className="group">
+                  <TableCell className="min-w-[15rem]">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar className="h-9 w-9 shrink-0 border border-border/70">
+                        <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                          {u.name
+                            .split(/\s+/)
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((part) => part[0])
+                            .join("")
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground">{u.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                      </div>
                     </div>
                   </TableCell>
+                  <TableCell className="max-w-[16rem] truncate text-muted-foreground" title={u.email}>
+                    {u.email}
+                  </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {u.tenants.map((t) => (
-                        <Badge key={t.tenantId} variant="muted">
-                          {t.tenantName}
-                        </Badge>
-                      ))}
+                    <Badge
+                      variant="outline"
+                      className="whitespace-nowrap bg-background font-medium text-muted-foreground"
+                    >
+                      {USER_ORG_LABELS[u.organization]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {u.roles.length > 0 ? (
+                      <div
+                        className="flex max-w-[15rem] flex-wrap items-center gap-1"
+                        aria-label={`${u.roles.length} access role${u.roles.length === 1 ? "" : "s"}: ${u.roles.map((role) => CROPFORT_ROLE_LABELS[role]).join(", ")}`}
+                      >
+                        {u.roles.slice(0, 2).map((role) => (
+                          <RoleBadge key={role} role={role} />
+                        ))}
+                        {u.roles.length > 2 ? (
+                          <Badge
+                            variant="secondary"
+                            className="h-6 px-2 text-[11px]"
+                            title={u.roles.slice(2).map((role) => CROPFORT_ROLE_LABELS[role]).join(", ")}
+                          >
+                            +{u.roles.length - 2} more
+                          </Badge>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">No roles assigned</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {u.tenants.length > 0 ? (
+                      <div
+                        className="flex max-w-[14rem] flex-wrap items-center gap-1"
+                        aria-label={`${u.tenants.length} assigned program${u.tenants.length === 1 ? "" : "s"}: ${u.tenants.map((tenant) => tenant.tenantName).join(", ")}`}
+                      >
+                        {u.tenants.slice(0, 2).map((tenant) => (
+                          <Badge
+                            key={tenant.tenantId}
+                            variant="muted"
+                            className="h-6 max-w-[9rem] truncate px-2 text-[11px]"
+                            title={tenant.tenantName}
+                          >
+                            {tenant.tenantName}
+                          </Badge>
+                        ))}
+                        {u.tenants.length > 2 ? (
+                          <Badge
+                            variant="secondary"
+                            className="h-6 px-2 text-[11px]"
+                            title={u.tenants.slice(2).map((tenant) => tenant.tenantName).join(", ")}
+                          >
+                            +{u.tenants.length - 2} more
+                          </Badge>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">No programs assigned</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-start gap-1">
+                      <StatusBadge
+                        status={u.status}
+                        label={
+                          u.status === "invited"
+                            ? "Invitation pending"
+                            : u.status === "active"
+                              ? "Active"
+                              : "Suspended"
+                        }
+                        className="whitespace-nowrap"
+                      />
+                      <span className="text-[11px] leading-tight text-muted-foreground">
+                        {u.status === "invited"
+                          ? "Awaiting activation"
+                          : u.status === "active"
+                            ? "Sign-in enabled"
+                            : "Sign-in blocked"}
+                      </span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <StatusBadge status={u.status} />
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    <time dateTime={u.createdAt}>
+                      {new Date(u.createdAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </time>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {new Date(u.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "Never"}
+                    {u.lastLoginAt ? (
+                      <time dateTime={u.lastLoginAt}>
+                        {new Date(u.lastLoginAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </time>
+                    ) : (
+                      <span className="text-muted-foreground/80">Never logged in</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${u.name}`}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground opacity-70 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                          aria-label={`Actions for ${u.name}`}
+                        >
                           <MoreHorizontal className="h-4 w-4" aria-hidden />
                         </Button>
                       </DropdownMenuTrigger>
@@ -430,7 +542,18 @@ export default function UsersAdminPage() {
             )}
           </TableBody>
         </Table>
-        <TablePagination page={page} pageCount={pageCount} total={visible.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <TablePagination
+          page={page}
+          pageCount={pageCount}
+          total={visible.length}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
       </SectionCard>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>

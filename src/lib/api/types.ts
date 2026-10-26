@@ -51,6 +51,8 @@ export interface AuthTenant {
 export interface MeResponse {
   user: AuthUser;
   tenant: AuthTenant;
+  /** Cropfort roles assigned to the user in the active program. */
+  cropfortRoles?: string[];
   activeProgram: {
     id: string;
     name: string;

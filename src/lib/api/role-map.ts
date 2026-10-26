@@ -15,12 +15,18 @@ export function mapBackendRole(role: string): FieldUserRole {
   return "spx_principal";
 }
 
-export function mapToCropfortRole(role: string): CropfortRole {
+export function mapToCropfortRole(role: string, programRoles: string[] = []): CropfortRole {
   const desk = mapBackendRole(role);
   if (desk === "silva_owner") return "farm_owner";
+  if (role === "system_admin") return "spx_platform_admin";
+  if (programRoles.includes("farm_owner")) return "farm_owner";
+  if (programRoles.includes("farm_owner_viewer")) return "farm_owner_viewer";
+  if (programRoles.includes("spx_platform_admin")) return "spx_platform_admin";
+  if (programRoles.includes("spx_validator")) return "spx_validator";
+  if (programRoles.includes("field_supervisor")) return "field_supervisor";
+  if (programRoles.includes("bagro_office")) return "bagro_office";
   // Vendor users act as the Vendor party on field tickets (not site owner).
   if (desk === "vendor_lead" || role.startsWith("vendor_")) return "bagro_office";
-  if (role === "system_admin") return "spx_platform_admin";
   return "spx_validator";
 }
 

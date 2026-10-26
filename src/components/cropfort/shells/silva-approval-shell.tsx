@@ -18,6 +18,23 @@ import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { ActivePlanSync } from "@/components/navigation/active-plan-sync";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarSeparator,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 import { cn } from "@/lib/utils";
 
@@ -90,13 +107,11 @@ function SessionBanner() {
 export function SilvaApprovalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { activeProgram } = useCropfortAuth();
-  const currentPage = SILVA_NAV.find((item) =>
-    item.match ? item.match(pathname) : pathname.startsWith(item.href),
-  );
 
   return (
-    <div
-      className="flex min-h-[100dvh] overflow-x-hidden bg-background text-foreground"
+    <SidebarProvider
+      style={{ "--sidebar-width": "15rem" } as React.CSSProperties}
+      className="min-h-[100dvh] items-stretch overflow-x-hidden bg-background text-foreground"
       data-desk="silva"
     >
       <a
@@ -106,91 +121,83 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
         Skip to main content
       </a>
 
-      {/* Desktop slim rail — shared sidebar tokens keep the desks visually consistent. */}
-      <aside className="relative z-20 hidden w-60 shrink-0 flex-col border-r border-emerald-900/10 bg-gradient-to-b from-emerald-50 to-sidebar text-sidebar-foreground shadow-[4px_0_20px_-8px_rgba(15,23,20,0.18)] md:flex">
-        <div className="border-b border-emerald-900/10 px-4 pb-5 pt-5">
-          <Link href={CROPFORT_ROUTES.dashboard} className="group flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
+      <Sidebar className="border-sidebar-border bg-gradient-to-b from-emerald-50 to-sidebar">
+        <SidebarHeader className="p-4">
+          <Link
+            href={CROPFORT_ROUTES.dashboard}
+            className="group flex items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Leaf className="size-5" aria-hidden />
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-bold tracking-tight text-sidebar-foreground">Cropfort</span>
+              <span className="block text-sm font-bold tracking-tight text-sidebar-foreground">
+                Cropfort
+              </span>
               <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
                 Asset owner
               </span>
             </span>
           </Link>
-        </div>
-        <nav aria-label="Asset owner desk" className="flex flex-1 flex-col p-3">
-          <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/45">
-            Workspace
+          <SidebarSeparator className="mx-0 mt-2" />
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu aria-label="Asset owner desk">
+                {SILVA_NAV.map((item) => {
+                  const Icon = item.icon;
+                  const active = item.match
+                    ? item.match(pathname)
+                    : pathname.startsWith(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        size="lg"
+                        tooltip={item.label}
+                      >
+                        <Link href={item.href} aria-current={active ? "page" : undefined}>
+                          <Icon aria-hidden />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter>
+          <SidebarSeparator className="mx-0" />
+          <p className="px-2 py-1 text-xs text-sidebar-foreground/60">
+            {activeProgram?.name || "Cropfort"}
           </p>
-          {SILVA_NAV.map((item) => {
-            const Icon = item.icon;
-            const active = item.match
-              ? item.match(pathname)
-              : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[color,background-color,box-shadow,transform] duration-150 ease-out hover:translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:transform-none motion-reduce:transition-none",
-                  active
-                    ? "bg-white font-semibold text-sidebar-accent-foreground shadow-sm ring-1 ring-emerald-900/10"
-                    : "text-sidebar-foreground/70 hover:bg-white/70 hover:text-sidebar-foreground",
-                )}
-                aria-current={active ? "page" : undefined}
-              >
-                {active ? (
-                  <span
-                    className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-sm bg-sidebar-primary"
-                    aria-hidden
-                  />
-                ) : null}
-                <Icon
-                  className={cn(
-                    "size-[18px] shrink-0",
-                    active ? "text-sidebar-primary" : "text-sidebar-foreground/50",
-                  )}
-                  aria-hidden
-                />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </aside>
+        </SidebarFooter>
+      </Sidebar>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-border bg-card shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
+      <SidebarInset
+        id="cropfort-main"
+        tabIndex={-1}
+        className="min-w-0 overflow-x-hidden pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"
+      >
+        <header className="sticky top-0 z-30 border-b border-border bg-card supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
           <div className="flex h-14 items-center gap-3 px-3 sm:px-5">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex">
-                <Leaf className="size-4" aria-hidden />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold tracking-tight text-foreground">
-                  {currentPage?.label || "Home"}
-                </p>
-                <p className="truncate text-[11px] text-muted-foreground">
-                  {activeProgram?.name || "Cropfort"}
-                </p>
-              </div>
-            </div>
+            <SidebarTrigger
+              className="shrink-0 border border-sidebar-border bg-sidebar-accent/70 text-sidebar-foreground hover:bg-sidebar-accent"
+              aria-label="Toggle navigation"
+            />
+            <div className="flex-1" />
             <NotificationBell />
             <UserMenu />
           </div>
           <SessionBanner />
         </header>
 
-        <main
-          id="cropfort-main"
-          className="w-full min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"
-          tabIndex={-1}
-        >
-          {children}
-        </main>
+        {children}
 
         {/* Mobile bottom nav */}
         <nav
@@ -208,28 +215,30 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
                 : pathname.startsWith(item.href);
               return (
                 <li key={item.href}>
-                  <Link
-                    href={item.href}
+                  <Button
+                    asChild
+                    variant="ghost"
                     className={cn(
-                      "flex flex-col items-center gap-0.5 px-0.5 py-2.5 text-[10px] font-medium transition-colors",
+                      "h-auto w-full flex-col gap-0.5 rounded-none px-0.5 py-2.5 text-[10px] font-medium",
                       active
                         ? "text-sidebar-primary"
-                        :                         "text-sidebar-foreground/60 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground motion-reduce:transition-none",
+                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                     )}
-                    aria-current={active ? "page" : undefined}
                   >
-                    <Icon className="h-5 w-5" aria-hidden />
-                    {item.label}
-                  </Link>
+                    <Link href={item.href} aria-current={active ? "page" : undefined}>
+                      <Icon className="size-5" aria-hidden />
+                      {item.label}
+                    </Link>
+                  </Button>
                 </li>
               );
             })}
           </ul>
         </nav>
-      </div>
+      </SidebarInset>
 
       <ActivePlanSync />
       <div id="cropfort-route-announcer" className="sr-only" aria-live="polite" aria-atomic="true" />
-    </div>
+    </SidebarProvider>
   );
 }

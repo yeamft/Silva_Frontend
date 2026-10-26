@@ -32,12 +32,13 @@ export default function FarmAssessmentDetailPage({
   ].filter(Boolean).join(" · ") || "Farm condition report and asset owner review";
 
   return (
-    <PageContainer>
+    <PageContainer className="max-w-4xl">
       <PageHeader
         eyebrow={activeProgram?.name || "Workspace"}
         title={title}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
+          { label: "Planning", href: CROPFORT_ROUTES.coreOperations },
           { label: "Farm Assessments", href: CROPFORT_ROUTES.farmAssessments },
           { label: "Assessment" },
         ]}

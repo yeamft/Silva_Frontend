@@ -3,13 +3,33 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarCheck2,
+  CalendarDays,
+  CheckCircle2,
+  CircleDollarSign,
+  ClipboardList,
+  FileWarning,
+  FolderKanban,
+  Leaf,
+  Sprout,
+  WalletCards,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -28,7 +48,11 @@ import {
 } from "@/components/ui/table";
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { listProgramRateCardProposals } from "@/lib/api/rate-card-proposals";
+import {
+  approveRateCardProposal,
+  listProgramRateCardProposals,
+  rejectRateCardProposal,
+} from "@/lib/api/rate-card-proposals";
 import { PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
 import { cn } from "@/lib/utils";
 import type { CropfortAfeDto } from "@/lib/api/afes";
@@ -52,6 +76,7 @@ import { canApproveAsAssetOwner } from "@/lib/cropfortAccess";
 import { fmtEtb } from "@/store/cropfortOpsStore";
 import { scheduleLabel, scheduleStatusOf } from "@/store/coreOpsPlanStore";
 import { useSpendBandStore } from "@/store/spendBandStore";
+import { listFarmAssessments } from "@/lib/api/farm-assessments";
 import type { AfpPromotion, CoreOpsActivity, CoreOpsPlan } from "@/types/core-ops";
 import type { MonthlyWorkOrder, WeeklyPlan } from "@/types/agronomic-cycle";
 
@@ -67,16 +92,21 @@ function afpPromotionFromPlan(plan: ProgrammePlanDto): AfpPromotion {
   };
 }
 
-type Tab = "afe" | "afp" | "projects" | "interventions" | "monthly" | "weekly";
+type Tab = "afe" | "afp" | "projects" | "interventions" | "monthly" | "weekly" | "rates";
 
-const APPROVAL_TYPES: { id: Tab; label: string }[] = [
-  { id: "afp", label: "Core Operations plans" },
-  { id: "afe", label: "Spending requests" },
-  { id: "projects", label: "Projects" },
-  { id: "interventions", label: "Interventions" },
-  { id: "monthly", label: "Monthly work orders" },
-  { id: "weekly", label: "Weekly plans" },
+const APPROVAL_TYPES: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: "afp", label: "Core Operations plans", icon: Sprout },
+  { id: "afe", label: "Spending requests", icon: CircleDollarSign },
+  { id: "projects", label: "Projects", icon: FolderKanban },
+  { id: "interventions", label: "Interventions", icon: ClipboardList },
+  { id: "monthly", label: "Monthly work orders", icon: CalendarDays },
+  { id: "weekly", label: "Weekly plans", icon: CalendarCheck2 },
+  { id: "rates", label: "Rate cards", icon: WalletCards },
 ];
+
+const OWNER_STATUS_TYPES = APPROVAL_TYPES.filter(
+  ({ id }) => id === "afp" || id === "rates",
+);
 
 function ProjectDetail({ project }: { project: ProjectDto }) {
   const done = project.milestones.filter((m) => m.done).length;
@@ -568,13 +598,20 @@ export default function ApprovalsView() {
   const area = getCropfortArea("approvals");
   const canDecide = canApproveOperations(user.role);
   const canDecideRateCards = canApproveAsAssetOwner(user.role);
+  const farmAssessmentsQuery = useQuery({
+    queryKey: ["farm-assessments-owner", activeProgram?.id],
+    queryFn: () => listFarmAssessments({ status: "submitted" }),
+    enabled: isSilva && Boolean(activeProgram?.id),
+    refetchInterval: 15_000,
+  });
+  const submittedAssessments = farmAssessmentsQuery.data ?? [];
   const rateCardsQuery = useQuery({
     queryKey: ["approval-rate-cards", activeProgram?.id],
     queryFn: () => listProgramRateCardProposals({ status: "submitted", programWide: true }),
     enabled: canDecideRateCards && Boolean(activeProgram?.id),
     refetchInterval: 10_000,
   });
-  const pendingRateCards = rateCardsQuery.data ?? [];
+  const pendingRateCards = useMemo(() => rateCardsQuery.data ?? [], [rateCardsQuery.data]);
   const afesQuery = useAfes(Boolean(activeProgram?.id), "submitted");
   const decideAfe = useDecideAfe();
   const afes = useMemo(() => afesQuery.data || [], [afesQuery.data]);
@@ -663,6 +700,16 @@ export default function ApprovalsView() {
       meta: `${p.weekLabel} · ${p.lines.length} lines`,
       amount: p.lines.reduce((s, l) => s + l.etb, 0),
     }));
+    const rates: QueueRow[] = pendingRateCards.map((card) => ({
+      id: card.id,
+      kind: "rates" as const,
+      title: card.activityName || card.activityCode || "Rate card",
+      meta: [card.kind, card.farmEstateName, card.activityCode]
+        .filter(Boolean)
+        .join(" · "),
+      amount: card.proposedRate,
+      risk: card.flagged ? "Variance flagged" : undefined,
+    }));
     return {
       afe,
       afp,
@@ -670,8 +717,9 @@ export default function ApprovalsView() {
       interventions: interventionsQ,
       monthly,
       weekly,
+      rates,
     };
-  }, [afes, afpPlans, projects, interventions, monthlyOrders, weeklyPlans]);
+  }, [afes, afpPlans, projects, interventions, monthlyOrders, weeklyPlans, pendingRateCards]);
 
   const rows = queues[tab];
   const selected = rows.find((r) => r.id === selectedId) ?? rows[0] ?? null;
@@ -696,6 +744,10 @@ export default function ApprovalsView() {
   const selectedWeekly =
     selected?.kind === "weekly"
       ? weeklyPlans.find((p) => p.id === selected.id) ?? null
+      : null;
+  const selectedRateCard =
+    selected?.kind === "rates"
+      ? pendingRateCards.find((card) => card.id === selected.id) ?? null
       : null;
 
   const decideRow = async (decision: "approved" | "returned") => {
@@ -746,6 +798,13 @@ export default function ApprovalsView() {
           decision: decision === "approved" ? "approve" : "return",
           comment: note,
         });
+      } else if (selected.kind === "rates") {
+        if (decision === "approved") {
+          await approveRateCardProposal(selected.id);
+        } else {
+          await rejectRateCardProposal(selected.id, note || "");
+        }
+        await rateCardsQuery.refetch();
       }
       setSelectedId(null);
       setDecisionNote("");
@@ -759,8 +818,7 @@ export default function ApprovalsView() {
     }
   };
 
-  const otherWaitingTotal = APPROVAL_TYPES.reduce((s, t) => s + queues[t.id].length, 0);
-  const waitingTotal = otherWaitingTotal + pendingRateCards.length;
+  const waitingTotal = APPROVAL_TYPES.reduce((s, t) => s + queues[t.id].length, 0);
 
   useEffect(() => {
     if (queues[tab].length > 0 || waitingTotal === 0) return;
@@ -777,7 +835,7 @@ export default function ApprovalsView() {
         <header className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Approvals</h1>
           <p className="text-sm text-muted-foreground">
-            {waitingTotal} awaiting your decision
+            {waitingTotal + submittedAssessments.length} awaiting your decision
           </p>
           <p className="text-xs text-muted-foreground">
             Review one request at a time, then approve it or request changes.
@@ -801,62 +859,245 @@ export default function ApprovalsView() {
         />
       )}
 
-      {canDecideRateCards &&
-      (pendingRateCards.length > 0 || rateCardsQuery.isLoading || rateCardsQuery.isError) ? (
-        <SectionCard
-          title={`Rate cards awaiting your decision${pendingRateCards.length ? ` (${pendingRateCards.length})` : ""}`}
-          description="Submitted rate cards are reviewed separately from Core Operations and spending requests."
-          flush
-        >
-          {rateCardsQuery.isLoading && pendingRateCards.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">Loading submitted rate cards…</p>
-          ) : rateCardsQuery.isError ? (
-            <div className="flex flex-col gap-2 px-4 py-5 text-sm sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-destructive">
-                Could not load submitted rate cards.{" "}
-                {rateCardsQuery.error instanceof Error ? rateCardsQuery.error.message : ""}
-              </p>
-              <Button size="sm" variant="outline" onClick={() => void rateCardsQuery.refetch()}>
-                Try again
-              </Button>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {pendingRateCards.map((card) => (
-                <li key={card.id}>
-                  <Link
-                    href={`${CROPFORT_ROUTES.rateCardProposals}/${card.id}`}
-                    className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
+      {isSilva ? (
+        <section aria-label="Approval status" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Card
+            className={cn(
+              "overflow-hidden transition-[border-color,background-color,box-shadow] duration-150",
+              submittedAssessments.length > 0
+                ? "border-primary/50 bg-primary/[0.03] shadow-sm"
+                : "hover:border-primary/30 hover:shadow-sm",
+            )}
+          >
+            <Button
+              asChild
+              variant="ghost"
+              className="h-full min-h-32 w-full flex-col items-stretch justify-between gap-4 whitespace-normal rounded-lg p-4 text-left hover:bg-transparent focus-visible:ring-inset"
+            >
+              <Link href={CROPFORT_ROUTES.farmAssessments} aria-label="Open submitted farm assessments">
+                <span className="flex w-full items-center justify-between gap-3">
+                  <span
+                    className={cn(
+                      "flex size-10 shrink-0 items-center justify-center rounded-lg",
+                      submittedAssessments.length > 0
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground",
+                    )}
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
-                        {card.activityName || card.activityCode || "Rate card"}
-                      </span>
-                      <span className="mt-0.5 block text-xs capitalize text-muted-foreground">
-                        {[card.kind, card.farmEstateName, card.activityCode]
-                          .filter(Boolean)
-                          .join(" · ")}
-                        {card.submittedAt
-                          ? ` · Submitted ${new Date(card.submittedAt).toLocaleDateString()}`
-                          : ""}
-                      </span>
+                    <Leaf className="size-5" aria-hidden />
+                  </span>
+                  <span
+                    className={cn(
+                      "cf-numeric text-3xl font-semibold leading-none tabular-nums tracking-tight",
+                      submittedAssessments.length > 0 ? "text-primary" : "text-muted-foreground",
+                    )}
+                  >
+                    {(farmAssessmentsQuery.isLoading || farmAssessmentsQuery.isError) &&
+                    submittedAssessments.length === 0
+                      ? "—"
+                      : submittedAssessments.length}
+                  </span>
+                </span>
+                <span className="block w-full">
+                  <span className="block text-sm font-semibold leading-snug text-foreground">
+                    Farm assessments
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-1 block text-xs",
+                      submittedAssessments.length > 0
+                        ? "font-medium text-primary"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {farmAssessmentsQuery.isError
+                      ? "Could not load assessments"
+                      : submittedAssessments.length > 0
+                      ? `${submittedAssessments.length} ${submittedAssessments.length === 1 ? "item" : "items"} need your review`
+                      : "No items waiting"}
+                  </span>
+                </span>
+              </Link>
+            </Button>
+          </Card>
+          {OWNER_STATUS_TYPES.map((item) => {
+            const count = queues[item.id].length;
+            const active = tab === item.id;
+            const Icon = item.icon;
+            return (
+              <Card
+                key={item.id}
+                className={cn(
+                  "overflow-hidden transition-[border-color,background-color,box-shadow] duration-150",
+                  active
+                    ? "border-primary/50 bg-primary/[0.03] shadow-sm"
+                    : "hover:border-primary/30 hover:shadow-sm",
+                )}
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setTab(item.id);
+                    setSelectedId(null);
+                  }}
+                  aria-pressed={active}
+                  className="h-full min-h-32 w-full flex-col items-stretch justify-between gap-4 whitespace-normal rounded-lg p-4 text-left hover:bg-transparent focus-visible:ring-inset"
+                >
+                  <span className="flex w-full items-center justify-between gap-3">
+                    <span
+                      className={cn(
+                        "flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors",
+                        count > 0
+                          ? "bg-primary/10 text-primary"
+                          : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      <Icon className="size-5" aria-hidden />
                     </span>
-                    <span className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-                      <span className="text-xs text-muted-foreground">Proposed</span>
-                      <span className="cf-numeric text-sm font-semibold tabular-nums">
-                        {fmtEtb(card.proposedRate)}
-                      </span>
-                      <span className="text-xs font-medium text-primary">Review →</span>
+                    <span
+                      className={cn(
+                        "cf-numeric text-3xl font-semibold leading-none tabular-nums tracking-tight",
+                        count > 0 ? "text-primary" : "text-muted-foreground",
+                      )}
+                    >
+                      {count}
                     </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+                  </span>
+                  <span className="block w-full">
+                    <span className="block text-sm font-semibold leading-snug text-foreground">
+                      {item.label}
+                    </span>
+                    <span
+                      className={cn(
+                        "mt-1 block text-xs",
+                        count > 0 ? "font-medium text-primary" : "text-muted-foreground",
+                      )}
+                    >
+                      {count > 0
+                        ? `${count} ${count === 1 ? "item" : "items"} need your review`
+                        : "No items waiting"}
+                    </span>
+                  </span>
+                </Button>
+              </Card>
+            );
+          })}
+        </section>
+      ) : null}
+
+      {isSilva && farmAssessmentsQuery.isError ? (
+        <SectionCard>
+          <div className="flex flex-col gap-2 py-5 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-destructive">
+              Could not load submitted farm assessments.{" "}
+              {farmAssessmentsQuery.error instanceof Error
+                ? farmAssessmentsQuery.error.message
+                : ""}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void farmAssessmentsQuery.refetch()}
+            >
+              Try again
+            </Button>
+          </div>
         </SectionCard>
       ) : null}
 
-      {otherWaitingTotal > 0 ? (
+      {isSilva && submittedAssessments.length > 0 ? (
+        <SectionCard
+          title={`Farm assessments awaiting review (${submittedAssessments.length})`}
+          description="Submitted assessments are listed here so you can open each one and review it."
+          flush
+        >
+          <ul className="divide-y divide-border">
+            {submittedAssessments.map((assessment) => (
+              <li key={assessment.id}>
+                <Link
+                  href={`${CROPFORT_ROUTES.farmAssessments}/${encodeURIComponent(assessment.id)}`}
+                  className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">
+                      {assessment.title || "Farm Assessment"}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {[assessment.farmName, assessment.cycleLabel].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-medium text-primary">Review →</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ) : null}
+
+      {canDecideRateCards && rateCardsQuery.isError ? (
+        <SectionCard>
+          <div className="flex flex-col gap-2 py-5 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-destructive">
+              Could not load submitted rate cards.{" "}
+              {rateCardsQuery.error instanceof Error ? rateCardsQuery.error.message : ""}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => void rateCardsQuery.refetch()}>
+              Try again
+            </Button>
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {canDecideRateCards && rateCardsQuery.isLoading && pendingRateCards.length === 0 ? (
+        <SectionCard>
+          <p className="py-5 text-center text-sm text-muted-foreground">
+            Checking for submitted rate cards…
+          </p>
+        </SectionCard>
+      ) : null}
+
+      {canDecideRateCards && pendingRateCards.length > 0 ? (
+        <SectionCard
+          title={`Rate cards awaiting approval (${pendingRateCards.length})`}
+          description="Submitted rate cards are listed here so they stay visible alongside other approval queues."
+          flush
+        >
+          <ul className="divide-y divide-border">
+            {pendingRateCards.map((card) => (
+              <li key={card.id}>
+                <Link
+                  href={`${CROPFORT_ROUTES.rateCardProposals}/${card.id}`}
+                  className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">
+                      {card.activityName || card.activityCode || "Rate card"}
+                    </span>
+                    <span className="mt-0.5 block text-xs capitalize text-muted-foreground">
+                      {[card.kind, card.farmEstateName, card.activityCode]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      {card.submittedAt
+                        ? ` · Submitted ${new Date(card.submittedAt).toLocaleDateString()}`
+                        : ""}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                    <span className="text-xs text-muted-foreground">Proposed</span>
+                    <span className="cf-numeric text-sm font-semibold tabular-nums">
+                      {fmtEtb(card.proposedRate)}
+                    </span>
+                    <span className="text-xs font-medium text-primary">Review →</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ) : null}
+
+      {waitingTotal > 0 ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <label className="text-sm font-medium" htmlFor="approval-review-type">Review type</label>
@@ -891,7 +1132,7 @@ export default function ApprovalsView() {
             <p className="mt-1 text-sm text-muted-foreground">There are no requests waiting for your decision.</p>
           </div>
         </SectionCard>
-      ) : otherWaitingTotal === 0 ? null : rows.length === 0 ? (
+      ) : waitingTotal === 0 ? null : rows.length === 0 ? (
         <SectionCard>
           <p className="py-8 text-center text-sm text-muted-foreground">Nothing waiting in this category.</p>
         </SectionCard>
@@ -976,6 +1217,44 @@ export default function ApprovalsView() {
                 ) : null}
                 {selectedMonthly ? <MonthlyDetail order={selectedMonthly} /> : null}
                 {selectedWeekly ? <WeeklyDetail plan={selectedWeekly} /> : null}
+                {selectedRateCard ? (
+                  <div className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <DetailKV label="Activity">
+                      {selectedRateCard.activityName || selectedRateCard.activityCode || "Rate card"}
+                    </DetailKV>
+                    <DetailKV label="Farm">
+                      {selectedRateCard.farmEstateName || "—"}
+                    </DetailKV>
+                    <DetailKV label="Kind">
+                      <span className="capitalize">{selectedRateCard.kind}</span>
+                    </DetailKV>
+                    <DetailKV label="Budget year">{selectedRateCard.budgetYear}</DetailKV>
+                    <DetailKV label="Proposed rate">
+                      <span className="cf-numeric font-medium">
+                        {fmtEtb(selectedRateCard.proposedRate)}
+                      </span>
+                    </DetailKV>
+                    <DetailKV label="Benchmark rate">
+                      <span className="cf-numeric font-medium">
+                        {fmtEtb(selectedRateCard.recommendedRate)}
+                      </span>
+                    </DetailKV>
+                    <DetailKV label="Justification">
+                      {selectedRateCard.justificationNote || "—"}
+                    </DetailKV>
+                    <DetailKV label="Submitted">
+                      {selectedRateCard.submittedAt
+                        ? new Date(selectedRateCard.submittedAt).toLocaleString()
+                        : "—"}
+                    </DetailKV>
+                    <Link
+                      href={`${CROPFORT_ROUTES.rateCardProposals}/${selectedRateCard.id}`}
+                      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      Open full rate card review →
+                    </Link>
+                  </div>
+                ) : null}
 
                 <div className="space-y-2 border-t border-border pt-4">
                   <label className="text-sm font-medium" htmlFor="approval-decision-note">

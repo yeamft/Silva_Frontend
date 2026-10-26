@@ -15,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
 import { usePlanningContextStore } from "@/store/planningContextStore";
@@ -117,7 +118,7 @@ export function GlobalContextBar({
   return (
     <div
       className={cn(
-        "sticky top-0 z-30 flex h-14 min-h-14 items-center gap-1 border-b border-border/80 bg-background/95 px-2 shadow-[0_2px_10px_-8px_hsl(var(--foreground)/0.25)] backdrop-blur-md sm:gap-2 sm:px-4 md:px-6",
+        "flex min-w-0 items-center gap-1 px-2 sm:gap-2 sm:px-4 md:px-6",
         className,
       )}
     >
@@ -163,7 +164,8 @@ export function GlobalContextBar({
         >
           <HelpCircle className="h-4 w-4" aria-hidden />
         </Button>
-        <div className="ml-0.5">
+        <Separator orientation="vertical" className="mx-1 h-6" />
+        <div className="shrink-0">
           <UserMenu />
         </div>
       </div>

@@ -58,6 +58,11 @@ const ROLE_CAPS: Record<
     ],
     cannot: ["Create plans / issue WOs", "See raw payment requests or draft tickets"],
   },
+  farm_owner_viewer: {
+    desk: "Silva · Asset owner (viewer)",
+    can: ["Read approved records", "View rate cards and released reports", "Estate map (read)"],
+    cannot: ["Approve rate cards or operational records", "Create plans / issue WOs"],
+  },
   bagro_office: {
     desk: "Vendor · Office",
     can: ["Create / submit tickets", "Create payment requests", "Read assigned WOs"],

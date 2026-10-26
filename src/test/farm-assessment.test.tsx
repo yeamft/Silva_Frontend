@@ -27,7 +27,7 @@ const draft: FarmAssessment = {
   programId: "workspace",
   planYear: 2026,
   cycleLabel: "2026 Programme",
-  title: "Chaka Annual Farm Assessment — 2026 Programme",
+  title: "Chaka Annual Farm Assessment 2026 Programme",
   assessmentDate: "2026-10-25",
   assessorName: "Test User",
   assessorUserId: "user",
@@ -71,6 +71,10 @@ describe("Farm Assessment workflow", () => {
   it("saves findings and a PDF before enabling submission, then locks the submitted draft", async () => {
     show();
     const findings = await screen.findByLabelText("Findings");
+    expect(findings).not.toHaveAttribute("placeholder");
+    expect(screen.queryByText("Record the farm's condition, findings, and recommendations for the asset owner.")).not.toBeInTheDocument();
+    expect(screen.queryByText("PDF, up to 5 MB. Optional — you can submit without a report.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Save your findings before submitting. Asset owners will be notified to review them.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Submit to asset owner" })).toBeDisabled();
     fireEvent.change(findings, { target: { value: "Repair irrigation" } });
     const file = new File(["%PDF-1.4 report"], "assessment.pdf", { type: "application/pdf" });
@@ -118,6 +122,7 @@ describe("Farm Assessment workflow", () => {
     };
     show(submitted);
     const comments = await screen.findByLabelText("Review comments");
+    expect(comments).not.toHaveAttribute("placeholder");
     expect(screen.getByRole("button", { name: "Request changes" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
     fireEvent.change(comments, { target: { value: "Add soil analysis" } });

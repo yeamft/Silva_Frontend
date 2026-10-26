@@ -59,7 +59,7 @@ export type CropfortWorkspace = {
   modules: WorkspaceModule[];
 };
 
-const ALL_PLAN: CropfortRole[] = ["spx_validator", "farm_owner", "spx_platform_admin"];
+const ALL_PLAN: CropfortRole[] = ["spx_validator", "farm_owner", "farm_owner_viewer", "spx_platform_admin"];
 const SPX: CropfortRole[] = ["spx_validator", "spx_platform_admin"];
 const ADMIN: CropfortRole[] = ["spx_platform_admin"];
 const FIELD: CropfortRole[] = [
@@ -68,6 +68,7 @@ const FIELD: CropfortRole[] = [
   "spx_validator",
   "spx_platform_admin",
   "farm_owner",
+  "farm_owner_viewer",
 ];
 /** Execution / control without vendor-only desk. */
 const FIELD_NO_VENDOR: CropfortRole[] = [
@@ -75,6 +76,7 @@ const FIELD_NO_VENDOR: CropfortRole[] = [
   "spx_validator",
   "spx_platform_admin",
   "farm_owner",
+  "farm_owner_viewer",
 ];
 const EXEC_ROLES: CropfortRole[] = [...FIELD];
 

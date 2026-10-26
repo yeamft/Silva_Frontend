@@ -2,7 +2,12 @@ import type { CropfortRole } from "@/types/cropfort";
 
 /** UI gating only. Real authorization must be enforced on the API. */
 export function canViewRateCard(role: CropfortRole): boolean {
-  return role === "spx_validator" || role === "farm_owner" || role === "spx_platform_admin";
+  return (
+    role === "spx_validator" ||
+    role === "farm_owner" ||
+    role === "farm_owner_viewer" ||
+    role === "spx_platform_admin"
+  );
 }
 
 /** SPX maker — draft, edit, submit benchmark / rate proposals. */

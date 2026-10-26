@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
+import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,6 +30,8 @@ function relativeTime(iso: string | null) {
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const { activeProgram, programs, switchProgram } = useCropfortAuth();
   const notificationsQuery = useNotifications(true);
   const acknowledgeOne = useAcknowledgeNotification();
   const acknowledgeAll = useAcknowledgeAllNotifications();
@@ -143,9 +147,31 @@ export function NotificationBell() {
                 setOpen(false);
               };
 
-              if (n.href) {
+              const href = n.href;
+              if (href) {
                 return (
-                  <Link key={n.id} href={n.href} onClick={() => void onOpen()}>
+                  <Link
+                    key={n.id}
+                    href={href}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void (async () => {
+                        await onOpen();
+                        if (n.programId && n.programId !== activeProgram?.id) {
+                          if (!programs.some((program) => program.id === n.programId)) {
+                            toast.error("This notification belongs to a workspace that is unavailable.");
+                            return;
+                          }
+                          const result = await switchProgram(n.programId);
+                          if (result.ok === false) {
+                            toast.error(result.error || "Could not switch workspace.");
+                            return;
+                          }
+                        }
+                        router.push(href);
+                      })();
+                    }}
+                  >
                     {body}
                   </Link>
                 );

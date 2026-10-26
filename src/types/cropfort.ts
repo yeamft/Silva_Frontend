@@ -4,6 +4,7 @@ export type CropfortRole =
   | "bagro_office"
   | "spx_validator"
   | "farm_owner"
+  | "farm_owner_viewer"
   | "spx_platform_admin";
 
 export interface CropfortUser {
@@ -30,5 +31,6 @@ export const CROPFORT_ROLE_LABELS: Record<CropfortRole, string> = {
   bagro_office: "RFSP Office",
   spx_validator: "SPX Account Manager",
   farm_owner: "Chaka Buna reviewer",
+  farm_owner_viewer: "Asset owner (viewer)",
   spx_platform_admin: "Platform Admin",
 };

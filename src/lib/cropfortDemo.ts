@@ -196,6 +196,12 @@ export const ROLE_DASHBOARD_COPY: Record<CropfortRole, RoleDashboardCopy> = {
     description: "Budget, actuals, and variance across Core Operations — released and approved records only.",
     primaryAction: "Download report",
   },
+  farm_owner_viewer: {
+    eyebrow: "Ownership · viewer",
+    title: "Estate performance",
+    description: "Read approved records, released reports, and rate cards across the active estate.",
+    primaryAction: "View reports",
+  },
   spx_platform_admin: {
     eyebrow: "Platform",
     title: "Tenant operations",

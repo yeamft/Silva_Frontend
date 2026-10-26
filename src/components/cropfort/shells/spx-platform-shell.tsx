@@ -16,6 +16,8 @@ import {
 } from "@/components/navigation/needs-attention";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
@@ -76,20 +78,24 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
         tabIndex={-1}
         className="min-w-0 overflow-x-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0"
       >
-        <header className="sticky top-0 z-30 bg-card shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
-          <div className="flex h-14 items-stretch border-b border-border bg-card">
-            <div className="flex shrink-0 items-center pl-2 md:hidden">
-              <SidebarTrigger className="cf-focus flex h-9 w-9 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent/70 text-sidebar-foreground hover:bg-sidebar-accent" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <GlobalContextBar
-                onOpenSearch={() => setSearchOpen(true)}
-                onOpenAttention={() => setAttentionOpen(true)}
-                attentionCount={attentionCount}
-                className="border-b-0"
+        <header className="sticky top-0 z-30 bg-background supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
+          <Card className="rounded-none border-x-0 border-t-0 bg-card shadow-sm">
+            <CardContent className="flex h-14 items-center gap-3 px-3 py-0 sm:px-5">
+              <SidebarTrigger
+                className="shrink-0 border border-sidebar-border bg-sidebar-accent/70 text-sidebar-foreground hover:bg-sidebar-accent"
+                aria-label="Toggle navigation"
               />
-            </div>
-          </div>
+              <Separator orientation="vertical" className="h-6 shrink-0" />
+              <div className="ml-auto min-w-0 shrink-0">
+                <GlobalContextBar
+                  onOpenSearch={() => setSearchOpen(true)}
+                  onOpenAttention={() => setAttentionOpen(true)}
+                  attentionCount={attentionCount}
+                  className="w-auto px-0 shadow-none sm:px-0 md:px-0"
+                />
+              </div>
+            </CardContent>
+          </Card>
 
           {sessionWarning ? (
             <div

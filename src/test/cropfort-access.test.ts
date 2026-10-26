@@ -14,12 +14,19 @@ const ALL: CropfortRole[] = [
   "bagro_office",
   "spx_validator",
   "farm_owner",
+  "farm_owner_viewer",
   "spx_platform_admin",
 ];
 
 describe("cropfort UI access helpers", () => {
-  it("shows rate card to validator, owner, and platform admin only", () => {
-    expect(ALL.filter(canViewRateCard)).toEqual(["spx_validator", "farm_owner", "spx_platform_admin"]);
+  it("lets asset-owner viewers see rate cards without granting approval", () => {
+    expect(ALL.filter(canViewRateCard)).toEqual([
+      "spx_validator",
+      "farm_owner",
+      "farm_owner_viewer",
+      "spx_platform_admin",
+    ]);
+    expect(canDecideRateCard("farm_owner_viewer")).toBe(false);
   });
 
   it("lets validators and admins edit; owners decide", () => {

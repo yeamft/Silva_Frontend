@@ -33,22 +33,25 @@ export function UserMenu() {
           type="button"
           variant="ghost"
           size="sm"
-          className="h-9 gap-2 touch-manipulation px-1 hover:bg-muted sm:h-8"
+          className="h-auto min-h-9 items-center gap-2 touch-manipulation px-2 py-1 hover:bg-muted"
           aria-label={`Account menu for ${user.name}`}
         >
           <span
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted text-[11px] font-semibold text-foreground"
+            className="flex size-8 shrink-0 items-center justify-center self-center rounded-full border border-border bg-muted text-[11px] font-semibold leading-none text-foreground"
             aria-hidden
           >
             {initials}
           </span>
-          <span className="hidden min-w-0 text-left lg:block">
-            <span className="block truncate text-[13px] font-medium leading-tight">
+          <span className="hidden min-w-0 flex-col justify-center text-left lg:flex">
+            <span className="block max-w-40 truncate text-[13px] font-medium leading-4">
               {user.name}
+            </span>
+            <span className="block max-w-40 truncate text-[10px] leading-3 text-muted-foreground">
+              {CROPFORT_ROLE_LABELS[user.role]}
             </span>
           </span>
           <ChevronDown
-            className="hidden h-4 w-4 shrink-0 text-muted-foreground lg:block"
+            className="hidden size-4 shrink-0 self-center text-muted-foreground lg:block"
             aria-hidden
           />
         </Button>

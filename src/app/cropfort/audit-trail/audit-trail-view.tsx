@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Layers3, Search, ScrollText, Users } from "lucide-react";
 import { CompactSummaryCards, PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { TablePagination } from "@/components/cropfort/data-table";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,8 @@ export default function AuditTrailView() {
   const [filter, setFilter] = useState<SourceFilter>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   const feed = useMemo(() => {
     return (auditQuery.data || []).map((row) => ({
@@ -83,6 +86,12 @@ export default function AuditTrailView() {
         .includes(q);
     });
   }, [feed, filter, query]);
+
+  const pageCount = Math.ceil(visible.length / pageSize);
+  const pageRows = useMemo(
+    () => visible.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize),
+    [visible, pageIndex, pageSize],
+  );
 
   const selected = visible.find((r) => r.id === selectedId) ?? feed.find((r) => r.id === selectedId) ?? null;
 
@@ -131,7 +140,10 @@ export default function AuditTrailView() {
               size="sm"
               variant={filter === f.id ? "secondary" : "outline"}
               className="h-8"
-              onClick={() => setFilter(f.id)}
+              onClick={() => {
+                setFilter(f.id);
+                setPageIndex(0);
+              }}
             >
               {f.label}
               {counts[f.id] != null ? (
@@ -146,7 +158,10 @@ export default function AuditTrailView() {
             className="h-9 pl-9"
             placeholder="Search actor, action, entity…"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPageIndex(0);
+            }}
             aria-label="Search audit trail"
           />
         </div>
@@ -168,6 +183,7 @@ export default function AuditTrailView() {
             No audit events match this filter.
           </p>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
@@ -179,7 +195,7 @@ export default function AuditTrailView() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.map((row) => (
+              {pageRows.map((row) => (
                 <TableRow
                   key={row.id}
                   className={cn(
@@ -208,6 +224,21 @@ export default function AuditTrailView() {
               ))}
             </TableBody>
           </Table>
+          <div className="px-4 sm:px-5">
+            <TablePagination
+              page={pageIndex + 1}
+              pageCount={pageCount}
+              total={visible.length}
+              pageSize={pageSize}
+              onPageChange={(page) => setPageIndex(page - 1)}
+              pageSizeOptions={[10, 25, 50]}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPageIndex(0);
+              }}
+            />
+          </div>
+          </>
         )}
       </SectionCard>
 

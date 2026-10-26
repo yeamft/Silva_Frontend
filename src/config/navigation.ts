@@ -58,6 +58,7 @@ export const MOBILE_PRIMARY_NAV: Record<CropfortRole, WorkspaceId[]> = {
   bagro_office: ["overview", "execution", "control"],
   spx_validator: ["overview", "planning", "execution", "control", "performance"],
   farm_owner: ["overview", "planning", "control", "performance"],
+  farm_owner_viewer: ["overview", "planning", "control", "performance"],
   spx_platform_admin: ["overview", "planning", "execution", "control", "administration"],
 };
 

@@ -175,16 +175,20 @@ export function CropfortAuthProvider({ children }: { children: ReactNode }) {
     // Demo role switching disabled — JWT roles come from the backend.
   }, []);
 
-  const cropfortUser: CropfortUser | null = authUser
-    ? {
-        id: authUser.id,
-        name: authUser.name,
-        email: authUser.email,
-        role: mapToCropfortRole(authUser.backendRole || authUser.role),
-        tenantId: me?.tenant.id || authUser.organizationId || "",
-        tenantName: me?.tenant.displayName || me?.tenant.name || "Organization",
-      }
-    : null;
+  const cropfortUser = useMemo<CropfortUser | null>(
+    () =>
+      authUser
+        ? {
+            id: authUser.id,
+            name: authUser.name,
+            email: authUser.email,
+            role: mapToCropfortRole(authUser.backendRole || authUser.role, me?.cropfortRoles),
+            tenantId: me?.tenant.id || authUser.organizationId || "",
+            tenantName: me?.tenant.displayName || me?.tenant.name || "Organization",
+          }
+        : null,
+    [authUser, me?.cropfortRoles, me?.tenant],
+  );
 
   const workspacePrograms = useMemo(
     () =>

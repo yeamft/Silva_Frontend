@@ -115,10 +115,7 @@ function AssessmentForm({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          Record the farm's condition, findings, and recommendations for the asset owner.
-        </p>
+      <div className="flex justify-end">
         <StatusBadge status={assessment.status} label={STATUS_LABELS[assessment.status] ?? assessment.status} />
       </div>
 
@@ -129,18 +126,17 @@ function AssessmentForm({
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor={`${id}-findings`}>Findings</Label>
           {assessment.canEdit ? (
             <Textarea
               id={`${id}-findings`}
-              rows={5}
+              rows={6}
               value={findings}
               maxLength={20000}
               disabled={pending}
               onChange={(e) => setFindings(e.target.value)}
-              placeholder="Agronomic condition, infrastructure, labour, inputs, risks, and recommended actions…"
             />
           ) : (
             <p className="whitespace-pre-wrap break-words rounded-lg border p-3 text-sm">
@@ -149,71 +145,58 @@ function AssessmentForm({
           )}
         </div>
 
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor={`${id}-report`}>Assessment report</Label>
-            {assessment.reportName ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-                <FileText className="size-4 shrink-0" aria-hidden />
-                <span className="min-w-0 flex-1 break-words text-sm">{assessment.reportName}</span>
-                <Button size="sm" variant="outline" onClick={() => download.mutate()} disabled={download.isPending}>
-                  <Download className="size-4" aria-hidden />
-                  {download.isPending ? "Downloading…" : "Download report"}
-                </Button>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No report uploaded yet.</p>
-            )}
-            {assessment.canEdit ? (
-              <>
-                <Input
-                  id={`${id}-report`}
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  disabled={pending}
-                  aria-describedby={`${id}-report-help`}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    if (file && (!/\.pdf$/i.test(file.name) || file.size > 5 * 1024 * 1024 || file.size === 0)) {
-                      toast.error("Choose a PDF report up to 5 MB.");
-                      e.target.value = "";
-                      setReport(null);
-                      return;
-                    }
-                    setReport(file);
-                  }}
-                />
-                <p id={`${id}-report-help`} className="text-xs text-muted-foreground">
-                  PDF, up to 5 MB. Optional — you can submit without a report.
-                </p>
-              </>
-            ) : null}
-          </div>
-
-          {assessment.canEdit ? (
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  disabled={pending || (!dirty && assessment.revision > 0)}
-                  onClick={() => mutation.mutate("save")}
-                >
-                  {pending && mutation.variables === "save" ? "Saving…" : "Save draft"}
-                </Button>
-                <Button
-                  disabled={pending || dirty || !canSubmit}
-                  onClick={() => mutation.mutate("submit")}
-                  title={dirty ? "Save your changes first" : !canSubmit ? "Add at least one finding or condition before submitting" : undefined}
-                >
-                  {pending && mutation.variables === "submit" ? "Submitting…" : "Submit to asset owner"}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Save your findings before submitting. Asset owners will be notified to review them.
-              </p>
+        <div className="space-y-2">
+          <Label htmlFor={`${id}-report`}>Assessment report</Label>
+          {assessment.reportName ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+              <FileText className="size-4 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 break-words text-sm">{assessment.reportName}</span>
+              <Button size="sm" variant="outline" onClick={() => download.mutate()} disabled={download.isPending}>
+                <Download className="size-4" aria-hidden />
+                {download.isPending ? "Downloading…" : "Download report"}
+              </Button>
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No report uploaded yet.</p>
+          )}
+          {assessment.canEdit ? (
+            <Input
+              id={`${id}-report`}
+              type="file"
+              accept=".pdf,application/pdf"
+              disabled={pending}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                if (file && (!/\.pdf$/i.test(file.name) || file.size > 5 * 1024 * 1024 || file.size === 0)) {
+                  toast.error("Choose a PDF report up to 5 MB.");
+                  e.target.value = "";
+                  setReport(null);
+                  return;
+                }
+                setReport(file);
+              }}
+            />
           ) : null}
         </div>
+
+        {assessment.canEdit ? (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              disabled={pending || (!dirty && assessment.revision > 0)}
+              onClick={() => mutation.mutate("save")}
+            >
+              {pending && mutation.variables === "save" ? "Saving…" : "Save draft"}
+            </Button>
+            <Button
+              disabled={pending || dirty || !canSubmit}
+              onClick={() => mutation.mutate("submit")}
+              title={dirty ? "Save your changes first" : !canSubmit ? "Add at least one finding or condition before submitting" : undefined}
+            >
+              {pending && mutation.variables === "submit" ? "Submitting…" : "Submit to asset owner"}
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {assessment.canReview ? (
@@ -226,7 +209,6 @@ function AssessmentForm({
             maxLength={5000}
             disabled={pending}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Add your review. Comments are required when requesting changes."
           />
           <div className="flex flex-wrap gap-2">
             <Button disabled={pending} onClick={() => mutation.mutate("approve")}>Approve assessment</Button>
