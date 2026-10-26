@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -8,6 +9,7 @@ import {
   CalendarCheck2,
   CalendarDays,
   CheckCircle2,
+  ChevronRight,
   CircleDollarSign,
   ClipboardList,
   FileWarning,
@@ -92,7 +94,7 @@ function afpPromotionFromPlan(plan: ProgrammePlanDto): AfpPromotion {
   };
 }
 
-type Tab = "afe" | "afp" | "projects" | "interventions" | "monthly" | "weekly" | "rates";
+export type Tab = "afe" | "afp" | "projects" | "interventions" | "monthly" | "weekly" | "rates";
 
 const APPROVAL_TYPES: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "afp", label: "Core Operations plans", icon: Sprout },
@@ -591,7 +593,12 @@ function WeeklyDetail({ plan }: { plan: WeeklyPlan }) {
   );
 }
 
-export default function ApprovalsView() {
+export default function ApprovalsView({
+  initialSelection,
+}: {
+  initialSelection?: { kind: Tab; id: string };
+}) {
+  const router = useRouter();
   const { user, activeProgram } = useCropfortAuth();
   const desk = useDeskMode();
   const isSilva = desk === "silva";
@@ -637,9 +644,18 @@ export default function ApprovalsView() {
   );
   const bandAutoApproves = useSpendBandStore((s) => s.bandAutoApproves);
 
-  const [tab, setTab] = useState<Tab>("afp");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const detailRoute = Boolean(initialSelection);
+  const initialKind = initialSelection?.kind;
+  const initialId = initialSelection?.id;
+  const [tab, setTab] = useState<Tab>(initialKind ?? "afp");
+  const [selectedId, setSelectedId] = useState<string | null>(initialId ?? null);
   const [decisionNote, setDecisionNote] = useState("");
+
+  useEffect(() => {
+    if (!initialKind || !initialId) return;
+    setTab(initialKind);
+    setSelectedId(initialId);
+  }, [initialKind, initialId]);
 
   useEffect(() => {
     setDecisionNote("");
@@ -722,7 +738,7 @@ export default function ApprovalsView() {
   }, [afes, afpPlans, projects, interventions, monthlyOrders, weeklyPlans, pendingRateCards]);
 
   const rows = queues[tab];
-  const selected = rows.find((r) => r.id === selectedId) ?? rows[0] ?? null;
+  const selected = rows.find((r) => r.id === selectedId) ?? null;
 
   const selectedAfe =
     selected?.kind === "afe" ? afes.find((p) => p.id === selected.id) : null;
@@ -806,13 +822,13 @@ export default function ApprovalsView() {
         }
         await rateCardsQuery.refetch();
       }
-      setSelectedId(null);
       setDecisionNote("");
       toast.success(
         decision === "approved"
           ? `Approved by ${user.name.split(" ")[0] || "reviewer"}`
           : "Returned with comments",
       );
+      if (detailRoute) router.replace(CROPFORT_ROUTES.approvals);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Decision failed");
     }
@@ -821,17 +837,44 @@ export default function ApprovalsView() {
   const waitingTotal = APPROVAL_TYPES.reduce((s, t) => s + queues[t.id].length, 0);
 
   useEffect(() => {
-    if (queues[tab].length > 0 || waitingTotal === 0) return;
+    if (detailRoute || queues[tab].length > 0 || waitingTotal === 0) return;
     const firstQueueWithWork = APPROVAL_TYPES.find((item) => queues[item.id].length > 0);
     if (firstQueueWithWork) {
       setTab(firstQueueWithWork.id);
       setSelectedId(null);
     }
-  }, [queues, tab, waitingTotal]);
+  }, [detailRoute, queues, tab, waitingTotal]);
+
+  const detailLoading = {
+    afe: afesQuery.isLoading,
+    afp: afpPlansQuery.isLoading,
+    projects: projectsQuery.isLoading,
+    interventions: interventionsQuery.isLoading,
+    monthly: monthlyQuery.isLoading,
+    weekly: weeklyQuery.isLoading,
+    rates: rateCardsQuery.isLoading,
+  }[tab];
 
   return (
     <PageContainer className={cn(isSilva && "gap-5")}>
-      {isSilva ? (
+      {detailRoute ? (
+        <header className="space-y-3">
+          <Button variant="outline" size="sm" asChild className="w-fit">
+            <Link href={CROPFORT_ROUTES.approvals}>
+              <ChevronRight className="mr-1 size-4 rotate-180" aria-hidden />
+              Back to approvals
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+              {selected?.title || "Review request"}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Review the request details and record your decision.
+            </p>
+          </div>
+        </header>
+      ) : isSilva ? (
         <header className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Approvals</h1>
           <p className="text-sm text-muted-foreground">
@@ -859,7 +902,7 @@ export default function ApprovalsView() {
         />
       )}
 
-      {isSilva ? (
+      {!detailRoute && isSilva ? (
         <section aria-label="Approval status" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Card
             className={cn(
@@ -986,7 +1029,7 @@ export default function ApprovalsView() {
         </section>
       ) : null}
 
-      {isSilva && farmAssessmentsQuery.isError ? (
+      {!detailRoute && isSilva && farmAssessmentsQuery.isError ? (
         <SectionCard>
           <div className="flex flex-col gap-2 py-5 text-sm sm:flex-row sm:items-center sm:justify-between">
             <p className="text-destructive">
@@ -1006,7 +1049,7 @@ export default function ApprovalsView() {
         </SectionCard>
       ) : null}
 
-      {isSilva && submittedAssessments.length > 0 ? (
+      {!detailRoute && isSilva && submittedAssessments.length > 0 ? (
         <SectionCard
           title={`Farm assessments awaiting review (${submittedAssessments.length})`}
           description="Submitted assessments are listed here so you can open each one and review it."
@@ -1035,7 +1078,7 @@ export default function ApprovalsView() {
         </SectionCard>
       ) : null}
 
-      {canDecideRateCards && rateCardsQuery.isError ? (
+      {!detailRoute && canDecideRateCards && rateCardsQuery.isError ? (
         <SectionCard>
           <div className="flex flex-col gap-2 py-5 text-sm sm:flex-row sm:items-center sm:justify-between">
             <p className="text-destructive">
@@ -1049,7 +1092,7 @@ export default function ApprovalsView() {
         </SectionCard>
       ) : null}
 
-      {canDecideRateCards && rateCardsQuery.isLoading && pendingRateCards.length === 0 ? (
+      {!detailRoute && canDecideRateCards && rateCardsQuery.isLoading && pendingRateCards.length === 0 ? (
         <SectionCard>
           <p className="py-5 text-center text-sm text-muted-foreground">
             Checking for submitted rate cards…
@@ -1057,7 +1100,7 @@ export default function ApprovalsView() {
         </SectionCard>
       ) : null}
 
-      {canDecideRateCards && pendingRateCards.length > 0 ? (
+      {!detailRoute && canDecideRateCards && pendingRateCards.length > 0 ? (
         <SectionCard
           title={`Rate cards awaiting approval (${pendingRateCards.length})`}
           description="Submitted rate cards are listed here so they stay visible alongside other approval queues."
@@ -1097,7 +1140,7 @@ export default function ApprovalsView() {
         </SectionCard>
       ) : null}
 
-      {waitingTotal > 0 ? (
+      {!detailRoute && waitingTotal > 0 ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <label className="text-sm font-medium" htmlFor="approval-review-type">Review type</label>
@@ -1124,7 +1167,7 @@ export default function ApprovalsView() {
         </div>
       ) : null}
 
-      {waitingTotal === 0 && !rateCardsQuery.isLoading && !rateCardsQuery.isError ? (
+      {!detailRoute && waitingTotal === 0 && !rateCardsQuery.isLoading && !rateCardsQuery.isError ? (
         <SectionCard>
           <div className="py-10 text-center">
             <CheckCircle2 className="mx-auto mb-3 size-9 text-success" aria-hidden />
@@ -1132,58 +1175,127 @@ export default function ApprovalsView() {
             <p className="mt-1 text-sm text-muted-foreground">There are no requests waiting for your decision.</p>
           </div>
         </SectionCard>
-      ) : waitingTotal === 0 ? null : rows.length === 0 ? (
+      ) : !detailRoute && waitingTotal === 0 ? null : !detailRoute && rows.length === 0 ? (
         <SectionCard>
           <p className="py-8 text-center text-sm text-muted-foreground">Nothing waiting in this category.</p>
         </SectionCard>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-          <SectionCard title="Awaiting your decision" flush>
-            <ul className="divide-y divide-border">
-              {rows.map((row) => {
-                const active = selected?.id === row.id;
-                return (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(row.id)}
+        <div className="space-y-4">
+          {!detailRoute ? (
+            <SectionCard
+              title="Awaiting your decision"
+              description="Select a request to view its details and decision options."
+              action={
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                <span className="size-1.5 rounded-full bg-primary" aria-hidden />
+                {rows.length} {rows.length === 1 ? "request" : "requests"}
+              </span>
+              }
+              flush
+            >
+              <Table
+              containerClassName="max-h-[32rem]"
+              className="min-w-[720px]"
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Request</TableHead>
+                  <TableHead>Reference / details</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-24 text-right">Review</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => {
+                  const type = APPROVAL_TYPES.find((item) => item.id === row.kind);
+                  const TypeIcon = type?.icon ?? ClipboardList;
+                  return (
+                    <TableRow
+                      key={row.id}
+                      aria-label={`Review ${row.title}`}
+                      tabIndex={0}
                       className={cn(
-                        "flex w-full flex-col gap-1 px-4 py-3 text-left text-sm transition-colors hover:bg-muted/50",
-                        active && "bg-accent/50",
+                        "group cursor-pointer border-l-2 border-l-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring hover:border-l-primary/40 hover:bg-muted/40",
                       )}
+                      onClick={() =>
+                        router.push(
+                          `${CROPFORT_ROUTES.approvals}/review/${row.kind}/${encodeURIComponent(row.id)}`,
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(
+                            `${CROPFORT_ROUTES.approvals}/review/${row.kind}/${encodeURIComponent(row.id)}`,
+                          );
+                        }
+                      }}
                     >
-                      <span className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 font-medium leading-snug">{row.title}</span>
-                        <span className="cf-numeric shrink-0 text-xs font-medium">
+                      <TableCell>
+                        <span className="flex min-w-0 items-center gap-3 py-2">
+                          <span
+                            className={cn(
+                              "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+                              "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
+                            )}
+                          >
+                            <TypeIcon className="size-4" aria-hidden />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium leading-snug text-foreground">
+                              {row.title}
+                            </span>
+                            <span className="mt-1 block text-[11px] font-medium text-muted-foreground">
+                              {type?.label ?? "Request"}
+                            </span>
+                          </span>
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="flex flex-col gap-1 py-2">
+                          <span className="text-xs text-muted-foreground">
+                            {row.meta || "No additional reference"}
+                          </span>
+                          {row.risk ? (
+                            <span className="w-fit rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                              {row.risk}
+                            </span>
+                          ) : null}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="cf-numeric whitespace-nowrap text-sm font-semibold tabular-nums">
                           {fmtEtb(row.amount)}
                         </span>
-                      </span>
-                      <span className="text-xs text-muted-foreground">{row.meta}</span>
-                      <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      </TableCell>
+                      <TableCell>
                         <StatusBadge status="submitted" />
-                        {row.risk ? (
-                          <span className="rounded-md bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                            {row.risk}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </SectionCard>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 text-xs font-semibold transition-colors",
+                            "text-muted-foreground group-hover:text-primary",
+                          )}
+                        >
+                          Review <ChevronRight className="size-3.5" aria-hidden />
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+              </Table>
+            </SectionCard>
+          ) : null}
 
-          <SectionCard
-            title={selected?.title ?? "Decision detail"}
-            description={
-              selected
-                ? "Confirm the facts below, then approve or return with a note."
-                : undefined
-            }
-            action={selected ? <StatusBadge status="submitted" /> : null}
-          >
-            {selected ? (
+          {selected ? (
+            <SectionCard
+              title={selected.title}
+              description="Confirm the facts below, then approve or return with a note."
+              action={<StatusBadge status="submitted" />}
+            >
               <div className="space-y-5">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="cf-numeric text-lg font-semibold">
@@ -1293,10 +1405,26 @@ export default function ApprovalsView() {
                   </p>
                 )}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Select an item to review.</p>
-            )}
-          </SectionCard>
+            </SectionCard>
+          ) : detailRoute ? (
+            <SectionCard>
+              <p className="py-5 text-center text-sm text-muted-foreground">
+                {detailLoading
+                  ? "Loading request details…"
+                  : "This request is no longer awaiting a decision, or it could not be found."}
+              </p>
+            </SectionCard>
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center">
+              <span className="mb-3 flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <ClipboardList className="size-5" aria-hidden />
+              </span>
+              <p className="text-sm font-semibold">Choose a request to review</p>
+              <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                Select any row above to see its details and available decision actions.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </PageContainer>

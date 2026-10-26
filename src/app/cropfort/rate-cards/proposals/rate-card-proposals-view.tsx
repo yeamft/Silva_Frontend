@@ -136,20 +136,20 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
           const row = c.row.original;
           const uom = row.activity?.uom || "unit";
           return (
-            <div className="flex flex-col gap-0.5">
-              <span className="font-medium text-foreground">
-                {row.activity?.code ? (
-                  <span className="mr-1.5 inline-flex rounded border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                    {row.activity.code}
-                  </span>
-                ) : null}
+            <div className="flex min-w-[12rem] flex-col gap-1">
+              <span className="font-semibold leading-5 text-foreground">
                 {row.activity?.name ?? row.activityId}
               </span>
               <div className="flex flex-wrap items-center gap-1.5">
+                {row.activity?.code ? (
+                  <span className="inline-flex rounded-md border border-border/80 bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
+                    {row.activity.code}
+                  </span>
+                ) : null}
                 <span className="inline-flex rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold capitalize text-primary">
                   {row.kind}
                 </span>
-                <span className="text-xs text-muted-foreground">{uom}</span>
+                <span className="text-[11px] text-muted-foreground">per {uom}</span>
               </div>
             </div>
           );
@@ -159,7 +159,11 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
         id: "scope",
         header: "Scope",
         size: 130,
-        cell: (c) => <span className="text-sm text-muted-foreground">{c.getValue()}</span>,
+        cell: (c) => (
+          <span className="inline-flex max-w-full rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-foreground/80">
+            <span className="truncate">{c.getValue()}</span>
+          </span>
+        ),
       }),
       col.accessor("proposedRate", {
         header: "Proposed rate",
@@ -167,9 +171,9 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
         cell: (c) => {
           const uom = c.row.original.activity?.uom || "unit";
           return (
-            <span className="tabular-nums">
+            <span className="flex flex-col items-end gap-0.5 tabular-nums">
               <span className="font-semibold text-foreground">{fmtEtb(c.getValue())}</span>
-              <span className="ml-1 text-xs text-muted-foreground">/{uom}</span>
+              <span className="text-[11px] text-muted-foreground">per {uom}</span>
             </span>
           );
         },
@@ -204,7 +208,11 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
           if (v == null) return <span className="text-muted-foreground">—</span>;
           const flagged = Math.abs(v) > 10;
           return (
-            <span className={flagged ? "font-semibold text-destructive tabular-nums" : "tabular-nums text-muted-foreground"}>
+            <span
+              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold tabular-nums ${
+                flagged ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
+              }`}
+            >
               {v > 0 ? "+" : ""}{v.toFixed(1)}%
             </span>
           );
@@ -217,12 +225,12 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
           const row = c.row.original;
           if (!c.getValue()) return <span className="text-muted-foreground">—</span>;
           return (
-            <div className="whitespace-nowrap text-xs text-muted-foreground">
-              <span>From {fmtDate(c.getValue())}</span>
+            <div className="whitespace-nowrap text-xs">
+              <span className="font-medium text-foreground/80">{fmtDate(c.getValue())}</span>
               {row.availableTo ? (
-                <span className="block">To {fmtDate(row.availableTo)}</span>
+                <span className="mt-0.5 block text-muted-foreground">Until {fmtDate(row.availableTo)}</span>
               ) : (
-                <span className="block text-muted-foreground/60">Open-ended</span>
+                <span className="mt-0.5 block text-muted-foreground/70">No end date</span>
               )}
             </div>
           );
@@ -390,7 +398,7 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
           emptyTitle={isAssetOwner ? "No rate cards for this filter" : "No rate cards — create one from a locked benchmark"}
           emptyDescription="Adjust the filters or open a benchmark survey to create a rate card."
           pageSizeOptions={[10, 25, 50]}
-          className="[&_thead_tr]:border-b [&_thead_tr]:bg-muted/40 [&_thead_th]:h-11 [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.06em] [&_tbody_tr:nth-child(even)]:bg-muted/10 [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-primary/[0.04] [&_tbody_td]:py-3.5"
+          className="[&_thead_tr]:border-b [&_thead_tr]:bg-muted/50 [&_thead_th]:h-11 [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.06em] [&_tbody_tr]:border-b [&_tbody_tr:nth-child(even)]:bg-muted/20 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-primary/[0.04] [&_tbody_td]:py-3.5"
           containerClassName="rounded-none border-0"
         />
       </SectionCard>

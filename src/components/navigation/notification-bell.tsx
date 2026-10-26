@@ -31,7 +31,7 @@ function relativeTime(iso: string | null) {
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { activeProgram, programs, switchProgram } = useCropfortAuth();
+  const { activeProgram, switchProgram } = useCropfortAuth();
   const notificationsQuery = useNotifications(true);
   const acknowledgeOne = useAcknowledgeNotification();
   const acknowledgeAll = useAcknowledgeAllNotifications();
@@ -158,10 +158,6 @@ export function NotificationBell() {
                       void (async () => {
                         await onOpen();
                         if (n.programId && n.programId !== activeProgram?.id) {
-                          if (!programs.some((program) => program.id === n.programId)) {
-                            toast.error("This notification belongs to a workspace that is unavailable.");
-                            return;
-                          }
                           const result = await switchProgram(n.programId);
                           if (result.ok === false) {
                             toast.error(result.error || "Could not switch workspace.");

@@ -373,7 +373,7 @@ export default function WeeklyPlansView() {
               ) : null}
 
               <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full text-sm">
+                <table className="cf-table w-full text-sm">
                   <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2">Activity</th>

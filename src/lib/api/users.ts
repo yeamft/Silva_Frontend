@@ -7,7 +7,23 @@ import type {
 } from "@/types/cropfort-modules";
 
 function asError(err: unknown): Error {
-  if (err instanceof ApiError) return new Error(err.message);
+  if (err instanceof ApiError) {
+    const detailMessages = err.details.flatMap((detail) => {
+      if (!detail || typeof detail !== "object") return [];
+      const issue = detail as { field?: unknown; issue?: unknown };
+      if (typeof issue.issue !== "string") return [];
+      return [
+        typeof issue.field === "string" && issue.field
+          ? `${issue.field}: ${issue.issue}`
+          : issue.issue,
+      ];
+    });
+    return new Error(
+      detailMessages.length
+        ? `${err.message} ${detailMessages.join("; ")}`
+        : err.message,
+    );
+  }
   if (err instanceof Error) return err;
   return new Error("Request failed");
 }

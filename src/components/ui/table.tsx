@@ -9,7 +9,7 @@ const Table = React.forwardRef<
   <div className={cn("cf-table-scroll relative w-full overflow-auto", containerClassName)}>
     <table
       ref={ref}
-      className={cn("w-full min-w-[640px] caption-bottom text-[13px]", className)}
+      className={cn("cf-table w-full min-w-[640px] caption-bottom text-[13px]", className)}
       {...props}
     />
   </div>

@@ -408,7 +408,7 @@
   }
 
   .cf-table th {
-    @apply sticky top-0 z-[1] border-b border-border bg-card px-3 py-2.5 text-left text-xs font-medium text-muted-foreground;
+    @apply sticky top-0 z-[1] border-b border-border bg-muted/50 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground;
   }
 
   .cf-table td {
@@ -416,8 +416,12 @@
     height: var(--cf-row-h);
   }
 
+  .cf-table tbody tr:nth-child(even) {
+    @apply bg-muted/20;
+  }
+
   .cf-table tbody tr:hover td {
-    @apply bg-muted/40;
+    @apply bg-primary/[0.04];
   }
 
   .cf-status-dot {

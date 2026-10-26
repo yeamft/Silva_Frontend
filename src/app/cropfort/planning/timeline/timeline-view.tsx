@@ -92,7 +92,7 @@ export default function TimelineView() {
           <p className="text-sm text-muted-foreground">No activities</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
+            <table className="cf-table w-full min-w-[720px] border-collapse text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
                   <th className="sticky left-0 z-10 bg-card px-2 py-2 font-medium">Activity</th>

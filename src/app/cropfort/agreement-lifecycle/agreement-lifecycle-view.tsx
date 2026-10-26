@@ -177,7 +177,7 @@ export default function AgreementLifecycleView() {
 
           <SectionCard title="Exception paths">
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
+              <table className="cf-table w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2">Path</th>
@@ -449,7 +449,7 @@ export default function AgreementLifecycleView() {
 
           <SectionCard title="Schedule 6 — Process calendar" className="lg:col-span-2">
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
+              <table className="cf-table w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2">Phase</th>
