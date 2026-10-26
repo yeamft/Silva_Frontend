@@ -47,7 +47,6 @@ function WorkspaceLinks() {
           {workspaces
             .filter(
               (workspace) =>
-                workspace.id !== "overview" &&
                 workspace.id !== "execution" &&
                 workspace.id !== "performance",
             )
