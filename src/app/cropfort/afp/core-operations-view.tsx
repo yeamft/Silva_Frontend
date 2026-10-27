@@ -1167,7 +1167,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {completion.includedCount} activities · {fmtEtb(completion.budgetEtb)} · Band {band} — goes to
-            the Silva asset owner for approval. No AFE is needed.
+            the Silva asset owner for approval.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={submitting}>
