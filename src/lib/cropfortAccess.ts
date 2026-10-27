@@ -21,14 +21,14 @@ export function canProposeRateCard(role: CropfortRole): boolean {
 }
 
 /**
- * Chaka Buna reviewer (checker) — approve / return submitted surveys and rate proposals.
+ * Silva asset owner (checker) — approve / return submitted surveys and rate proposals.
  * Maps to farm_owner in current RBAC (owning-company / Silva approver), not SPX.
  */
 export function canDecideRateCard(role: CropfortRole): boolean {
   return role === "farm_owner";
 }
 
-/** Alias: Chaka Buna reviewer approves rates (Checker). */
+/** Alias: the Silva asset owner approves rates (Checker). */
 export function canApproveAsAssetOwner(role: CropfortRole): boolean {
   return canDecideRateCard(role);
 }

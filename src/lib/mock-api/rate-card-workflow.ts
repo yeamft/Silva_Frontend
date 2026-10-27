@@ -31,21 +31,21 @@ const ASSET_OWNERS: Record<string, EligibleChecker> = {
   "fa-tumi": {
     userId: "u-ao-tumi",
     name: "Samuel Bekele",
-    roleLabel: "Chaka Buna reviewer",
+    roleLabel: "Asset owner",
     orgName: "Sheka Holdings (Silva)",
     assignmentLabel: "Tumi Estate",
   },
   "fa-gura": {
     userId: "u-ao-gura",
     name: "Hanna Desta",
-    roleLabel: "Chaka Buna reviewer",
+    roleLabel: "Asset owner",
     orgName: "Sheka Holdings (Silva)",
     assignmentLabel: "Gura Farm Area",
   },
   "fa-bench-n": {
     userId: "u-ao-bench",
     name: "Yonas Alemu",
-    roleLabel: "Chaka Buna reviewer",
+    roleLabel: "Asset owner",
     orgName: "Bench Maji Coffee PLC (Silva)",
     assignmentLabel: "Bench North",
   },
@@ -54,7 +54,7 @@ const ASSET_OWNERS: Record<string, EligibleChecker> = {
 const DEFAULT_CHECKER: EligibleChecker = {
   userId: "u-ao-default",
   name: "Samuel Bekele",
-  roleLabel: "Chaka Buna reviewer",
+  roleLabel: "Asset owner",
   orgName: "Sheka Holdings (Silva)",
   assignmentLabel: "Program Asset Owner",
 };
@@ -104,7 +104,7 @@ function assertParty(party: WorkflowParty | undefined, allowed: WorkflowParty, a
     throw new Error(
       allowed === "spx"
         ? `Only SPX can ${action}`
-        : `Only the Chaka Buna reviewer (Asset Owner) can ${action}`,
+        : `Only the Silva asset owner can ${action}`,
     );
   }
 }

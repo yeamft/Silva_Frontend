@@ -23,7 +23,6 @@ export default function TimelineView() {
   const plan = useCoreOpsPlanStore((s) => s.plan);
   const loading = useCoreOpsPlanStore((s) => s.loading);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
-  const cycleMonthIntensity = useCoreOpsPlanStore((s) => s.cycleMonthIntensity);
   const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
 
   useEffect(() => {
@@ -54,6 +53,7 @@ export default function TimelineView() {
       <PageHeader
         eyebrow={activeProgram?.name || "Planning"}
         title="Timeline"
+        description={plan ? `${plan.name || "Core Operations plan"}${plan.farmName ? ` · ${plan.farmName}` : ""} — when each activity runs through the year` : "When each planned activity runs through the year"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Planning", href: CROPFORT_ROUTES.coreOperations },
@@ -72,9 +72,11 @@ export default function TimelineView() {
           ) : null
         }
         actions={
-          <Button size="sm" asChild>
-            <Link href={CROPFORT_ROUTES.coreOperations}>Core Operations</Link>
-          </Button>
+          plan ? (
+            <Button size="sm" asChild>
+              <Link href={`${CROPFORT_ROUTES.programmePlans}/${plan.id}`}>Edit schedule</Link>
+            </Button>
+          ) : null
         }
       />
 
@@ -83,13 +85,18 @@ export default function TimelineView() {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : !plan ? (
           <p className="text-sm text-muted-foreground">
-            No plan.{" "}
-            <Link href={CROPFORT_ROUTES.coreOperations} className="underline underline-offset-2">
-              Core Operations
+            No Core Operations plan selected yet.{" "}
+            <Link href={CROPFORT_ROUTES.programmePlans} className="text-primary underline-offset-2 hover:underline">
+              Open your plans
             </Link>
           </p>
         ) : acts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No activities</p>
+          <p className="text-sm text-muted-foreground">
+            This plan has no activities included yet.{" "}
+            <Link href={`${CROPFORT_ROUTES.programmePlans}/${plan.id}`} className="text-primary underline-offset-2 hover:underline">
+              Add activities
+            </Link>
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="cf-table w-full min-w-[720px] border-collapse text-sm">
@@ -112,24 +119,23 @@ export default function TimelineView() {
                     </td>
                     {PLAN_MONTHS.map((m) => (
                       <td key={m} className="px-1 py-1 text-center">
-                        <button
-                          type="button"
-                          title={`${PLAN_MONTH_LABELS[m]} · ${act.intensities[m]} (click to cycle)`}
+                        {/* Read-only overview — the schedule is edited (and saved) in the plan editor */}
+                        <span
+                          title={`${PLAN_MONTH_LABELS[m]} · ${act.intensities[m] === "none" ? "not running" : act.intensities[m]}`}
                           className={cn(
                             "mx-auto flex h-8 w-8 items-center justify-center rounded text-xs font-semibold",
                             intensityClass(act.intensities[m]),
                           )}
-                          onClick={() => cycleMonthIntensity(act.id, m)}
                         >
                           {intensityLetter(act.intensities[m])}
-                        </button>
+                        </span>
                       </td>
                     ))}
                   </tr>
                 ))}
                 <tr className="border-t bg-muted/30">
                   <td className="sticky left-0 z-10 bg-muted/30 px-2 py-2 text-xs font-medium">
-                    Active count
+                    Activities running
                   </td>
                   {loadRow.map(({ m, total, peak }) => (
                     <td key={m} className="px-1 py-2 text-center text-xs tabular-nums">
@@ -141,7 +147,17 @@ export default function TimelineView() {
                 </tr>
               </tbody>
             </table>
-            <p className="mt-3 text-xs text-muted-foreground">P · A · L</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              {(["peak", "active", "light"] as const).map((level) => (
+                <span key={level} className="inline-flex items-center gap-1.5">
+                  <span className={cn("flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold", intensityClass(level))}>
+                    {intensityLetter(level)}
+                  </span>
+                  {level === "peak" ? "Peak" : level === "active" ? "Active" : "Light"}
+                </span>
+              ))}
+              <span>· Change the schedule in the plan editor&apos;s Schedule step.</span>
+            </div>
           </div>
         )}
       </SectionCard>

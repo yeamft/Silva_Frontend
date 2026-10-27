@@ -30,7 +30,7 @@ export const CROPFORT_ROLE_LABELS: Record<CropfortRole, string> = {
   field_supervisor: "Field Supervisor",
   bagro_office: "RFSP Office",
   spx_validator: "SPX Account Manager",
-  farm_owner: "Chaka Buna reviewer",
-  farm_owner_viewer: "Asset owner (viewer)",
+  farm_owner: "Asset owner (Silva)",
+  farm_owner_viewer: "Chaka Buna (view only)",
   spx_platform_admin: "Platform Admin",
 };

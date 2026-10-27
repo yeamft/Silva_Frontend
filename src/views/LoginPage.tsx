@@ -46,14 +46,14 @@ const DEMO_ACCOUNTS = [
   },
   {
     email: "owner@silva.example",
-    label: "Silva Owner",
-    org: "Silva",
+    label: "Asset Owner",
+    org: "Silva · Approver",
     icon: ShieldCheck,
   },
   {
     email: "reviewer@chakabuna.example",
-    label: "Chaka Buna Reviewer",
-    org: "Silva · View only",
+    label: "Chaka Buna",
+    org: "View only",
     icon: Eye,
   },
   {

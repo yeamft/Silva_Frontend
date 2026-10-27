@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { AlertTriangle, Archive, History, RotateCcw, TrendingUp } from "lucide-react";
+import { AlertTriangle, Archive, CheckCircle2, Clock, History, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -29,6 +30,12 @@ import { useRateCardStore } from "@/store/rateCardStore";
 function fmtEtb(n: number | null | undefined) {
   if (n == null || !Number.isFinite(n)) return "—";
   return `ETB ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+/** Keeps small per-unit values readable: 0.003 stays 0.003 instead of 0. */
+function fmtQty(n: number | null | undefined) {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return n.toLocaleString(undefined, { maximumFractionDigits: Math.abs(n) < 1 ? 3 : 2 });
 }
 
 function fmtDate(s: string | null | undefined) {
@@ -119,6 +126,7 @@ export default function RateCardProposalDetailView() {
     notes: "",
   });
   const [auditOpen, setAuditOpen] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   useEffect(() => {
     if (!canView || !id) return;
@@ -229,13 +237,10 @@ export default function RateCardProposalDetailView() {
         meta={
           <>
             <StatusBadge status={card.status} />
-            <StatusBadge status="draft" label={card.kind} />
-            {card.year?.name ? (
-              <span className="text-xs text-muted-foreground">
-                Budget year {card.year.name}
-              </span>
-            ) : null}
-            {flagged ? <StatusBadge status="flagged" label="Variance flagged" /> : null}
+            <span className="text-xs capitalize text-muted-foreground">
+              {card.kind} · per {uom}
+              {card.year?.name ? ` · budget year ${card.year.name}` : ""}
+            </span>
           </>
         }
         actions={
@@ -245,15 +250,7 @@ export default function RateCardProposalDetailView() {
                 variant="outline"
                 size="sm"
                 disabled={busy}
-                onClick={async () => {
-                  try {
-                    await archive(card.id);
-                    toast.success("Rate card archived");
-                    router.push(CROPFORT_ROUTES.rateCardProposals);
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Archive failed");
-                  }
-                }}
+                onClick={() => setConfirmArchive(true)}
               >
                 <Archive className="h-4 w-4" aria-hidden />
                 Archive
@@ -279,11 +276,110 @@ export default function RateCardProposalDetailView() {
             ) : null}
             <Button variant="outline" size="sm" onClick={() => setAuditOpen(true)}>
               <History className="h-4 w-4" aria-hidden />
-              Audit
+              History
             </Button>
           </div>
         }
       />
+
+      {/* What happens now — the decision sits at the top so reviewers don't scroll past the evidence */}
+      <section
+        aria-label="Approval"
+        className={`rounded-xl border p-4 sm:p-5 ${
+          isAoReview ? "border-primary/40 bg-primary/[0.04]" : card.status === "returned" ? "border-warning/40 bg-warning/5" : "border-border bg-card"
+        }`}
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            {card.status === "approved" ? (
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
+            ) : card.status === "returned" ? (
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
+            ) : (
+              <Clock className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+            )}
+            <div className="min-w-0">
+              <p className="font-semibold">
+                {isAoReview
+                  ? "Waiting for your decision"
+                  : card.status === "submitted"
+                    ? "Submitted — waiting for the asset owner"
+                    : card.status === "approved"
+                      ? `Approved${card.approvedByName ? ` by ${card.approvedByName}` : ""}${card.approvedAt ? ` on ${fmtDate(card.approvedAt)}` : ""}`
+                      : card.status === "returned"
+                        ? "Returned for changes"
+                        : card.status === "archived"
+                          ? "Archived — no longer used for rate resolution"
+                          : editable
+                            ? "Draft — check the rate, then submit it for approval"
+                            : "Draft"}
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Proposed <span className="font-medium text-foreground">{fmtEtb(Number(form.proposedRate) || card.proposedRate)}</span> per {uom}
+                {variance != null ? (
+                  <>
+                    {" · "}
+                    <span className={flagged ? "font-medium text-warning" : undefined}>
+                      {variance > 0 ? "+" : ""}
+                      {variance.toFixed(1)}% vs benchmark {fmtEtb(card.recommendedRate)}
+                    </span>
+                  </>
+                ) : null}
+                {card.status === "approved" ? " · used for rate resolution within its effective period" : ""}
+              </p>
+              {card.returnComment && (card.status === "returned" || card.status === "draft") ? (
+                <p className="mt-2 rounded-md bg-background/80 px-3 py-2 text-sm">
+                  <span className="font-medium">Reviewer: </span>
+                  {card.returnComment}
+                </p>
+              ) : null}
+              {flagged && (isAoReview || editable) ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {card.justificationNote
+                    ? `More than 10% from the benchmark. Justification: ${card.justificationNote}`
+                    : "More than 10% from the benchmark — add a variance justification before submitting."}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="shrink-0">
+            <MakerCheckerPanel
+              status={card.status}
+              canSubmit={showSpxEdit}
+              canDecide={canDecide}
+              busy={busy}
+              entityLabel={`${card.kind} · ${activityLabel} · ${fmtEtb(card.proposedRate)}`}
+              onSubmit={async () => {
+                try {
+                  if (editable) await update(card.id, patch);
+                  await submit(card.id);
+                  toast.success("Rate card submitted for review");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Submit failed");
+                }
+              }}
+              onApprove={async () => {
+                try {
+                  await approve(card.id);
+                  toast.success("Approved");
+                  router.push(CROPFORT_ROUTES.rateCardProposals);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Approve failed");
+                }
+              }}
+              onReturn={async (comment) => {
+                try {
+                  await reject(card.id, comment);
+                  toast.success("Returned to SPX for revision");
+                  router.push(CROPFORT_ROUTES.rateCardProposals);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Return failed");
+                }
+              }}
+            />
+          </div>
+        </div>
+      </section>
 
       {/* ── Section 1: Rate summary ── */}
       <SectionCard title="Rate summary">
@@ -306,8 +402,8 @@ export default function RateCardProposalDetailView() {
           />
           <MetricTile
             label="Labor norm"
-            value={benchmarkNorm != null ? `${benchmarkNorm} MD` : "—"}
-            sub={`per ${uom}`}
+            value={benchmarkNorm != null ? `${fmtQty(benchmarkNorm)} MD` : "—"}
+            sub={`man-days per ${uom}`}
           />
         </div>
 
@@ -318,11 +414,6 @@ export default function RateCardProposalDetailView() {
           </div>
         )}
 
-        {card.returnComment ? (
-          <div className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-            <span className="font-medium">Returned:</span> {card.returnComment}
-          </div>
-        ) : null}
       </SectionCard>
 
       {/* ── Section 2: Rate details ── */}
@@ -396,7 +487,7 @@ export default function RateCardProposalDetailView() {
       </SectionCard>
 
       {/* ── Section 3: Benchmark evidence ── */}
-      <SectionCard title="Benchmark evidence">
+      <SectionCard title="Benchmark evidence" description="The farm rates behind the benchmark this card is compared with.">
         {linkedSurvey ? (
           <div className="space-y-4">
             {/* Source farms */}
@@ -429,7 +520,7 @@ export default function RateCardProposalDetailView() {
                         </p>
                         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                           {farm.manDaysPerUnit != null && (
-                            <span>{farm.manDaysPerUnit} MD/{uom}</span>
+                            <span>{fmtQty(farm.manDaysPerUnit)} MD/{uom}</span>
                           )}
                           {farm.frequency != null && (
                             <span>{farm.frequency} times/yr</span>
@@ -449,11 +540,11 @@ export default function RateCardProposalDetailView() {
                 </p>
                 <p className="font-semibold">
                   {fmtEtb(benchmarkAvg?.costPerUnit)} /{uom}
-                  {benchmarkNorm != null ? ` · ${benchmarkNorm} MD/${uom}` : ""}
+                  {benchmarkNorm != null ? ` · ${fmtQty(benchmarkNorm)} MD/${uom}` : ""}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {benchmarkWage != null ? `${fmtEtb(benchmarkWage)}/MD` : "—"}
-                  {benchmarkFreq != null ? ` · ${benchmarkFreq} times/yr` : ""}
+                  {benchmarkFreq != null ? ` · ${fmtQty(benchmarkFreq)} times/yr` : ""}
                   {" · "}
                   {benchmarkAvg?.farmsWithRate ?? 0} farm
                   {(benchmarkAvg?.farmsWithRate ?? 0) !== 1 ? "s" : ""}
@@ -461,14 +552,14 @@ export default function RateCardProposalDetailView() {
               </div>
               <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Survey reference
+                  Rate survey
                 </p>
                 <p className="font-medium">
                   <Link
                     href={`${CROPFORT_ROUTES.benchmarkSurveys}/${linkedSurvey.id}`}
-                    className="underline-offset-2 hover:underline"
+                    className="text-primary underline-offset-2 hover:underline"
                   >
-                    {linkedSurvey.id}
+                    Open the survey this rate came from →
                   </Link>
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -495,82 +586,24 @@ export default function RateCardProposalDetailView() {
         )}
       </SectionCard>
 
-      {/* ── Section 4: Approval ── */}
-      <SectionCard title="Approval">
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div>
-              <p className="cf-label">Current status</p>
-              <div className="mt-1">
-                <StatusBadge status={card.status} />
-              </div>
-            </div>
-            {card.approvedAt ? (
-              <div>
-                <p className="cf-label">Approved</p>
-                <p className="cf-data">{fmtDate(card.approvedAt)}</p>
-              </div>
-            ) : null}
-            {card.approvedByName ? (
-              <div>
-                <p className="cf-label">Approved by</p>
-                <p className="cf-data">{card.approvedByName}</p>
-              </div>
-            ) : null}
-          </div>
-
-          {card.status === "submitted" && !canDecide && (
-            <p className="text-sm text-muted-foreground">
-              Awaiting reviewer decision.
-            </p>
-          )}
-
-          <MakerCheckerPanel
-            status={card.status}
-            canSubmit={showSpxEdit}
-            canDecide={canDecide}
-            busy={busy}
-            entityLabel={`${card.kind} · ${activityLabel} · ${fmtEtb(card.proposedRate)}`}
-            onSubmit={async () => {
-              try {
-                if (editable) await update(card.id, patch);
-                await submit(card.id);
-                toast.success("Rate card submitted for review");
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Submit failed");
-              }
-            }}
-            onApprove={async () => {
-              try {
-                await approve(card.id);
-                toast.success("Approved");
-                router.push(CROPFORT_ROUTES.rateCardProposals);
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Approve failed");
-              }
-            }}
-            onReturn={async (comment) => {
-              try {
-                await reject(card.id, comment);
-                toast.success("Returned to SPX for revision");
-                router.push(CROPFORT_ROUTES.rateCardProposals);
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Reject failed");
-              }
-            }}
-          />
-
-          {card.status === "approved" && (
-            <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
-              <TrendingUp className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-              <p className="text-sm text-foreground">
-                This rate is approved and eligible for rate resolution within its effective
-                period.
-              </p>
-            </div>
-          )}
-        </div>
-      </SectionCard>
+      <ConfirmDialog
+        open={confirmArchive}
+        onOpenChange={setConfirmArchive}
+        title="Archive this rate card?"
+        description="It stops being used for rate resolution. You can restore it from the archive later."
+        confirmLabel="Archive"
+        loading={busy}
+        onConfirm={async () => {
+          try {
+            await archive(card.id);
+            setConfirmArchive(false);
+            toast.success("Rate card archived");
+            router.push(CROPFORT_ROUTES.rateCardProposals);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Archive failed");
+          }
+        }}
+      />
 
       <AuditTimelineDrawer
         entityId={auditOpen ? card.id : null}

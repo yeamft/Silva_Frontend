@@ -117,7 +117,7 @@ const SEED_THREADS: CommThread[] = [
     createdAt: "2026-09-17T10:00:00.000Z",
     updatedAt: "2026-09-21T08:15:00.000Z",
     createdByParty: "asset_owner",
-    createdByName: "Chaka Buna reviewer",
+    createdByName: "Silva asset owner",
     closed: false,
   },
 ];
@@ -164,7 +164,7 @@ const SEED_MESSAGES: CommMessage[] = [
     threadId: "cth-3",
     at: "2026-09-17T10:00:00.000Z",
     authorId: "asset-1",
-    authorName: "Chaka Buna reviewer",
+    authorName: "Silva asset owner",
     authorParty: "asset_owner",
     body: "Need shade-house specs before Band B approval on AFE-132.",
   },

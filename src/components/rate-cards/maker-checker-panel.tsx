@@ -63,14 +63,14 @@ export function MakerCheckerPanel({
 
       {showSubmit ? (
         <Button size="sm" disabled={busy} onClick={() => void onSubmit()}>
-          Submit
+          Submit for approval
         </Button>
       ) : null}
 
       {showDecide ? (
         <>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setRejectOpen(true)}>
-            Reject
+            Return for changes
           </Button>
           <Button size="sm" disabled={busy} onClick={() => setApproveOpen(true)}>
             Approve
@@ -101,11 +101,11 @@ export function MakerCheckerPanel({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reject rate card</DialogTitle>
+            <DialogTitle>Return rate card for changes</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">{entityLabel}</p>
           <FormField
-            label="Reject comment"
+            label="What needs to change"
             required
             render={(props) => (
               <Textarea
@@ -113,7 +113,7 @@ export function MakerCheckerPanel({
                 value={rejectComment}
                 onChange={(e) => setRejectComment(e.target.value)}
                 rows={4}
-                placeholder="Reason for rejection — SPX will revise and resubmit"
+                placeholder="SPX will see this, revise the rate and resubmit"
               />
             )}
           />
@@ -122,7 +122,6 @@ export function MakerCheckerPanel({
               Cancel
             </Button>
             <Button
-              variant="destructive"
               disabled={!rejectComment.trim() || busy}
               onClick={async () => {
                 await onReturn(rejectComment.trim());
@@ -130,7 +129,7 @@ export function MakerCheckerPanel({
                 setRejectOpen(false);
               }}
             >
-              Reject
+              Return to SPX
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -53,7 +53,7 @@ export const DEFAULT_USERS_DATA: UsersData = {
     user: {
       id: "u-silva",
       email: "owner@silva.example",
-      name: "Silva Owner",
+      name: "Asset Owner",
       role: "silva_owner",
       organizationId: "org-silva",
       branchId: "prog-shecha",

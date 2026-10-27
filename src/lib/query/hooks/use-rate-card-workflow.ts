@@ -208,8 +208,8 @@ export function useEligibleChecker(programId: string, farmAreaId?: string | null
       const farm = farmAreaId ? farms.find((f) => f.id === farmAreaId) : farms.find((f) => f.isApprover);
       return {
         userId: farm?.approverUserId || "ao",
-        name: farm?.isApprover ? "You (farm approver)" : "Chaka Buna reviewer",
-        roleLabel: "Chaka Buna reviewer",
+        name: farm?.isApprover ? "You (farm approver)" : "Silva asset owner",
+        roleLabel: "Asset owner",
         orgName: "Asset owner",
         assignmentLabel: farm?.name || "Program",
       };

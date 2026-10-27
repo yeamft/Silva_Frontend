@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -33,12 +34,13 @@ export default function ScenariosView() {
   const replacePlan = useCoreOpsPlanStore((s) => s.replacePlan);
 
   const scenariosQuery = usePlanScenarios(Boolean(activeProgram?.id));
-  const scenarios = scenariosQuery.data || [];
+  const scenarios = useMemo(() => scenariosQuery.data || [], [scenariosQuery.data]);
   const createScenario = useCreatePlanScenario();
   const deleteScenario = useDeletePlanScenario();
 
   const [name, setName] = useState("");
   const [compareId, setCompareId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: "apply" | "delete"; id: string } | null>(null);
 
   useEffect(() => {
     void loadContext();
@@ -74,10 +76,14 @@ export default function ScenariosView() {
   const onApply = (id: string) => {
     const row = scenarios.find((s) => s.id === id);
     if (!row) return;
-    if (!window.confirm(`Replace the live Core Operations plan with “${row.name}”?`)) return;
     replacePlan(structuredClone(row.snapshot));
-    toast.success(`Applied “${row.name}”`);
+    toast.success(`Restored “${row.name}” — save the plan to keep it`, {
+      action: plan
+        ? { label: "Open plan", onClick: () => { window.location.href = `${CROPFORT_ROUTES.programmePlans}/${plan.id}`; } }
+        : undefined,
+    });
   };
+  const confirmRow = confirm ? scenarios.find((s) => s.id === confirm.id) ?? null : null;
 
   return (
     <PageContainer>
@@ -106,11 +112,15 @@ export default function ScenariosView() {
         }
       />
 
-      <SectionCard title="Snapshot">
+      <SectionCard
+        title="Save a snapshot"
+        description="Keep a copy of the current plan so you can compare alternatives or go back to it later."
+      >
         <div className="flex flex-wrap gap-2">
           <Input
             className="max-w-xs"
-            placeholder="Name"
+            placeholder={`Scenario ${scenarios.length + 1}`}
+            aria-label="Snapshot name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -119,7 +129,7 @@ export default function ScenariosView() {
             disabled={!plan || createScenario.isPending}
             onClick={() => void onSave()}
           >
-            Save
+            Save snapshot
           </Button>
         </div>
       </SectionCard>
@@ -128,7 +138,9 @@ export default function ScenariosView() {
         {scenariosQuery.isLoading ? (
           <p className="px-5 py-8 text-center text-sm text-muted-foreground">Loading…</p>
         ) : scenarios.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-muted-foreground">None</p>
+          <p className="px-5 py-8 text-center text-sm text-muted-foreground">
+            No snapshots yet. Save one above before trying changes to the plan.
+          </p>
         ) : (
           <Table>
             <TableHeader>
@@ -156,22 +168,15 @@ export default function ScenariosView() {
                       <Button size="sm" variant="ghost" onClick={() => setCompareId(s.id)}>
                         Compare
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => onApply(s.id)}>
-                        Apply
+                      <Button size="sm" variant="outline" onClick={() => setConfirm({ kind: "apply", id: s.id })}>
+                        Restore
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
                         className="text-destructive"
                         disabled={deleteScenario.isPending}
-                        onClick={() => {
-                          void deleteScenario
-                            .mutateAsync(s.id)
-                            .then(() => toast.success("Removed"))
-                            .catch((e) =>
-                              toast.error(e instanceof Error ? e.message : "Delete failed"),
-                            );
-                        }}
+                        onClick={() => setConfirm({ kind: "delete", id: s.id })}
                       >
                         Delete
                       </Button>
@@ -204,6 +209,34 @@ export default function ScenariosView() {
           </div>
         </SectionCard>
       ) : null}
+      <ConfirmDialog
+        open={Boolean(confirm)}
+        onOpenChange={(o) => !o && setConfirm(null)}
+        destructive={confirm?.kind === "delete"}
+        title={confirm?.kind === "apply" ? `Restore “${confirmRow?.name ?? ""}”?` : `Delete “${confirmRow?.name ?? ""}”?`}
+        description={
+          confirm?.kind === "apply"
+            ? "The plan you have open is replaced by this snapshot. It isn't saved until you save the plan — save a snapshot of the current plan first if you may want it back."
+            : "The snapshot is removed. The live plan isn't affected."
+        }
+        confirmLabel={confirm?.kind === "apply" ? "Restore" : "Delete"}
+        loading={deleteScenario.isPending}
+        onConfirm={async () => {
+          if (!confirm) return;
+          if (confirm.kind === "apply") {
+            onApply(confirm.id);
+            setConfirm(null);
+            return;
+          }
+          try {
+            await deleteScenario.mutateAsync(confirm.id);
+            toast.success("Snapshot deleted");
+            setConfirm(null);
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Delete failed");
+          }
+        }}
+      />
     </PageContainer>
   );
 }

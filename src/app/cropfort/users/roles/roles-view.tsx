@@ -48,7 +48,7 @@ const ROLE_CAPS: Record<
     cannot: ["Approve rate cards as asset owner", "Mark owner settlements settled"],
   },
   farm_owner: {
-    desk: "Silva · Asset owner",
+    desk: "Silva · Asset owner (approver)",
     can: [
       "Decide AFP / AFE",
       "Approve / return rate cards",
@@ -59,7 +59,7 @@ const ROLE_CAPS: Record<
     cannot: ["Create plans / issue WOs", "See raw payment requests or draft tickets"],
   },
   farm_owner_viewer: {
-    desk: "Silva · Asset owner (viewer)",
+    desk: "Chaka Buna · View only",
     can: ["Read approved records", "View rate cards and released reports", "Estate map (read)"],
     cannot: ["Approve rate cards or operational records", "Create plans / issue WOs"],
   },
