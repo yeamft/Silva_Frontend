@@ -130,7 +130,7 @@ export function SetupGuide({
       {
         id: "plan-approved",
         title: "Get the plan approved",
-        hint: "Submit the plan; the asset owner approves it if it's above the auto-approve band.",
+        hint: "Submit the plan to the asset owner for approval — no AFE needed.",
         href: CROPFORT_ROUTES.programmePlans,
         action: "Open plans",
         done: plans.some((p) => p.statusRaw === "approved" || p.statusRaw === "active"),

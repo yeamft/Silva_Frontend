@@ -7,7 +7,9 @@ import {
   duplicateProgrammePlan,
   listProgrammePlans,
   submitProgrammePlan,
+  type ProgrammePlanDto,
 } from "@/lib/api/programme-plans";
+import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { queryKeys } from "@/lib/query/keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -79,7 +81,13 @@ export function useArchiveProgrammePlan() {
 export function useSubmitProgrammePlanMutation() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (id: string) => submitProgrammePlan(id),
+    mutationFn: (row: Pick<ProgrammePlanDto, "id" | "updatedAt">) => {
+      // Edits made in the plan editor that haven't reached the server yet go with the submit.
+      const local = useCoreOpsPlanStore.getState().plan;
+      const hasNewerLocal =
+        local?.id === row.id && Date.parse(local.updatedAt) > Date.parse(row.updatedAt);
+      return submitProgrammePlan(row.id, hasNewerLocal ? local : undefined);
+    },
     onSuccess: () => invalidate(),
   });
 }

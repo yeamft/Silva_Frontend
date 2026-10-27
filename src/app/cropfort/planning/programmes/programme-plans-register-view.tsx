@@ -523,7 +523,7 @@ export default function ProgrammePlansRegisterView({
                               <DropdownMenuItem
                                 onClick={() =>
                                   void submitMut
-                                    .mutateAsync(row.id)
+                                    .mutateAsync(row)
                                     .then(() => toast.success("Submitted for Silva approval"))
                                     .catch((e) =>
                                       toast.error(
@@ -652,7 +652,7 @@ export default function ProgrammePlansRegisterView({
         open={Boolean(archiveTarget)}
         onOpenChange={(o) => !o && setArchiveTarget(null)}
         title={`Archive ${archiveTarget?.name || "this plan"}?`}
-        description="It moves to Archived plans. You can duplicate it into a new draft later."
+        description="It moves to Archived plans and frees its budget year — you can create a new plan for that year, or duplicate this one into a new draft."
         confirmLabel="Archive"
         loading={archiveMut.isPending}
         onConfirm={async () => {

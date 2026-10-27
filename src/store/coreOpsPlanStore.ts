@@ -1003,9 +1003,8 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
           );
         }
 
-        // Persist latest lines before server readiness check.
-        await upsertProgrammePlan(plan.id, plan, plan.status === "draft" ? "finalized" : plan.status);
-        const result = await submitProgrammePlan(plan.id);
+        // Details, activity lines and schedule go with the submit and are saved in the same step.
+        const result = await submitProgrammePlan(plan.id, plan);
         const promo: AfpPromotion =
           result.promotion ||
           result.plan.promotions?.[0] || {

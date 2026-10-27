@@ -135,6 +135,23 @@ export function getProgrammePlan(id: string) {
   return apiFetch<ProgrammePlanDto>(`/programme-plans/${id}`);
 }
 
+/** Plan details plus every activity line with its quantity, rate, blocks and month schedule. */
+function planBody(plan: CoreOpsPlan) {
+  return {
+    name: plan.name,
+    description: plan.description,
+    planningCycleLabel: plan.planningCycleLabel,
+    notes: plan.notes,
+    annualPlanData: plan.annualPlanData ?? null,
+    vendorLabel: plan.vendorLabel,
+    budgetYearLabel: plan.budgetYearLabel,
+    programBandSetId: plan.programBandSetId,
+    totalHa: plan.totalHa,
+    applicableBlockIds: plan.applicableBlockIds,
+    lines: linesFromPlan(plan),
+  };
+}
+
 export function upsertProgrammePlan(
   id: string,
   plan: CoreOpsPlan,
@@ -142,20 +159,7 @@ export function upsertProgrammePlan(
 ) {
   return apiFetch<ProgrammePlanDto>(`/programme-plans/${id}`, {
     method: "PUT",
-    body: {
-      name: plan.name,
-      description: plan.description,
-      planningCycleLabel: plan.planningCycleLabel,
-      notes: plan.notes,
-      annualPlanData: plan.annualPlanData ?? null,
-      vendorLabel: plan.vendorLabel,
-      budgetYearLabel: plan.budgetYearLabel,
-      programBandSetId: plan.programBandSetId,
-      totalHa: plan.totalHa,
-      applicableBlockIds: plan.applicableBlockIds,
-      status: status ?? plan.status,
-      lines: linesFromPlan(plan),
-    },
+    body: { ...planBody(plan), status: status ?? plan.status },
   });
 }
 
@@ -179,9 +183,14 @@ export function getProgrammeReadiness(id: string) {
   return apiFetch<ProgrammeReadiness>(`/programme-plans/${id}/readiness`);
 }
 
-export function submitProgrammePlan(id: string) {
+/**
+ * Submit for approval. Pass the plan to send its details, activity list and schedule with the
+ * submit, so the server saves and submits exactly what is on screen in one step.
+ */
+export function submitProgrammePlan(id: string, plan?: CoreOpsPlan) {
   return apiFetch<ProgrammeSubmitResult>(`/programme-plans/${id}/submit`, {
     method: "POST",
+    body: plan ? planBody(plan) : {},
   });
 }
 

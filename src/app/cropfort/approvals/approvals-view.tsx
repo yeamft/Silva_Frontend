@@ -42,7 +42,7 @@ import {
   listProgramRateCardProposals,
   rejectRateCardProposal,
 } from "@/lib/api/rate-card-proposals";
-import { PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
+import { PLAN_MONTHS, PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
 import { cn } from "@/lib/utils";
 import type { CropfortAfeDto } from "@/lib/api/afes";
 import type { InterventionDto } from "@/lib/api/interventions";
@@ -63,7 +63,7 @@ import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { canApproveOperations } from "@/lib/cropfort/platform-access";
 import { canApproveAsAssetOwner } from "@/lib/cropfortAccess";
 import { fmtEtb } from "@/store/cropfortOpsStore";
-import { scheduleLabel, scheduleStatusOf } from "@/store/coreOpsPlanStore";
+import { scheduleStatusOf } from "@/store/coreOpsPlanStore";
 import { useSpendBandStore } from "@/store/spendBandStore";
 import { listFarmAssessments } from "@/lib/api/farm-assessments";
 import type { AfpPromotion, CoreOpsActivity, CoreOpsPlan } from "@/types/core-ops";
@@ -257,6 +257,13 @@ function AfeDetail({ afe }: { afe: CropfortAfeDto }) {
   );
 }
 
+const INTENSITY_CELL: Record<string, string> = {
+  peak: "bg-primary",
+  active: "bg-primary/55",
+  light: "bg-primary/25",
+  none: "bg-muted/60",
+};
+
 function AfpDetail({
   plan,
   promotion,
@@ -301,10 +308,22 @@ function AfpDetail({
           {scheduled}/{included.length}
         </DetailKV>
         <DetailKV label="Vendor">{plan.vendorLabel || "—"}</DetailKV>
+        <DetailKV label="Area">
+          {plan.totalHa ? `${plan.totalHa.toLocaleString()} ha` : "—"}
+          {plan.applicableBlockIds?.length
+            ? ` · ${plan.applicableBlockIds.length} block${plan.applicableBlockIds.length === 1 ? "" : "s"}`
+            : ""}
+        </DetailKV>
         <DetailKV label="Submitted">
           {new Date(promotion.createdAt).toLocaleString()}
         </DetailKV>
       </div>
+
+      {plan.description ? (
+        <DetailKV label="Description">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">{plan.description}</p>
+        </DetailKV>
+      ) : null}
 
       {plan.notes ? (
         <DetailKV label="Plan notes">
@@ -350,47 +369,75 @@ function AfpDetail({
 
       {included.length > 0 ? (
         <div>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Included activity lines ({included.length})
-          </p>
-          <div className="cf-table-scroll max-h-64 rounded-md border border-border">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Activities and schedule ({included.length})
+            </p>
+            <span className="flex items-center gap-3 text-[10px] text-muted-foreground">
+              {(["peak", "active", "light"] as const).map((level) => (
+                <span key={level} className="flex items-center gap-1 capitalize">
+                  <span className={cn("h-2.5 w-2.5 rounded-sm", INTENSITY_CELL[level])} aria-hidden />
+                  {level}
+                </span>
+              ))}
+            </span>
+          </div>
+          <div className="cf-table-scroll max-h-[28rem] rounded-md border border-border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Activity</TableHead>
-                  <TableHead className="hidden sm:table-cell">Qty</TableHead>
+                  <TableHead className="min-w-[12rem]">Activity</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
                   <TableHead className="text-right">Cost</TableHead>
-                  <TableHead className="hidden md:table-cell">Schedule</TableHead>
+                  {PLAN_MONTHS.map((m) => (
+                    <TableHead key={m} className="w-7 px-0.5 text-center text-[10px]">
+                      {PLAN_MONTH_LABELS[m]}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {included.slice(0, 40).map((a) => (
+                {included.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell>
                       <p className="text-sm font-medium">{a.activityName}</p>
-                      <p className="font-mono text-[10px] text-muted-foreground">
-                        {a.activityCode} · {a.category}
+                      <p className="text-[10px] text-muted-foreground">
+                        <span className="font-mono">{a.activityCode}</span> · {a.category}
+                        {a.blockAllocations?.length
+                          ? ` · ${a.blockAllocations.length} block${a.blockAllocations.length === 1 ? "" : "s"}`
+                          : a.scope === "off_block"
+                            ? " · off-block"
+                            : ""}
+                        {a.manualsRef ? " · manual attached" : ""}
                       </p>
                     </TableCell>
-                    <TableCell className="hidden tabular-nums text-sm sm:table-cell">
-                      {a.plannedQty || "—"} {a.uom}
+                    <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
+                      {a.plannedQty ? a.plannedQty.toLocaleString() : "—"}{" "}
+                      <span className="text-xs text-muted-foreground">{a.uom}</span>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
+                    <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
+                      {a.agreedRate ? fmtEtb(a.agreedRate.unitRateEtb) : "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right tabular-nums text-sm font-medium">
                       {fmtEtb(a.plannedCost)}
                     </TableCell>
-                    <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                      {scheduleStatusOf(a) === "scheduled" ? scheduleLabel(a) : "Not set"}
-                    </TableCell>
+                    {PLAN_MONTHS.map((m) => {
+                      const level = a.intensities?.[m] ?? "none";
+                      return (
+                        <TableCell key={m} className="px-0.5 text-center">
+                          <span
+                            className={cn("mx-auto block h-4 w-5 rounded-sm", INTENSITY_CELL[level])}
+                            title={`${PLAN_MONTH_LABELS[m]}: ${level === "none" ? "not scheduled" : level}`}
+                          />
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-          {included.length > 40 ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Showing first 40 of {included.length} lines.
-            </p>
-          ) : null}
         </div>
       ) : null}
 
@@ -406,10 +453,7 @@ function AfpDetail({
                 ? "All included lines are scheduled"
                 : `${included.length - scheduled} lines not scheduled`,
           },
-          {
-            ok: promotion.band === "C" || promotion.band === "D",
-            label: `Spend band ${promotion.band} — Silva decision required`,
-          },
+          { ok: true, label: `Spend band ${promotion.band} — asset owner decision (no AFE needed)` },
         ]}
       />
     </div>

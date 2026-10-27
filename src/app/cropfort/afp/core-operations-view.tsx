@@ -166,7 +166,6 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
 
   // Spend band: assigned automatically from the active program's band set
   const bandForEtb = useSpendBandStore((s) => s.bandForEtb);
-  const bandAutoApproves = useSpendBandStore((s) => s.bandAutoApproves);
   const ensureBandProgram = useSpendBandStore((s) => s.ensureProgram);
   const getActiveBandSet = useSpendBandStore((s) => s.getActiveSet);
   const bandSets = useSpendBandStore((s) => s.sets);
@@ -311,14 +310,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
     setSubmitting(true);
     try {
       const promo = await submitToAfps();
-      toast.success(`Submitted · Band ${promo.band}`, {
-        action: {
-          label: "Open AFP",
-          onClick: () => {
-            window.location.href = CROPFORT_ROUTES.afpRegister;
-          },
-        },
-      });
+      toast.success(`Submitted to the asset owner · Band ${promo.band}`);
       setSubmitOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Submit failed");
@@ -405,7 +397,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
             <div>
               <dt className="text-xs text-muted-foreground">Approval band</dt>
               <dd className="font-medium">
-                {band} · {bandAutoApproves(band) ? "auto-approves" : "needs Silva approval"}
+                {band} · goes to the asset owner
               </dd>
             </div>
           </dl>
@@ -1174,8 +1166,8 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
             <DialogTitle>Submit plan for approval?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {completion.includedCount} activities · {fmtEtb(completion.budgetEtb)} · Band {band} —{" "}
-            {bandAutoApproves(band) ? "approves automatically." : "goes to Silva for approval."}
+            {completion.includedCount} activities · {fmtEtb(completion.budgetEtb)} · Band {band} — goes to
+            the Silva asset owner for approval. No AFE is needed.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={submitting}>
