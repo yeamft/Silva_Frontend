@@ -29,6 +29,8 @@ export type ReportEvent = {
 
 export type OpsReport = {
   id: string;
+  /** Asset owner's reason when the report was returned. */
+  returnedComment?: string | null;
   code: string;
   title: string;
   cadence: ReportCadence;

@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Plus } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   PageContainer,
   PageHeader,
   SectionCard,
-  StatCard,
 } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -23,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getCropfortArea } from "@/config/cropfort-areas";
+import { cn } from "@/lib/utils";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { fmtEtb } from "@/lib/cropfort/performance-metrics";
 import { generateReportPayload } from "@/lib/cropfort/report-builder";
@@ -36,7 +40,10 @@ import {
   useSubmitOpsReport,
   useUpdateOpsReport,
 } from "@/lib/query/hooks/use-ops-reports";
-import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
+import { PLAN_MONTH_NAMES } from "@/lib/annual-plan-budget";
+import { PLAN_MONTHS } from "@/lib/cropfort/ethiopian-year";
+import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
+import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
 import type { OpsReport, ReportCadence } from "@/store/reportsStore";
 
 const CADENCE_LABEL: Record<ReportCadence, string> = {
@@ -76,11 +83,66 @@ function MetricGrid({ report }: { report: OpsReport }) {
   );
 }
 
-export default function ReportsView() {
+const REPORT_SECTIONS = [
+  { key: "summary", label: "Summary", rows: 4 },
+  { key: "highlights", label: "Highlights", rows: 2 },
+  { key: "risks", label: "Risks", rows: 2 },
+  { key: "recommendations", label: "Recommendations", rows: 3 },
+  { key: "outlook", label: "Outlook", rows: 2 },
+] as const;
+
+/**
+ * Report periods offered for a Core Operations plan. The plan runs Tikimt → Meskerem; its
+ * planYear is the GC year it ends in, so Tikimt–Nehase fall in EC planYear − 8 and Meskerem in − 7.
+ */
+function periodsForPlan(plan: ProgrammePlanDto, cadence: ReportCadence): string[] {
+  const ecYear = (index: number) => plan.budgetYearGc - (index === 11 ? 7 : 8);
+  if (cadence === "annual") return [plan.budgetYearLabel || `${plan.budgetYearGc} plan year`];
+  if (cadence === "six_month") {
+    return [`${PLAN_MONTH_NAMES[0]}–${PLAN_MONTH_NAMES[5]} ${ecYear(0)}`, `${PLAN_MONTH_NAMES[6]}–${PLAN_MONTH_NAMES[11]} ${ecYear(6)}`];
+  }
+  const included = plan.activityIds.map((id) => plan.activities[id]).filter((a) => a?.included);
+  const scheduled = PLAN_MONTHS.map((m, i) => ({ m, i })).filter(({ m }) =>
+    included.some((a) => a.intensities?.[m] && a.intensities[m] !== "none"),
+  );
+  return (scheduled.length ? scheduled : PLAN_MONTHS.map((m, i) => ({ m, i }))).map(
+    ({ i }) => `${PLAN_MONTH_NAMES[i]} ${ecYear(i)}`,
+  );
+}
+
+type SourcedMetrics = OpsReport["metrics"] & { sourcePlanId?: string };
+
+/** Same weights monthly work orders use to spread a plan line over its scheduled months. */
+const INTENSITY_SHARE: Record<string, number> = { peak: 0.4, active: 0.25, light: 0.1 };
+
+/** The plan's budget for the report period — one month, a half-year or the whole year. */
+function periodBudget(plan: ProgrammePlanDto, cadence: ReportCadence, periodLabel: string) {
+  if (cadence === "annual") return plan.plannedCostEtb ?? 0;
+  const first = PLAN_MONTH_NAMES.findIndex((name) => periodLabel.startsWith(name));
+  if (first < 0) return plan.plannedCostEtb ?? 0;
+  const months = cadence === "six_month" ? PLAN_MONTHS.slice(first, first + 6) : [PLAN_MONTHS[first]];
+  return plan.activityIds
+    .map((id) => plan.activities[id])
+    .filter((a) => a?.included)
+    .reduce((sum, a) => {
+      const weight = (m: (typeof PLAN_MONTHS)[number]) => INTENSITY_SHARE[a.intensities?.[m] ?? "none"] ?? 0;
+      const total = PLAN_MONTHS.reduce((t, m) => t + weight(m), 0);
+      if (!total) return sum;
+      return sum + a.plannedCost * (months.reduce((t, m) => t + weight(m), 0) / total);
+    }, 0);
+}
+
+/** Older reports were saved with mis-encoded dashes and dots (e.g. "â€”"); show them correctly. */
+function cleanText(value: string) {
+  return value.replace(/â€”/g, "—").replace(/â€“/g, "–").replace(/â†’/g, "→").replace(/Â·/g, "·");
+}
+
+export default function ReportsView({ reportId }: { reportId?: string }) {
+  const router = useRouter();
   const { activeProgram, user } = useCropfortAuth();
   const area = getCropfortArea("reports");
   const reportsQuery = useOpsReports(Boolean(activeProgram?.id));
-  const reports = reportsQuery.data || [];
+  const reports = useMemo(() => reportsQuery.data || [], [reportsQuery.data]);
   const createMut = useCreateOpsReport();
   const updateMut = useUpdateOpsReport();
   const submitMut = useSubmitOpsReport();
@@ -91,58 +153,67 @@ export default function ReportsView() {
   const { workOrders, tickets, committedEtb, weekly, dfrs } = usePerformanceLiveData(
     Boolean(activeProgram?.id),
   );
-  const plan = useCoreOpsPlanStore((s) => s.plan);
-  const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
-  const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
+  const plansQuery = useProgrammePlans(Boolean(activeProgram?.id), { status: "approved" });
+  const plans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const params = useSearchParams();
+  const selectedId = reportId ?? null;
+
+  // Old links used ?report=<id>; send them to the report's own page
+  const legacyReportParam = params.get("report");
+  useEffect(() => {
+    if (!reportId && legacyReportParam) {
+      router.replace(`${CROPFORT_ROUTES.reports}/${encodeURIComponent(legacyReportParam)}`);
+    }
+  }, [reportId, legacyReportParam, router]);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [returnNote, setReturnNote] = useState("");
   const [cadence, setCadence] = useState<ReportCadence>("monthly");
-  const [periodLabel, setPeriodLabel] = useState("Tikimt 2019");
+  const [planId, setPlanId] = useState("");
+  const [periodLabel, setPeriodLabel] = useState("");
 
+  const sourcePlan = plans.find((p) => p.id === planId) ?? null;
+  const periodOptions = useMemo(
+    () => (sourcePlan ? periodsForPlan(sourcePlan, cadence) : []),
+    [sourcePlan, cadence],
+  );
   useEffect(() => {
-    void loadContext();
-  }, [loadContext]);
-
+    if (!planId && plans.length) setPlanId(plans[0].id);
+  }, [plans, planId]);
   useEffect(() => {
-    if (!reports.length) {
-      if (selectedId) setSelectedId(null);
-      return;
-    }
-    if (!selectedId || !reports.some((r) => r.id === selectedId)) {
-      setSelectedId(reports[0].id);
-    }
-  }, [reports, selectedId]);
+    if (!periodOptions.includes(periodLabel)) setPeriodLabel(periodOptions[0] ?? "");
+  }, [periodOptions, periodLabel]);
 
-  const buildPayload = useCallback(() => {
-    const completion = planCompletion();
-    return generateReportPayload({
-      farmName: plan?.farmName || activeProgram?.name || "Farm",
-      programName: activeProgram?.name || "Core Operations",
-      authorName: user.name || "SPX",
-      plan,
-      planBudgetEtb: completion.budgetEtb,
-      committedEtb,
-      workOrders,
-      tickets,
-      dfrs,
-      weekly,
-    });
-  }, [
-    planCompletion,
-    plan,
-    activeProgram,
-    user.name,
-    committedEtb,
-    workOrders,
-    tickets,
-    dfrs,
-    weekly,
-  ]);
+  /** Report figures for one Core Operations plan: its budget and the work orders on its farm. */
+  const buildPayload = useCallback(
+    (plan: ProgrammePlanDto | null, reportCadence: ReportCadence = "annual", period = "") => {
+      const onFarm = plan ? workOrders.filter((wo) => wo.farm === plan.farmName) : [];
+      const planOrders = onFarm.length ? onFarm : workOrders;
+      const orderIds = new Set(planOrders.map((wo) => wo.id));
+      return generateReportPayload({
+        farmName: plan?.farmName || activeProgram?.name || "Farm",
+        programName: plan?.name || activeProgram?.name || "Core Operations",
+        authorName: user.name || "SPX",
+        plan,
+        planBudgetEtb: plan ? periodBudget(plan, reportCadence, period) : 0,
+        committedEtb,
+        workOrders: planOrders,
+        tickets: tickets.filter((t) => orderIds.has(t.workOrderId)),
+        dfrs,
+        weekly,
+      });
+    },
+    [activeProgram, user.name, committedEtb, workOrders, tickets, dfrs, weekly],
+  );
 
-  const livePreview = useMemo(() => buildPayload(), [buildPayload]);
+  const livePreview = useMemo(
+    () => buildPayload(sourcePlan, cadence, periodLabel),
+    [buildPayload, sourcePlan, cadence, periodLabel],
+  );
 
   const selected = useMemo(
-    () => reports.find((r) => r.id === selectedId) ?? reports[0] ?? null,
+    () => reports.find((r) => r.id === selectedId) ?? null,
     [reports, selectedId],
   );
 
@@ -151,18 +222,20 @@ export default function ReportsView() {
     user.role === "spx_platform_admin" ||
     user.role === "field_supervisor" ||
     user.role === "bagro_office";
-  const canRelease =
-    user.role === "spx_validator" ||
-    user.role === "spx_platform_admin" ||
-    user.role === "farm_owner";
+  /** SPX submits; the Silva asset owner accepts or returns. */
+  const canRelease = user.role === "farm_owner";
 
   const onCreate = async () => {
-    const payload = buildPayload();
+    if (!sourcePlan || !periodLabel) {
+      toast.error("Choose an approved Core Operations plan and a period");
+      return;
+    }
+    const payload = buildPayload(sourcePlan, cadence, periodLabel);
     try {
       const row = await createMut.mutateAsync({
         cadence,
-        periodLabel: periodLabel.trim() || "Current period",
-        title: `${CADENCE_LABEL[cadence]} operations report â€” ${periodLabel.trim() || "Current period"}`,
+        periodLabel,
+        title: `${CADENCE_LABEL[cadence]} report · ${periodLabel}`,
         farmName: payload.farmName,
         programName: payload.programName,
         authorName: payload.authorName,
@@ -174,13 +247,14 @@ export default function ReportsView() {
         planEtb: payload.metrics.planEtb,
         actualEtb: payload.metrics.actualEtb,
         variancePct: payload.metrics.variancePct,
-        metrics: payload.metrics,
+        metrics: { ...payload.metrics, sourcePlanId: sourcePlan.id } as SourcedMetrics,
         activityLines: payload.activityLines,
         blockLines: payload.blockLines,
         attentionItems: payload.attentionItems,
         missAttributions: payload.missAttributions,
       });
-      setSelectedId(row.id);
+      setGenerateOpen(false);
+      router.push(`${CROPFORT_ROUTES.reports}/${row.id}`);
       toast.success(`Drafted ${row.code} from live snapshot`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not create report");
@@ -189,7 +263,10 @@ export default function ReportsView() {
 
   const onRefresh = async () => {
     if (!selected) return;
-    const payload = buildPayload();
+    const reportPlanId = (selected.metrics as SourcedMetrics)?.sourcePlanId;
+    const reportPlan =
+      plans.find((p) => p.id === reportPlanId) ?? plans.find((p) => p.farmName === selected.farmName) ?? null;
+    const payload = buildPayload(reportPlan, selected.cadence, selected.periodLabel);
     try {
       await updateMut.mutateAsync({
         id: selected.id,
@@ -202,7 +279,7 @@ export default function ReportsView() {
           planEtb: payload.metrics.planEtb,
           actualEtb: payload.metrics.actualEtb,
           variancePct: payload.metrics.variancePct,
-          metrics: payload.metrics,
+          metrics: { ...payload.metrics, sourcePlanId: reportPlan?.id } as SourcedMetrics,
           activityLines: payload.activityLines,
           blockLines: payload.blockLines,
           attentionItems: payload.attentionItems,
@@ -222,433 +299,446 @@ export default function ReportsView() {
 
   return (
     <PageContainer>
+      {reportId ? (
+        <>
       <PageHeader
-        eyebrow={activeProgram?.name || "Performance"}
-        title={area.label}
+        eyebrow={selected ? `${selected.code} · ${CADENCE_LABEL[selected.cadence]} · ${selected.periodLabel}` : "Report"}
+        title={selected ? cleanText(selected.title) : reportsQuery.isLoading ? "Loading…" : "Report not found"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Performance", href: CROPFORT_ROUTES.progress },
-          { label: area.label },
+          { label: area.label, href: CROPFORT_ROUTES.reports },
+          { label: selected?.code || "Report" },
         ]}
         actions={
           <Button size="sm" variant="outline" asChild>
-            <Link href="/cropfort/performance/programme">Core Operations performance</Link>
+            <Link href={CROPFORT_ROUTES.reports}>Back to reports</Link>
           </Button>
         }
       />
+      {selected ? (
+        <div className="space-y-4">
+          <SectionCard>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <StatusBadge status={selected.status} />
+              <span className="text-muted-foreground">{selected.farmName || selected.programName}</span>
+              <span className="text-muted-foreground">By {selected.authorName}</span>
+              {selected.releasedAt ? (
+                <span className="text-muted-foreground">
+                  Accepted {new Date(selected.releasedAt).toLocaleDateString()}
+                </span>
+              ) : null}
+            </div>
+            {selected.status === "returned" && selected.returnedComment ? (
+              <p className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+                Returned by the asset owner: {selected.returnedComment}
+              </p>
+            ) : null}
+            <div className="mt-4">
+              <MetricGrid report={selected} />
+            </div>
+          </SectionCard>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Live plan" value={fmtEtb(livePreview.metrics.planEtb)} />
-        <StatCard label="Live actual" value={fmtEtb(livePreview.metrics.actualEtb)} />
-        <StatCard
-          label="Live variance"
-          value={`${livePreview.metrics.variancePct}%`}
-        />
-        <StatCard
-          label="Attention items"
-          value={String(livePreview.attentionItems.length)}
-        />
-      </div>
+          <SectionCard title="Report">
+            <div className="space-y-4">
+              {editable ? (
+                <div className="space-y-1">
+                  <Label>Title</Label>
+                  <Input
+                    value={cleanText(selected.title)}
+                    onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { title: e.target.value } })}
+                  />
+                </div>
+              ) : null}
+              {REPORT_SECTIONS.map(({ key, label, rows }) =>
+                editable ? (
+                  <div key={key} className="space-y-1">
+                    <Label>{label}</Label>
+                    <Textarea
+                      rows={rows}
+                      value={selected[key]}
+                      onChange={(e) =>
+                        void updateMut.mutateAsync({ id: selected.id, patch: { [key]: e.target.value } })
+                      }
+                    />
+                  </div>
+                ) : selected[key].trim() ? (
+                  <div key={key}>
+                    <h3 className="text-sm font-semibold">{label}</h3>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                      {selected[key]}
+                    </p>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          </SectionCard>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
-        <div className="space-y-1">
-          <Label>Cadence</Label>
-          <Select value={cadence} onValueChange={(v) => setCadence(v as ReportCadence)}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="monthly">Monthly</SelectItem>
-              <SelectItem value="six_month">Six-month</SelectItem>
-              <SelectItem value="annual">Annual</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>Period</Label>
-          <Input
-            className="w-44"
-            value={periodLabel}
-            onChange={(e) => setPeriodLabel(e.target.value)}
-          />
-        </div>
-        <Button onClick={onCreate} disabled={!canAuthor}>
-          Generate draft
-        </Button>
-      </div>
+          {(selected.activityLines?.length ?? 0) > 0 ? (
+            <SectionCard title="Activities" flush>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Activity</TableHead>
+                    <TableHead className="text-right">Planned</TableHead>
+                    <TableHead className="text-right">Actual</TableHead>
+                    <TableHead className="text-right">Variance</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selected.activityLines.map((row) => (
+                    <TableRow key={row.activity}>
+                      <TableCell>{row.activity}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmtEtb(row.planned)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmtEtb(row.actual)}</TableCell>
+                      <TableCell
+                        className={cn("text-right tabular-nums", row.variancePct > 0 && "text-destructive")}
+                      >
+                        {row.variancePct > 0 ? "+" : ""}
+                        {row.variancePct}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </SectionCard>
+          ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-        <SectionCard title="Reports" flush>
-          {reports.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">No reports yet.</p>
-          ) : (
-            <ul className="divide-y">
-              {reports.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(r.id)}
-                    className={`flex w-full flex-col gap-0.5 px-4 py-3 text-left text-sm ${
-                      selected?.id === r.id ? "bg-primary/10" : "hover:bg-muted/50"
-                    }`}
-                  >
-                    <span className="font-medium">{r.code}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {CADENCE_LABEL[r.cadence]} Â· {r.periodLabel}
+          {(selected.blockLines?.length ?? 0) > 0 ? (
+            <SectionCard title="Blocks" flush>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Block</TableHead>
+                    <TableHead className="text-right">Progress</TableHead>
+                    <TableHead className="text-right">Tickets closed</TableHead>
+                    <TableHead className="text-right">Spend / planned</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selected.blockLines.map((row) => (
+                    <TableRow key={row.block}>
+                      <TableCell>{row.block}</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.progress}%</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {row.ticketsClosed}/{row.tickets}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmtEtb(row.spend)} / {fmtEtb(row.planned)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </SectionCard>
+          ) : null}
+
+          {(selected.attentionItems?.length ?? 0) + (selected.missAttributions?.length ?? 0) > 0 ? (
+            <SectionCard title="Needs attention">
+              <ul className="divide-y divide-border text-sm">
+                {(selected.attentionItems || []).map((item) => (
+                  <li key={`${item.code}-${item.reason}`} className="flex flex-wrap justify-between gap-2 py-2">
+                    <span>
+                      <span className="font-medium">{item.code}</span>{" "}
+                      <span className="text-muted-foreground">{item.title}</span>
                     </span>
-                    <StatusBadge status={r.status} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </SectionCard>
+                    <span className="text-xs text-warning">{item.reason}</span>
+                  </li>
+                ))}
+                {(selected.missAttributions || []).map((item, i) => (
+                  <li key={`${item.cause}-${i}`} className="flex flex-wrap justify-between gap-2 py-2">
+                    <span>
+                      <span className="font-medium">{item.kpiLabel}</span>{" "}
+                      <span className="text-muted-foreground">{item.detail}</span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">{item.cause}</span>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          ) : null}
 
-        <SectionCard title={selected ? selected.title : "Select a report"}>
-          {!selected ? (
+          {(selected.events?.length ?? 0) > 0 ? (
+            <details className="rounded-lg border border-border bg-card px-4 py-3">
+              <summary className="cursor-pointer text-sm font-medium">History ({selected.events.length})</summary>
+              <ul className="mt-3 space-y-1.5 text-sm">
+                {selected.events.map((ev) => (
+                  <li key={ev.id} className="flex flex-wrap gap-x-2 text-muted-foreground">
+                    <span className="tabular-nums">{new Date(ev.at).toLocaleString()}</span>
+                    <span className="text-foreground">{ev.action}</span>
+                    <span>· {ev.actor}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+
+          <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border bg-background py-3">
+            {editable && canAuthor ? (
+              <>
+                <Button
+                  onClick={() => {
+                    if (!selected.summary.trim()) {
+                      toast.error("Add a summary before submitting");
+                      return;
+                    }
+                    void submitMut
+                      .mutateAsync(selected.id)
+                      .then(() => toast.success("Sent to the asset owner for review"))
+                      .catch((e) => toast.error(e instanceof Error ? e.message : "Submit failed"));
+                  }}
+                >
+                  Submit to asset owner
+                </Button>
+                <Button variant="outline" onClick={onRefresh}>
+                  Refresh figures
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="text-destructive"
+                  onClick={() => {
+                    void removeMut
+                      .mutateAsync(selected.id)
+                      .then(() => {
+                        toast.message("Draft removed");
+                        router.push(CROPFORT_ROUTES.reports);
+                      })
+                      .catch((e) => toast.error(e instanceof Error ? e.message : "Delete failed"));
+                  }}
+                >
+                  Delete draft
+                </Button>
+              </>
+            ) : null}
+            {selected.status === "submitted" && canRelease ? (
+              <>
+                <Button
+                  disabled={releaseMut.isPending}
+                  onClick={() =>
+                    void releaseMut
+                      .mutateAsync({ id: selected.id })
+                      .then(() => toast.success("Report accepted"))
+                      .catch((e) => toast.error(e instanceof Error ? e.message : "Could not accept"))
+                  }
+                >
+                  Accept
+                </Button>
+                <Button variant="outline" onClick={() => setReturnOpen(true)}>
+                  Return for changes
+                </Button>
+              </>
+            ) : null}
+            {selected.status === "submitted" && !canRelease ? (
+              <p className="text-sm text-muted-foreground">Waiting for the asset owner&apos;s review.</p>
+            ) : null}
+          </div>
+        </div>
+      ) : !reportsQuery.isLoading ? (
+        <SectionCard>
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            This report doesn&apos;t exist or isn&apos;t available to you.
+          </p>
+        </SectionCard>
+      ) : null}
+        </>
+      ) : (
+        <>
+      <PageHeader
+        eyebrow={activeProgram?.name || "Control"}
+        title={area.label}
+        breadcrumbs={[
+          { label: "Home", href: CROPFORT_ROUTES.dashboard },
+          { label: area.label },
+        ]}
+        actions={
+          canAuthor ? (
+            <Button size="sm" onClick={() => setGenerateOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" aria-hidden />
+              Generate report
+            </Button>
+          ) : null
+        }
+      />
+
+      <SectionCard flush>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Report</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Period</TableHead>
+              <TableHead className="text-right">Plan</TableHead>
+              <TableHead className="text-right">Actual</TableHead>
+              <TableHead className="text-right">Variance</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Updated</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {reportsQuery.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                  Loading…
+                </TableCell>
+              </TableRow>
+            ) : reports.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                  No reports yet.
+                  {canAuthor ? (
+                    <Button size="sm" variant="link" onClick={() => setGenerateOpen(true)}>
+                      Generate the first one
+                    </Button>
+                  ) : null}
+                </TableCell>
+              </TableRow>
+            ) : (
+              reports.map((r) => (
+                <TableRow key={r.id} onClick={() => router.push(`${CROPFORT_ROUTES.reports}/${r.id}`)}>
+                  <TableCell>
+                    <span className="block font-medium">{cleanText(r.title)}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">{r.code}</span>
+                  </TableCell>
+                  <TableCell className="text-sm">{CADENCE_LABEL[r.cadence]}</TableCell>
+                  <TableCell className="text-sm">{r.periodLabel}</TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">{fmtEtb(r.planEtb)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">{fmtEtb(r.actualEtb)}</TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-right tabular-nums text-sm",
+                      r.variancePct > 0 ? "text-destructive" : "text-muted-foreground",
+                    )}
+                  >
+                    {r.variancePct > 0 ? "+" : ""}
+                    {r.variancePct}%
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={r.status} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {new Date(r.updatedAt).toLocaleDateString()}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </SectionCard>
+        </>
+      )}
+
+
+      <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate report</DialogTitle>
+          </DialogHeader>
+          {plans.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Generate a draft from the live ops snapshot. SPX authors; release to Silva when
-              ready.
+              Reports are built from an approved Core Operations plan, and there isn&apos;t one yet.{" "}
+              <Link href={CROPFORT_ROUTES.programmePlans} className="font-medium text-primary hover:underline">
+                Open Core Operations plans
+              </Link>
             </p>
           ) : (
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={selected.status} />
-                <span className="text-xs text-muted-foreground">
-                  {CADENCE_LABEL[selected.cadence]} Â· {selected.periodLabel}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {selected.farmName} Â· {selected.programName}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Author {selected.authorName}
-                </span>
-                {selected.releasedAt ? (
-                  <span className="text-xs text-muted-foreground">
-                    Released {new Date(selected.releasedAt).toLocaleDateString()} â†’{" "}
-                    {selected.releasedTo}
-                  </span>
-                ) : null}
-              </div>
-
-              <div>
-                <h3 className="mb-2 text-sm font-medium">Performance snapshot</h3>
-                <MetricGrid report={selected} />
-              </div>
-
-              <div className="space-y-1">
-                <Label>Title</Label>
-                <Input
-                  value={selected.title}
-                  disabled={!editable}
-                  onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { title: e.target.value } })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Period label</Label>
-                <Input
-                  value={selected.periodLabel}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    void updateMut.mutateAsync({ id: selected.id, patch: { periodLabel: e.target.value } })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Executive summary</Label>
-                <Textarea
-                  rows={4}
-                  value={selected.summary}
-                  disabled={!editable}
-                  onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { summary: e.target.value } })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Highlights</Label>
-                <Textarea
-                  rows={2}
-                  value={selected.highlights}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    void updateMut.mutateAsync({ id: selected.id, patch: { highlights: e.target.value } })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Risks</Label>
-                <Textarea
-                  rows={2}
-                  value={selected.risks}
-                  disabled={!editable}
-                  onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { risks: e.target.value } })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Recommendations</Label>
-                <Textarea
-                  rows={3}
-                  value={selected.recommendations}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    void updateMut.mutateAsync({ id: selected.id, patch: { recommendations: e.target.value } })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Outlook</Label>
-                <Textarea
-                  rows={2}
-                  value={selected.outlook}
-                  disabled={!editable}
-                  onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { outlook: e.target.value } })}
-                />
-              </div>
-
-              {(selected.activityLines?.length ?? 0) > 0 ? (
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">Activity variance</h3>
-                  <div className="overflow-x-auto rounded-lg border">
-                    <table className="cf-table w-full text-sm">
-                      <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                        <tr>
-                          <th className="px-3 py-2 font-medium">Activity</th>
-                          <th className="px-3 py-2 font-medium">WOs</th>
-                          <th className="px-3 py-2 font-medium">Planned</th>
-                          <th className="px-3 py-2 font-medium">Actual</th>
-                          <th className="px-3 py-2 font-medium">Var %</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {selected.activityLines.map((row) => (
-                          <tr key={row.activity}>
-                            <td className="px-3 py-2">{row.activity}</td>
-                            <td className="px-3 py-2 tabular-nums">{row.woCount}</td>
-                            <td className="px-3 py-2 tabular-nums">{fmtEtb(row.planned)}</td>
-                            <td className="px-3 py-2 tabular-nums">{fmtEtb(row.actual)}</td>
-                            <td className="px-3 py-2 tabular-nums">
-                              {row.variancePct > 0 ? "+" : ""}
-                              {row.variancePct}%
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-
-              {(selected.blockLines?.length ?? 0) > 0 ? (
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">Block progress</h3>
-                  <div className="overflow-x-auto rounded-lg border">
-                    <table className="cf-table w-full text-sm">
-                      <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                        <tr>
-                          <th className="px-3 py-2 font-medium">Block</th>
-                          <th className="px-3 py-2 font-medium">Progress</th>
-                          <th className="px-3 py-2 font-medium">Tickets</th>
-                          <th className="px-3 py-2 font-medium">Spend</th>
-                          <th className="px-3 py-2 font-medium">Planned</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {selected.blockLines.map((row) => (
-                          <tr key={row.block}>
-                            <td className="px-3 py-2">{row.block}</td>
-                            <td className="px-3 py-2 tabular-nums">{row.progress}%</td>
-                            <td className="px-3 py-2 tabular-nums">
-                              {row.ticketsClosed}/{row.tickets}
-                            </td>
-                            <td className="px-3 py-2 tabular-nums">{fmtEtb(row.spend)}</td>
-                            <td className="px-3 py-2 tabular-nums">{fmtEtb(row.planned)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-
-              {(selected.attentionItems?.length ?? 0) > 0 ? (
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">Items requiring attention</h3>
-                  <ul className="divide-y rounded-lg border">
-                    {selected.attentionItems.map((item) => (
-                      <li
-                        key={`${item.code}-${item.reason}`}
-                        className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2 text-sm"
-                      >
-                        <span>
-                          <span className="font-medium">{item.code}</span>{" "}
-                          <span className="text-muted-foreground">{item.title}</span>
-                        </span>
-                        <span className="text-xs text-amber-700 dark:text-amber-400">
-                          {item.reason}
-                        </span>
-                      </li>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Core Operations plan</Label>
+                <Select value={planId} onValueChange={setPlanId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plans.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} · {p.farmName}
+                      </SelectItem>
                     ))}
-                  </ul>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select value={cadence} onValueChange={(v) => setCadence(v as ReportCadence)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="six_month">Six-month</SelectItem>
+                      <SelectItem value="annual">Annual</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No attention items captured in this snapshot.
+                <div className="space-y-1.5">
+                  <Label>Period</Label>
+                  <Select value={periodLabel} onValueChange={setPeriodLabel} disabled={!periodOptions.length}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {periodOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {sourcePlan ? (
+                <p className="text-xs text-muted-foreground">
+                  Plan for this period {fmtEtb(livePreview.metrics.planEtb)} · actual so far {fmtEtb(livePreview.metrics.actualEtb)}
+                  {cadence === "monthly" ? " · months shown are the ones the plan schedules work in" : ""}.
                 </p>
-              )}
-
-              {(selected.missAttributions?.length ?? 0) > 0 ? (
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">Miss cause attribution</h3>
-                  <ul className="divide-y rounded-lg border">
-                    {selected.missAttributions.map((item, i) => (
-                      <li
-                        key={`${item.cause}-${i}`}
-                        className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2 text-sm"
-                      >
-                        <span>
-                          <span className="font-medium">{item.kpiLabel}</span>{" "}
-                          <span className="text-muted-foreground">{item.detail}</span>
-                        </span>
-                        <span className="text-xs text-muted-foreground">{item.cause}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               ) : null}
-
-              {(selected.events?.length ?? 0) > 0 ? (
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">Report trail</h3>
-                  <ul className="space-y-2 text-sm">
-                    {selected.events.map((ev) => (
-                      <li key={ev.id} className="flex flex-wrap gap-x-2 text-muted-foreground">
-                        <span className="tabular-nums">
-                          {new Date(ev.at).toLocaleString()}
-                        </span>
-                        <span className="text-foreground">{ev.action}</span>
-                        <span>Â· {ev.actor}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-2 border-t pt-4">
-                {editable && canAuthor ? (
-                  <>
-                    <Button size="sm" variant="secondary" onClick={onRefresh}>
-                      Refresh from live
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (!selected.summary.trim()) {
-                          toast.error("Add a summary before submit");
-                          return;
-                        }
-                        void submitMut
-                          .mutateAsync(selected.id)
-                          .then(() => toast.success("Submitted for release"))
-                          .catch((e) =>
-                            toast.error(e instanceof Error ? e.message : "Submit failed"),
-                          );
-                      }}
-                    >
-                      Submit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        void removeMut
-                          .mutateAsync(selected.id)
-                          .then(() => toast.message("Draft removed"))
-                          .catch((e) =>
-                            toast.error(e instanceof Error ? e.message : "Delete failed"),
-                          );
-                      }}
-                    >
-                      Delete draft
-                    </Button>
-                  </>
-                ) : null}
-                {selected.status === "submitted" && canRelease ? (
-                  <>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        void releaseMut.mutateAsync({ id: selected.id }).then(() => {
-                          if (selected.cadence === "monthly") {
-                            toast.success("Released to Silva — create next monthly WO with Loop G", {
-                              action: {
-                                label: "Create next MWO",
-                                onClick: () => {
-                                  window.location.href = `${CROPFORT_ROUTES.monthlyWorkOrders}?fromReport=${selected.id}`;
-                                },
-                              },
-                            });
-                          } else {
-                            toast.success("Released to Silva");
-                          }
-                        });
-                      }}
-                    >
-                      Release to Silva
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        void returnMut
-                          .mutateAsync({ id: selected.id })
-                          .then(() => toast.message("Returned for revision"))
-                          .catch((e) =>
-                            toast.error(e instanceof Error ? e.message : "Return failed"),
-                          );
-                      }}
-                    >
-                      Return
-                    </Button>
-                  </>
-                ) : null}
-                {selected.status === "draft" && canRelease ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      if (!selected.summary.trim()) {
-                        toast.error("Add a summary before release");
-                        return;
-                      }
-                      void releaseMut.mutateAsync({ id: selected.id }).then(() => {
-                        if (selected.cadence === "monthly") {
-                          toast.success("Released — create next monthly WO with Loop G", {
-                            action: {
-                              label: "Create next MWO",
-                              onClick: () => {
-                                window.location.href = `${CROPFORT_ROUTES.monthlyWorkOrders}?fromReport=${selected.id}`;
-                              },
-                            },
-                          });
-                        } else {
-                          toast.success("Released to Silva");
-                        }
-                      });
-                    }}
-                  >
-                    Release draft
-                  </Button>
-                ) : null}
-                <Button size="sm" variant="outline" asChild>
-                  <Link href="/cropfort/performance/variance">Open variance</Link>
-                </Button>
-                <Button size="sm" variant="outline" asChild>
-                  <Link href="/cropfort/performance/kpis">Open KPIs</Link>
-                </Button>
-              </div>
             </div>
           )}
-        </SectionCard>
-      </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenerateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void onCreate()} disabled={createMut.isPending || !sourcePlan || !periodLabel}>
+              Generate draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Return report for changes</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            rows={3}
+            value={returnNote}
+            onChange={(e) => setReturnNote(e.target.value)}
+            placeholder="What needs to change?"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReturnOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!returnNote.trim() || !selected || returnMut.isPending}
+              onClick={() => {
+                if (!selected) return;
+                void returnMut
+                  .mutateAsync({ id: selected.id, comment: returnNote.trim() })
+                  .then(() => {
+                    toast.success("Returned to SPX");
+                    setReturnOpen(false);
+                    setReturnNote("");
+                  })
+                  .catch((e) => toast.error(e instanceof Error ? e.message : "Return failed"));
+              }}
+            >
+              Return
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

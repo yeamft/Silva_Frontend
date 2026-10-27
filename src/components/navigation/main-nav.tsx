@@ -64,7 +64,7 @@ function WorkspaceLinks() {
                           module.id === "field-execution",
                       )
                   : workspace.id === "control"
-                    ? workspace.modules.filter((module) => module.id === "approvals")
+                    ? workspace.modules.filter((module) => module.id === "approvals" || module.id === "reports")
                     : workspace.id === "standards"
                       ? workspace.modules
                       : workspace.id === "administration"

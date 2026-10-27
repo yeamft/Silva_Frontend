@@ -13,6 +13,7 @@ import {
   FileDown,
   CircleDollarSign,
   ClipboardList,
+  FileText,
   FileWarning,
   FolderKanban,
   Leaf,
@@ -60,6 +61,7 @@ import {
 } from "@/lib/query/hooks/use-programme-plans";
 import { useDecideProject, useProjects } from "@/lib/query/hooks/use-projects";
 import { useDecideWeeklyPlan, useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
+import { useOpsReports, useReleaseOpsReport, useReturnOpsReport } from "@/lib/query/hooks/use-ops-reports";
 import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { canApproveOperations } from "@/lib/cropfort/platform-access";
 import { canApproveAsAssetOwner } from "@/lib/cropfortAccess";
@@ -82,7 +84,7 @@ function afpPromotionFromPlan(plan: ProgrammePlanDto): AfpPromotion {
   };
 }
 
-export type Tab = "afe" | "afp" | "projects" | "interventions" | "monthly" | "weekly" | "rates";
+export type Tab = "afe" | "afp" | "projects" | "interventions" | "monthly" | "weekly" | "rates" | "reports";
 
 const APPROVAL_TYPES: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "afp", label: "Core Operations plans", icon: Sprout },
@@ -92,6 +94,7 @@ const APPROVAL_TYPES: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "monthly", label: "Monthly work orders", icon: CalendarDays },
   { id: "weekly", label: "Weekly plans", icon: CalendarCheck2 },
   { id: "rates", label: "Rate cards", icon: WalletCards },
+  { id: "reports", label: "Reports", icon: FileText },
 ];
 
 
@@ -652,6 +655,10 @@ export default function ApprovalsView({
   const weeklyQuery = useWeeklyPlans(Boolean(activeProgram?.id), "submitted");
   const decideWeeklyMut = useDecideWeeklyPlan();
   const weeklyPlans = useMemo(() => weeklyQuery.data || [], [weeklyQuery.data]);
+  const reportsQuery = useOpsReports(Boolean(activeProgram?.id), "submitted");
+  const releaseReportMut = useReleaseOpsReport();
+  const returnReportMut = useReturnOpsReport();
+  const submittedReports = useMemo(() => reportsQuery.data || [], [reportsQuery.data]);
   const monthlyQuery = useMonthlyWorkOrders(Boolean(activeProgram?.id), "submitted");
   const decideMonthlyMut = useDecideMonthlyWorkOrder();
   const monthlyOrders = useMemo(() => monthlyQuery.data || [], [monthlyQuery.data]);
@@ -755,6 +762,13 @@ export default function ApprovalsView({
       amount: card.proposedRate,
       risk: card.flagged ? "Variance flagged" : undefined,
     }));
+    const reports: QueueRow[] = submittedReports.map((r) => ({
+      id: r.id,
+      kind: "reports" as const,
+      title: r.title || r.code,
+      meta: [r.code, r.periodLabel, r.farmName].filter(Boolean).join(" · "),
+      amount: r.actualEtb,
+    }));
     return {
       afe,
       afp,
@@ -763,8 +777,9 @@ export default function ApprovalsView({
       monthly,
       weekly,
       rates,
+      reports,
     };
-  }, [afes, afpPlans, projects, interventions, monthlyOrders, weeklyPlans, pendingRateCards]);
+  }, [afes, afpPlans, projects, interventions, monthlyOrders, weeklyPlans, pendingRateCards, submittedReports]);
 
   const rows = queues[tab];
   const selected = rows.find((r) => r.id === selectedId) ?? null;
@@ -790,6 +805,8 @@ export default function ApprovalsView({
     selected?.kind === "weekly"
       ? weeklyPlans.find((p) => p.id === selected.id) ?? null
       : null;
+  const selectedReport =
+    selected?.kind === "reports" ? submittedReports.find((r) => r.id === selected.id) ?? null : null;
   const selectedRateCard =
     selected?.kind === "rates"
       ? pendingRateCards.find((card) => card.id === selected.id) ?? null
@@ -843,6 +860,12 @@ export default function ApprovalsView({
           decision: decision === "approved" ? "approve" : "return",
           comment: note,
         });
+      } else if (selected.kind === "reports") {
+        if (decision === "approved") {
+          await releaseReportMut.mutateAsync({ id: selected.id });
+        } else {
+          await returnReportMut.mutateAsync({ id: selected.id, comment: note });
+        }
       } else if (selected.kind === "rates") {
         if (decision === "approved") {
           await approveRateCardProposal(selected.id);
@@ -913,7 +936,8 @@ export default function ApprovalsView({
     projectsQuery.isLoading ||
     interventionsQuery.isLoading ||
     monthlyQuery.isLoading ||
-    weeklyQuery.isLoading;
+    weeklyQuery.isLoading ||
+    reportsQuery.isLoading;
 
   const failedSources: { label: string; retry: () => Promise<unknown> }[] = [];
   if (isSilva && farmAssessmentsQuery.isError) {
@@ -931,6 +955,7 @@ export default function ApprovalsView({
     monthly: monthlyQuery.isLoading,
     weekly: weeklyQuery.isLoading,
     rates: rateCardsQuery.isLoading,
+    reports: reportsQuery.isLoading,
   }[tab];
 
   const waitingLabel = listLoading && allRows.length === 0
@@ -1114,6 +1139,37 @@ export default function ApprovalsView({
                 ) : null}
                 {selectedMonthly ? <MonthlyDetail order={selectedMonthly} /> : null}
                 {selectedWeekly ? <WeeklyDetail plan={selectedWeekly} /> : null}
+                {selectedReport ? (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <DetailKV label="Period">{selectedReport.periodLabel}</DetailKV>
+                      <DetailKV label="Plan">{fmtEtb(selectedReport.planEtb)}</DetailKV>
+                      <DetailKV label="Actual">
+                        {fmtEtb(selectedReport.actualEtb)}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          ({selectedReport.variancePct > 0 ? "+" : ""}
+                          {selectedReport.variancePct}%)
+                        </span>
+                      </DetailKV>
+                    </div>
+                    {selectedReport.summary ? (
+                      <DetailKV label="Summary">
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{selectedReport.summary}</p>
+                      </DetailKV>
+                    ) : null}
+                    {selectedReport.risks ? (
+                      <DetailKV label="Risks">
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{selectedReport.risks}</p>
+                      </DetailKV>
+                    ) : null}
+                    <Link
+                      href={`${CROPFORT_ROUTES.reports}/${selectedReport.id}`}
+                      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      Open full report →
+                    </Link>
+                  </div>
+                ) : null}
                 {selectedRateCard ? (
                   <div className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-2 lg:grid-cols-3">
                     <DetailKV label="Activity">

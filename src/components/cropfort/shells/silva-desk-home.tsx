@@ -18,6 +18,7 @@ import { listProgramRateCardProposals } from "@/lib/api/rate-card-proposals";
 import { useQuery } from "@tanstack/react-query";
 import { useAfes } from "@/lib/query/hooks/use-afes";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
+import { useOpsReports } from "@/lib/query/hooks/use-ops-reports";
 import { listFarmAssessments } from "@/lib/api/farm-assessments";
 import { fmtEtb } from "@/lib/cropfort/planning-helpers";
 
@@ -80,6 +81,7 @@ export function SilvaDeskHome() {
   });
   const afesQuery = useAfes(enabled, "submitted");
   const afpQuery = useProgrammePlans(enabled, { status: "submitted" });
+  const reportsQuery = useOpsReports(enabled, "submitted");
   const assessmentsQuery = useQuery({
     queryKey: ["farm-assessments-owner", activeProgram?.id],
     queryFn: () => listFarmAssessments({ status: "submitted" }),
@@ -129,14 +131,24 @@ export function SilvaDeskHome() {
         href: `${CROPFORT_ROUTES.rateCardProposals}/${card.id}`,
       });
     }
+    for (const r of reportsQuery.data || []) {
+      rows.push({
+        id: `report-${r.id}`,
+        type: "Report",
+        title: r.title || r.code,
+        meta: [r.code, r.periodLabel].filter(Boolean).join(" · "),
+        href: reviewHref("reports", r.id),
+      });
+    }
     return rows;
-  }, [assessmentsQuery.data, afpQuery.data, afesQuery.data, rateCardsQuery.data]);
+  }, [assessmentsQuery.data, afpQuery.data, afesQuery.data, rateCardsQuery.data, reportsQuery.data]);
 
   const isLoading =
     afesQuery.isLoading ||
     rateCardsQuery.isLoading ||
     afpQuery.isLoading ||
-    assessmentsQuery.isLoading;
+    assessmentsQuery.isLoading ||
+    reportsQuery.isLoading;
   const hasError =
     afesQuery.isError || rateCardsQuery.isError || afpQuery.isError || assessmentsQuery.isError;
   const approvalsReady = enabled && !isLoading && !hasError;

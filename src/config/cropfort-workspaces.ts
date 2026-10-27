@@ -226,6 +226,13 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         description: "Plans, AFEs, and monthly WO decisions",
       },
       {
+        id: "reports",
+        label: "Reports",
+        href: CROPFORT_ROUTES.reports,
+        roles: ALL_PLAN,
+        description: "Monthly, six-month and annual reports — SPX submits, asset owner accepts",
+      },
+      {
         id: "afp-register",
         label: "AFP Register",
         href: CROPFORT_ROUTES.afpRegister,
@@ -318,12 +325,6 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         label: "KPIs",
         href: "/cropfort/performance/kpis",
         description: "Process and Core Operations indicators",
-      },
-      {
-        id: "reports",
-        label: "Reports",
-        href: CROPFORT_ROUTES.reports,
-        description: "Monthly, six-month and annual reports",
       },
     ],
   },

@@ -9,6 +9,7 @@ const APPROVAL_TABS: Tab[] = [
   "monthly",
   "weekly",
   "rates",
+  "reports",
 ];
 
 export default async function ApprovalReviewPage({
