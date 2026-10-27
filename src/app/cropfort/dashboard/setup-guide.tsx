@@ -138,7 +138,7 @@ export function SetupGuide({
       {
         id: "work-orders",
         title: "Issue work orders",
-        hint: "Turn approved activities into work orders that vendors carry out.",
+        hint: "On an approved plan, choose Create work orders — one per scheduled month — then activate them for vendors.",
         href: CROPFORT_ROUTES.workOrders,
         action: "Open work orders",
         done: workOrderCount > 0,

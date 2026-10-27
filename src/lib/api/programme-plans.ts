@@ -3,6 +3,7 @@
  * Multiple named plans per workspace / farm area / budget year.
  */
 import { apiFetch } from "@/lib/api/http";
+import type { MonthlyWorkOrderDto } from "@/lib/api/monthly-work-orders";
 import type { CoreOpsActivity, CoreOpsPlan, CoreOpsPlanStatus } from "@/types/core-ops";
 import type { PlanMonth } from "@/lib/cropfort/ethiopian-year";
 import type { MonthIntensity } from "@/types/core-ops";
@@ -215,4 +216,12 @@ export function archiveProgrammePlan(id: string) {
   return apiFetch<ProgrammePlanDto>(`/programme-plans/${id}/archive`, {
     method: "POST",
   });
+}
+
+/** Turn an approved plan into one monthly work order per scheduled month (SPX desk). */
+export function createWorkOrdersFromPlan(id: string) {
+  return apiFetch<{ created: MonthlyWorkOrderDto[]; skipped: string[] }>(
+    `/programme-plans/${id}/work-orders`,
+    { method: "POST" },
+  );
 }

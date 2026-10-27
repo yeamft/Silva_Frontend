@@ -167,6 +167,13 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
     roles: EXEC_ROLES,
     modules: [
       {
+        id: "monthly-work-orders",
+        label: "Monthly Work Orders",
+        href: CROPFORT_ROUTES.monthlyWorkOrders,
+        roles: ALL_PLAN,
+        description: "Monthly orders created from approved Core Operations plans",
+      },
+      {
         id: "work-orders",
         label: "Work Orders",
         href: CROPFORT_ROUTES.workOrders,
@@ -503,7 +510,7 @@ export function resolveWorkspaceFromPath(
     { prefix: "/cropfort/admin/spend-bands", workspaceId: "administration", moduleId: "spend-bands" },
     { prefix: "/cropfort/admin/programs", workspaceId: "administration", moduleId: "programme-setup" },
     { prefix: "/cropfort/admin", workspaceId: "administration" },
-    { prefix: "/cropfort/monthly-work-orders", workspaceId: "execution", moduleId: "work-orders" },
+    { prefix: "/cropfort/monthly-work-orders", workspaceId: "execution", moduleId: "monthly-work-orders" },
     { prefix: "/cropfort/equipment-machinery", workspaceId: "planning", moduleId: "resources" },
     { prefix: "/cropfort/materials-inventory", workspaceId: "planning", moduleId: "resources" },
     { prefix: "/cropfort/communications", workspaceId: "execution", moduleId: "communications" },

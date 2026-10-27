@@ -4,11 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  CheckCircle2,
   Clock3,
   MoreHorizontal,
   Plus,
-  Store,
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,7 +19,6 @@ import {
   OpsDeskList,
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
-import { CompactSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useDeskMode } from "@/components/cropfort/desk-mode";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -117,16 +114,9 @@ const COLUMNS: {
   dot: string;
 }[] = [
   {
-    id: "assigned",
-    label: "Assigned",
-    statuses: ["assigned", "accepted"],
-    wash: "bg-muted/50",
-    dot: "bg-muted-foreground",
-  },
-  {
-    id: "field",
-    label: "Vendor",
-    statuses: ["in_progress", "returned"],
+    id: "vendor",
+    label: "With vendor",
+    statuses: ["assigned", "accepted", "in_progress", "returned"],
     wash: "bg-primary/[0.05]",
     dot: "bg-primary",
   },
@@ -139,7 +129,7 @@ const COLUMNS: {
   },
   {
     id: "asset",
-    label: "Asset close",
+    label: "Final check",
     statuses: ["site_reviewed"],
     wash: "bg-info/[0.08]",
     dot: "bg-info",
@@ -254,7 +244,6 @@ export default function FieldExecutionView() {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
-  const [reassignOpen, setReassignOpen] = useState(false);
   const [actionNote, setActionNote] = useState("");
   const [form, setForm] = useState({
     workOrderId: params.get("wo") || "",
@@ -267,25 +256,12 @@ export default function FieldExecutionView() {
     amount: "3200",
     due: "Fri",
   });
-  const [reassignForm, setReassignForm] = useState({
-    vendorLead: "",
-    siteOwner: "",
-    assetOwner: "",
-    due: "Fri",
-  });
-
   useEffect(() => {
     const vendorDefault = vendorLeads[0]?.id || "";
     const siteDefault = siteOwners[0]?.name || "";
     const assetDefault = assetOwners[0]?.name || "";
     if (!vendorDefault && !siteDefault && !assetDefault) return;
     setForm((f) => ({
-      ...f,
-      vendorLead: f.vendorLead || vendorDefault,
-      siteOwner: f.siteOwner || siteDefault,
-      assetOwner: f.assetOwner || assetDefault,
-    }));
-    setReassignForm((f) => ({
       ...f,
       vendorLead: f.vendorLead || vendorDefault,
       siteOwner: f.siteOwner || siteDefault,
@@ -411,17 +387,6 @@ export default function FieldExecutionView() {
     }
   };
 
-  const doReassign = () => {
-    toast.message("Create a follow-up ticket for crew changes.");
-    setReassignOpen(false);
-  };
-
-  const waitingCounts = {
-    vendor: tickets.filter((t) => ticketWaitingOn(t.status) === "vendor").length,
-    site: tickets.filter((t) => ticketWaitingOn(t.status) === "site_owner").length,
-    asset: tickets.filter((t) => ticketWaitingOn(t.status) === "asset_owner").length,
-  };
-
   return (
     <OpsDeskPage className={cn(isDeskApp && "gap-5")}>
       {isDeskApp ? (
@@ -458,46 +423,10 @@ export default function FieldExecutionView() {
         />
       )}
 
-      {desk === "spx" ? (
-        <CompactSummaryCards
-          label="Field ticket status summary"
-          items={[
-            { id: "vendor", label: "Vendor", value: woQuery.isLoading ? "—" : String(waitingCounts.vendor), footnote: "Awaiting vendor", icon: Store },
-            { id: "site", label: "Site", value: woQuery.isLoading ? "—" : String(waitingCounts.site), footnote: "Awaiting site review", icon: UserRound },
-            { id: "asset", label: "Asset", value: woQuery.isLoading ? "—" : String(waitingCounts.asset), footnote: "Awaiting asset owner", icon: Clock3 },
-            { id: "closed", label: "Closed", value: woQuery.isLoading ? "—" : String(tickets.filter((t) => t.status === "validated").length), footnote: "Validated tickets", icon: CheckCircle2 },
-          ]}
-        />
-      ) : (
-        <CompactSummaryCards
-          label="Field ticket status summary"
-          items={[
-            {
-              id: "queue",
-              label: "Queue",
-              value: woQuery.isLoading
-                ? "—"
-                : String(desk === "vendor" ? waitingCounts.vendor : waitingCounts.asset),
-              footnote: "Tickets awaiting action",
-              icon: Clock3,
-            },
-            {
-              id: "closed",
-              label: "Closed",
-              value: woQuery.isLoading
-                ? "—"
-                : String(tickets.filter((t) => t.status === "validated").length),
-              footnote: "Validated tickets",
-              icon: CheckCircle2,
-            },
-          ]}
-        />
-      )}
-
       <OpsDeskControlPanel
         search={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search…"
+        searchPlaceholder="Search task, block or vendor"
         view={view === "table" ? "list" : "board"}
         onViewChange={(v) => setView(v === "list" ? "table" : "board")}
         filters={
@@ -507,7 +436,7 @@ export default function FieldExecutionView() {
             options={[
               {
                 id: "mine",
-                label: party === "spx" ? "Queue" : PARTY_LABEL[party],
+                label: "My queue",
               },
               { id: "all", label: "All" },
             ]}
@@ -801,22 +730,6 @@ export default function FieldExecutionView() {
                       Return to vendor
                     </Button>
                   ) : null}
-                  {canAssign && selected.status !== "validated" ? (
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setReassignForm({
-                          vendorLead: selected.vendorLead,
-                          siteOwner: selected.siteOwner,
-                          assetOwner: selected.assetOwner,
-                          due: selected.due,
-                        });
-                        setReassignOpen(true);
-                      }}
-                    >
-                      Reassign
-                    </Button>
-                  ) : null}
                   {canBill && selected.status === "validated" ? (
                     paymentRequests.some(
                       (p) => p.fieldTicketId === selected.id && p.status !== "returned",
@@ -845,7 +758,7 @@ export default function FieldExecutionView() {
                 </div>
 
                 <OpsDeskChatter
-                  title="Chatter"
+                  title="History"
                   events={[...selected.events].reverse().map((e) => ({
                     id: e.id,
                     title: e.action,
@@ -862,7 +775,7 @@ export default function FieldExecutionView() {
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Assign ticket</DialogTitle>
+            <DialogTitle>Assign a field ticket</DialogTitle>
           </DialogHeader>
           <FormField
             label="Work order"
@@ -905,18 +818,6 @@ export default function FieldExecutionView() {
             )}
           />
           <FormField
-            label="Notes for the crew"
-            optional
-            render={(p) => (
-              <Textarea
-                {...p}
-                rows={2}
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              />
-            )}
-          />
-          <FormField
             label="Vendor lead"
             render={() => (
               <Select
@@ -937,60 +838,7 @@ export default function FieldExecutionView() {
               </Select>
             )}
           />
-          <FormField
-            label="Site owner"
-            render={() => (
-              <Select
-                value={form.siteOwner}
-                onValueChange={(siteOwner) => setForm((f) => ({ ...f, siteOwner }))}
-                disabled={!siteOwners.length}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={usersDirectory.isLoading ? "Loading users…" : "Select site owner"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {siteOwners.map((u) => (
-                    <SelectItem key={u.id} value={u.name}>
-                      {u.name} · {u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          <FormField
-            label="Asset owner"
-            render={() => (
-              <Select
-                value={form.assetOwner}
-                onValueChange={(assetOwner) => setForm((f) => ({ ...f, assetOwner }))}
-                disabled={!assetOwners.length}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={usersDirectory.isLoading ? "Loading users…" : "Select asset owner"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {assetOwners.map((u) => (
-                    <SelectItem key={u.id} value={u.name}>
-                      {u.name} · {u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          <div className="grid gap-3 sm:grid-cols-3">
-            <FormField
-              label="Hours"
-              render={(p) => (
-                <Input
-                  {...p}
-                  type="number"
-                  value={form.hours}
-                  onChange={(e) => setForm((f) => ({ ...f, hours: e.target.value }))}
-                />
-              )}
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
             <FormField
               label="Amount (ETB)"
               render={(p) => (
@@ -1013,6 +861,76 @@ export default function FieldExecutionView() {
               )}
             />
           </div>
+          <details className="rounded-md border border-border px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground">More options</summary>
+            <div className="mt-3 space-y-3">
+              <FormField
+                label="Notes for the crew"
+                optional
+                render={(p) => (
+                  <Textarea
+                    {...p}
+                    rows={2}
+                    value={form.description}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  />
+                )}
+              />
+              <FormField
+                label="Site owner"
+                render={() => (
+                  <Select
+                    value={form.siteOwner}
+                    onValueChange={(siteOwner) => setForm((f) => ({ ...f, siteOwner }))}
+                    disabled={!siteOwners.length}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={usersDirectory.isLoading ? "Loading users…" : "Select site owner"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {siteOwners.map((u) => (
+                        <SelectItem key={u.id} value={u.name}>
+                          {u.name} · {u.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <FormField
+                label="Asset owner"
+                render={() => (
+                  <Select
+                    value={form.assetOwner}
+                    onValueChange={(assetOwner) => setForm((f) => ({ ...f, assetOwner }))}
+                    disabled={!assetOwners.length}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={usersDirectory.isLoading ? "Loading users…" : "Select asset owner"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assetOwners.map((u) => (
+                        <SelectItem key={u.id} value={u.name}>
+                          {u.name} · {u.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <FormField
+                label="Hours"
+                render={(p) => (
+                  <Input
+                    {...p}
+                    type="number"
+                    value={form.hours}
+                    onChange={(e) => setForm((f) => ({ ...f, hours: e.target.value }))}
+                  />
+                )}
+              />
+            </div>
+          </details>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignOpen(false)}>
               Cancel
@@ -1032,100 +950,6 @@ export default function FieldExecutionView() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reassign ticket</DialogTitle>
-          </DialogHeader>
-          <FormField
-            label="Vendor lead"
-            render={() => (
-              <Select
-                value={reassignForm.vendorLead}
-                onValueChange={(vendorLead) =>
-                  setReassignForm((f) => ({ ...f, vendorLead }))
-                }
-                disabled={!vendorLeads.length}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select vendor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vendorLeads.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name} · {u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          <FormField
-            label="Site owner"
-            render={() => (
-              <Select
-                value={reassignForm.siteOwner}
-                onValueChange={(siteOwner) =>
-                  setReassignForm((f) => ({ ...f, siteOwner }))
-                }
-                disabled={!siteOwners.length}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select site owner" />
-                </SelectTrigger>
-                <SelectContent>
-                  {siteOwners.map((u) => (
-                    <SelectItem key={u.id} value={u.name}>
-                      {u.name} · {u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          <FormField
-            label="Asset owner"
-            render={() => (
-              <Select
-                value={reassignForm.assetOwner}
-                onValueChange={(assetOwner) =>
-                  setReassignForm((f) => ({ ...f, assetOwner }))
-                }
-                disabled={!assetOwners.length}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select asset owner" />
-                </SelectTrigger>
-                <SelectContent>
-                  {assetOwners.map((u) => (
-                    <SelectItem key={u.id} value={u.name}>
-                      {u.name} · {u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          <FormField
-            label="Due"
-            render={(p) => (
-              <Input
-                {...p}
-                value={reassignForm.due}
-                onChange={(e) =>
-                  setReassignForm((f) => ({ ...f, due: e.target.value }))
-                }
-              />
-            )}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReassignOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={doReassign}>Reassign</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </OpsDeskPage>
   );
 }

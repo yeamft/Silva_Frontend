@@ -382,3 +382,86 @@ export function summarizeMonthly(rows: AnnualBudgetRow[], data: AnnualPlanBudget
     return { name, manDays, cost, workers: workingDaysPerMonth > 0 ? manDays / workingDaysPerMonth : 0 };
   });
 }
+
+/** Ethiopian fiscal quarters: Q1 = Tikimt–Tahsas … Q4 = Hamle–Meskerem. */
+export function toQuarters(months: number[]): number[] {
+  return [0, 3, 6, 9].map((start) => months.slice(start, start + 3).reduce((s, v) => s + v, 0));
+}
+
+/**
+ * Monthly Plan tab: the plan row of every counted activity rolled up by category, for cost and
+ * man-days, with totals, cumulative cost and workers needed.
+ */
+export function summarizeMonthlyPlan(rows: AnnualBudgetRow[], data: AnnualPlanBudgetData) {
+  const { workingDaysPerMonth } = resolveSettings(data);
+  const counted = rows.filter((r) => r.counts);
+  const categories = PLAN_CATEGORIES.map((category) => {
+    const inCategory = counted.filter((r) => r.activity.category === category);
+    const month = (index: number, key: "cost" | "manDays") =>
+      inCategory.reduce((s, r) => s + r.monthly[index][key], 0);
+    return {
+      category,
+      annualCost: inCategory.reduce((s, r) => s + (r.selected.totalBudget ?? 0), 0),
+      annualManDays: inCategory.reduce((s, r) => s + (r.selected.totalManDays ?? 0), 0),
+      cost: PLAN_MONTH_NAMES.map((_, i) => month(i, "cost")),
+      manDays: PLAN_MONTH_NAMES.map((_, i) => month(i, "manDays")),
+    };
+  });
+  const sumMonths = (key: "cost" | "manDays") =>
+    PLAN_MONTH_NAMES.map((_, i) => categories.reduce((s, c) => s + c[key][i], 0));
+  const totalCost = sumMonths("cost");
+  const totalManDays = sumMonths("manDays");
+  let running = 0;
+  return {
+    categories,
+    annualCost: categories.reduce((s, c) => s + c.annualCost, 0),
+    annualManDays: categories.reduce((s, c) => s + c.annualManDays, 0),
+    totalCost,
+    totalManDays,
+    cumulativeCost: totalCost.map((v) => (running += v)),
+    workers: totalManDays.map((md) => (workingDaysPerMonth > 0 ? md / workingDaysPerMonth : 0)),
+  };
+}
+
+export type MonthlyTask = {
+  code: string;
+  activity: string;
+  category: PlanCategory;
+  subgroup: string;
+  unit: string;
+  /** Share of the annual quantity done this month (quantity per round × frequency × phasing). */
+  quantity: number;
+  manDays: number;
+  workers: number;
+  cost: number;
+  sharePct: number;
+  missingRate: boolean;
+};
+
+/** The plan for one month as a task list: every counted activity phased into that month. */
+export function monthlyTasks(
+  rows: AnnualBudgetRow[],
+  data: AnnualPlanBudgetData,
+  monthIndex: number,
+): MonthlyTask[] {
+  const { workingDaysPerMonth } = resolveSettings(data);
+  return rows
+    .filter((r) => r.counts && (r.phasing[monthIndex] || 0) > 0)
+    .map((r) => {
+      const share = r.phasing[monthIndex] || 0;
+      const manDays = r.monthly[monthIndex].manDays;
+      return {
+        code: r.activity.code,
+        activity: r.activity.activity,
+        category: r.activity.category,
+        subgroup: r.activity.subgroup,
+        unit: r.activity.unit,
+        quantity: r.quantityPerRound * (r.selected.frequency ?? 1) * share,
+        manDays,
+        workers: workingDaysPerMonth > 0 ? manDays / workingDaysPerMonth : 0,
+        cost: r.monthly[monthIndex].cost,
+        sharePct: share * 100,
+        missingRate: r.missingRate,
+      };
+    });
+}

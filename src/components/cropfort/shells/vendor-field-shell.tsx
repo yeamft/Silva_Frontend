@@ -8,7 +8,6 @@ import {
   Home,
   MessageSquare,
   Wrench,
-  WalletCards,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { NotificationBell } from "@/components/navigation/notification-bell";
@@ -39,12 +38,6 @@ const VENDOR_NAV: NavItem[] = [
     label: "My work",
     icon: ClipboardList,
     match: (p) => p.startsWith(CROPFORT_ROUTES.fieldTickets),
-  },
-  {
-    href: CROPFORT_ROUTES.paymentRequests,
-    label: "Payments",
-    icon: WalletCards,
-    match: (p) => p.startsWith(CROPFORT_ROUTES.paymentRequests),
   },
   {
     href: CROPFORT_ROUTES.communications,

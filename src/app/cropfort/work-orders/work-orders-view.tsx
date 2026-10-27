@@ -2,26 +2,15 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  AlertTriangle,
-  CalendarRange,
-  CheckCircle2,
-  ClipboardList,
-  MapPin,
-  MoreHorizontal,
-  Plus,
-  Sparkles,
-} from "lucide-react";
+import { CalendarRange, MapPin, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
-  OpsDeskChatter,
   OpsDeskControlPanel,
   OpsDeskFilterChips,
   OpsDeskHeader,
   OpsDeskList,
   OpsDeskPage,
 } from "@/components/cropfort/ops-desk";
-import { CompactSummaryCards } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -43,6 +32,7 @@ import {
 } from "@/components/ui/sheet";
 import { getCropfortArea } from "@/config/cropfort-areas";
 import { CROPFORT_ROUTES } from "@/config/navigation";
+import { isSpxDesk } from "@/lib/cropfort/platform-access";
 import { cn } from "@/lib/utils";
 import {
   mapTicketDto,
@@ -72,11 +62,7 @@ import {
 import { useFarmAreas } from "@/lib/query/hooks/use-org-map";
 
 type ViewMode = "board" | "list";
-type QuickFilter = "all" | "attention" | "week" | "crew";
-
-function weekNums(week: string): number[] {
-  return [...week.matchAll(/W(\d+)/gi)].map((m) => Number(m[1]));
-}
+type QuickFilter = "all" | "attention";
 
 const COLUMNS: { id: WoStatus; label: string; hint: string; dot: string; wash: string }[] = [
   { id: "draft", label: "Queued", hint: "", dot: "bg-muted-foreground", wash: "bg-muted/50" },
@@ -195,6 +181,8 @@ function WorkOrderCard({
 export default function WorkOrdersView() {
   const area = getCropfortArea("work_orders");
   const { user, activeProgram } = useCropfortAuth();
+  // Vendors carry out work orders; only SPX and field supervisors raise them
+  const canCreate = isSpxDesk(user.role) || user.role === "field_supervisor";
   const woQuery = useWorkOrders(Boolean(activeProgram?.id));
   const createWo = useCreateWorkOrder();
   const transitionWo = useTransitionWorkOrder();
@@ -222,32 +210,14 @@ export default function WorkOrdersView() {
 
   const selected = orders.find((o) => o.id === openId) ?? null;
 
-  const focusWeeks = useMemo(() => {
-    const nums = orders
-      .filter((o) => o.status !== "complete")
-      .flatMap((o) => weekNums(o.week));
-    if (!nums.length) return new Set<number>();
-    const latest = Math.max(...nums);
-    return new Set([latest, latest - 1].filter((n) => n > 0));
-  }, [orders]);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return orders.filter((wo) => {
       if (filter === "attention" && wo.attention === "none") return false;
-      if (filter === "week") {
-        const nums = weekNums(wo.week);
-        if (!nums.some((n) => focusWeeks.has(n))) return false;
-      }
-      if (filter === "crew") {
-        const mine = user.name.split(" ")[0]?.toLowerCase();
-        const lead = wo.assignee.split(" ")[0]?.toLowerCase();
-        if (lead !== mine && wo.vendor !== "RFSP") return false;
-      }
       if (!q) return true;
       return [wo.title, wo.code, wo.block, wo.vendor, wo.assignee, wo.activity].join(" ").toLowerCase().includes(q);
     });
-  }, [orders, query, filter, user.name, focusWeeks]);
+  }, [orders, query, filter]);
 
   const byColumn = useMemo(() => {
     const map: Record<WoStatus, WorkOrder[]> = { draft: [], issued: [], in_progress: [], complete: [] };
@@ -300,11 +270,10 @@ export default function WorkOrdersView() {
     }
   };
 
+  const attentionCount = orders.filter((o) => o.attention !== "none").length;
   const filters: { id: QuickFilter; label: string }[] = [
-    { id: "all", label: "All" },
-    { id: "attention", label: "Attention" },
-    { id: "week", label: "Week" },
-    { id: "crew", label: "Crew" },
+    { id: "all", label: `All (${orders.length})` },
+    { id: "attention", label: `Needs attention (${attentionCount})` },
   ];
 
   return (
@@ -326,27 +295,19 @@ export default function WorkOrdersView() {
           { label: area.label },
         ]}
         actions={
-          <Button size="sm" onClick={() => setIssueOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            Issue
-          </Button>
+          canCreate ? (
+            <Button size="sm" onClick={() => setIssueOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              New work order
+            </Button>
+          ) : null
         }
-      />
-
-      <CompactSummaryCards
-        label="Work order status summary"
-        items={[
-          { id: "open", label: "Open", value: woQuery.isLoading ? "—" : String(orders.filter((o) => o.status !== "complete").length), footnote: "Not yet completed", icon: ClipboardList },
-          { id: "in-field", label: "In field", value: woQuery.isLoading ? "—" : String(orders.filter((o) => o.status === "in_progress").length), footnote: "Currently underway", icon: Sparkles },
-          { id: "attention", label: "Attention", value: woQuery.isLoading ? "—" : String(orders.filter((o) => o.attention !== "none").length), footnote: "Requires follow-up", icon: AlertTriangle },
-          { id: "done", label: "Done", value: woQuery.isLoading ? "—" : String(orders.filter((o) => o.status === "complete").length), footnote: "Completed orders", icon: CheckCircle2 },
-        ]}
       />
 
       <OpsDeskControlPanel
         search={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search…"
+        searchPlaceholder="Search activity, block or vendor"
         view={view === "list" ? "list" : "board"}
         onViewChange={(v) => setView(v === "list" ? "list" : "board")}
         filters={
@@ -427,7 +388,7 @@ export default function WorkOrdersView() {
                 <p className="cf-numeric text-xs font-medium text-muted-foreground">{selected.code}</p>
                 <SheetTitle className="text-xl">{selected.title}</SheetTitle>
                 <SheetDescription>
-                  {selected.activity} · {selected.afe}
+                  {[selected.block, selected.vendor].filter(Boolean).join(" · ")}
                 </SheetDescription>
               </SheetHeader>
               <div className="space-y-5 px-6 py-5">
@@ -460,7 +421,7 @@ export default function WorkOrdersView() {
                 </dl>
                 <Progress value={selected.progress} className="h-2" />
                 <div>
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">Task tickets</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Field tickets</p>
                   <ul className="space-y-2">
                     {tickets.filter((t) => t.workOrderId === selected.id).length === 0 ? (
                       <li className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
@@ -491,34 +452,9 @@ export default function WorkOrdersView() {
                 <div className="flex flex-col gap-2">
                   {WO_NEXT[selected.status] ? <Button onClick={() => advance(selected.id)}>{WO_NEXT[selected.status]?.label}</Button> : null}
                   <Button variant="outline" asChild>
-                    <Link href={`${CROPFORT_ROUTES.fieldTickets}?wo=${selected.id}`}>Assign ticket</Link>
+                    <Link href={`${CROPFORT_ROUTES.fieldTickets}?wo=${selected.id}`}>Assign a field ticket</Link>
                   </Button>
                 </div>
-                <OpsDeskChatter
-                  title="History"
-                  events={[
-                    {
-                      id: `${selected.id}-created`,
-                      title: "Issued",
-                      subtitle: `${selected.assignee} · ${selected.vendor}`,
-                      at: selected.week,
-                    },
-                    {
-                      id: `${selected.id}-status`,
-                      title: selected.status.replace(/_/g, " "),
-                      subtitle: attentionLabel(selected.attention) || undefined,
-                      at: `${selected.progress}%`,
-                    },
-                    ...tickets
-                      .filter((t) => t.workOrderId === selected.id)
-                      .map((t) => ({
-                        id: t.id,
-                        title: `Ticket ${t.code}`,
-                        subtitle: `${t.title} · ${t.status}`,
-                        at: t.vendorLead,
-                      })),
-                  ]}
-                />
               </div>
             </>
           ) : null}
@@ -528,16 +464,16 @@ export default function WorkOrdersView() {
       <Dialog open={issueOpen} onOpenChange={setIssueOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Issue WO</DialogTitle>
+            <DialogTitle>New work order</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="wo-title">Title</Label>
+              <Label htmlFor="wo-title">Activity</Label>
               <Input
                 id="wo-title"
                 value={issueTitle}
                 onChange={(e) => setIssueTitle(e.target.value)}
-                placeholder="Title"
+                placeholder="e.g. Manual weeding, block B1"
               />
             </div>
             <div className="space-y-1.5">
@@ -565,7 +501,7 @@ export default function WorkOrdersView() {
               onClick={() => void issueFromForm()}
               disabled={!issueTitle.trim() || createWo.isPending || transitionWo.isPending}
             >
-              Issue
+              Create and issue
             </Button>
           </DialogFooter>
         </DialogContent>

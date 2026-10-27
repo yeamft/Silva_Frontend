@@ -44,11 +44,7 @@ function WorkspaceLinks() {
       <SidebarGroupContent>
         <SidebarMenu>
           {workspaces
-            .filter(
-              (workspace) =>
-                workspace.id !== "execution" &&
-                workspace.id !== "performance",
-            )
+            .filter((workspace) => workspace.id !== "performance")
             .map((workspace) => {
               const active = isWorkspaceActive(workspace.id);
               const Icon = workspace.icon;
@@ -60,6 +56,13 @@ function WorkspaceLinks() {
                         module.id === "farm-assessments" ||
                         module.id === "programme-archive",
                     )
+                  : workspace.id === "execution"
+                    ? workspace.modules.filter(
+                        (module) =>
+                          module.id === "monthly-work-orders" ||
+                          module.id === "work-orders" ||
+                          module.id === "field-execution",
+                      )
                   : workspace.id === "control"
                     ? workspace.modules.filter((module) => module.id === "approvals")
                     : workspace.id === "standards"

@@ -1,491 +1,436 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { Check, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import {
-  PLAN_MONTHS,
-  PLAN_MONTH_LABELS,
-  type PlanMonth,
-} from "@/lib/cropfort/ethiopian-year";
-import {
-  canApproveOutOfPlan,
-  canEditPlanScope,
-} from "@/lib/cropfort/platform-access";
+import { PLAN_MONTHS, PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
+import { canApproveOutOfPlan, canEditPlanScope } from "@/lib/cropfort/platform-access";
+import { cn } from "@/lib/utils";
 import { fmtEtb } from "@/store/cropfortOpsStore";
-import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
-import { deriveMonthlyLinesFromPlan } from "@/store/monthlyWorkOrderStore";
 import { useAgreementConfigStore } from "@/store/agreementConfigStore";
 import {
   useActivateMonthlyWorkOrder,
   useAddMonthlyOutOfPlanLine,
-  useCreateMonthlyWorkOrder,
   useDecideMonthlyWorkOrder,
   useMonthlyWorkOrders,
   useSubmitMonthlyWorkOrder,
 } from "@/lib/query/hooks/use-monthly-work-orders";
-import type { MonthlyWoStatus } from "@/types/agronomic-cycle";
+import { useCreateWorkOrdersFromPlan, useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
+import type { MonthlyWorkOrder, MonthlyWoStatus } from "@/types/agronomic-cycle";
 
-const STATUS_ORDER: MonthlyWoStatus[] = [
-  "draft",
-  "submitted",
-  "approved",
-  "returned",
-  "active",
+type Order = MonthlyWorkOrder & { returnedComment?: string | null };
+
+const STEPS: { status: MonthlyWoStatus; label: string }[] = [
+  { status: "draft", label: "Draft" },
+  { status: "submitted", label: "Submitted" },
+  { status: "approved", label: "Approved" },
+  { status: "active", label: "Active" },
 ];
+
+function stepIndex(status: MonthlyWoStatus) {
+  return status === "returned" ? 0 : STEPS.findIndex((s) => s.status === status);
+}
 
 export default function MonthlyWorkOrdersView() {
   const { activeProgram, user } = useCropfortAuth();
-  const params = useSearchParams();
-  const plan = useCoreOpsPlanStore((s) => s.plan);
-  const ordersQuery = useMonthlyWorkOrders(Boolean(activeProgram?.id));
-  const createMut = useCreateMonthlyWorkOrder();
+  const enabled = Boolean(activeProgram?.id);
+  const ordersQuery = useMonthlyWorkOrders(enabled);
+  const approvedPlansQuery = useProgrammePlans(enabled, { status: "approved" });
+  const fromPlanMut = useCreateWorkOrdersFromPlan();
   const submitMut = useSubmitMonthlyWorkOrder();
   const decideMut = useDecideMonthlyWorkOrder();
   const activateMut = useActivateMonthlyWorkOrder();
-  const addOutOfPlanMut = useAddMonthlyOutOfPlanLine();
-  const orders = ordersQuery.data || [];
+  const addExtraMut = useAddMonthlyOutOfPlanLine();
   const schedule7Blocking = useAgreementConfigStore((s) => s.schedule7Blocking);
-
-  const [month, setMonth] = useState<PlanMonth>("sep");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [outReason, setOutReason] = useState("");
-  const [outName, setOutName] = useState("");
-  const [outQty, setOutQty] = useState("1");
-  const [outEtb, setOutEtb] = useState("5000");
-  const [seedHint, setSeedHint] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fromReport = params.get("fromReport");
-    const fromKpi = params.get("fromKpi");
-    if (fromReport) {
-      setSeedHint("Report linked · create MWO for adjustments");
-    } else if (fromKpi) {
-      setSeedHint("KPI linked · create MWO from plan");
-    }
-  }, [params]);
-
-  useEffect(() => {
-    if (!orders.length) {
-      if (selectedId) setSelectedId(null);
-      return;
-    }
-    if (!selectedId || !orders.some((o) => o.id === selectedId)) {
-      setSelectedId(orders[0].id);
-    }
-  }, [orders, selectedId]);
-
-  const selected = useMemo(
-    () => orders.find((o) => o.id === selectedId) ?? orders[0] ?? null,
-    [orders, selectedId],
-  );
 
   const canEdit = canEditPlanScope(user.role);
   const canApprove = canApproveOutOfPlan(user.role);
-  /** In-plan-only MWOs: SPX may activate; out-of-plan needs Silva approve first. */
-  const canActivateScope = canEdit || canApprove;
 
-  const onCreate = async () => {
-    if (!canEdit) {
-      toast.error("SPX only");
-      return;
-    }
-    if (!plan) {
-      toast.error("No plan");
-      return;
-    }
+  const orders = useMemo(
+    () =>
+      ((ordersQuery.data || []) as Order[])
+        .slice()
+        .sort(
+          (a, b) =>
+            a.yearGc * 12 + PLAN_MONTHS.indexOf(a.ethiopianMonth) -
+            (b.yearGc * 12 + PLAN_MONTHS.indexOf(b.ethiopianMonth)),
+        ),
+    [ordersQuery.data],
+  );
+  const approvedPlans = approvedPlansQuery.data || [];
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnNote, setReturnNote] = useState("");
+  const [extraOpen, setExtraOpen] = useState(false);
+  const [extra, setExtra] = useState({ name: "", qty: "1", etb: "", reason: "" });
+
+  useEffect(() => {
+    if (!orders.length) return;
+    if (!selectedId || !orders.some((o) => o.id === selectedId)) setSelectedId(orders[0].id);
+  }, [orders, selectedId]);
+
+  const selected = orders.find((o) => o.id === selectedId) ?? null;
+  const editable = selected && (selected.status === "draft" || selected.status === "returned");
+  const hasExtra = selected?.lines.some((l) => !l.inPlan) ?? false;
+
+  const run = async (action: () => Promise<unknown>, success: string) => {
     try {
-      const lines = deriveMonthlyLinesFromPlan(plan.id, month);
-      if (!lines.length) {
-        toast.error("No activities this month");
-        return;
-      }
-      const row = await createMut.mutateAsync({
-        ethiopianMonth: month,
-        yearGc: new Date().getFullYear(),
-        farmName: plan.farmName || activeProgram?.name || "",
-        sourcePlanId: plan.id,
-        lines,
-      });
-      setSelectedId(row.id);
-      toast.success(`Created ${row.code}`);
+      await action();
+      toast.success(success);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not create monthly WO");
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
     }
   };
 
-  const onAddOutOfPlan = async () => {
-    if (!canEdit) {
-      toast.error("SPX only");
-      return;
+  /** The one thing to do next on the selected order, for this user. */
+  const primary = (() => {
+    if (!selected) return null;
+    if (editable && canEdit) {
+      return {
+        label: "Submit",
+        onClick: () => {
+          const blocking = schedule7Blocking();
+          if (blocking.length) {
+            toast.error(`Dependency register incomplete: ${blocking.map((b) => b.label).join(", ")}`);
+            return;
+          }
+          void run(() => submitMut.mutateAsync(selected.id), "Submitted");
+        },
+      };
     }
+    if (selected.status === "submitted" && canApprove) {
+      return {
+        label: "Approve",
+        onClick: () => void run(() => decideMut.mutateAsync({ id: selected.id, decision: "approve" }), "Approved"),
+      };
+    }
+    if (
+      canEdit &&
+      (selected.status === "approved" || (selected.status === "submitted" && !hasExtra))
+    ) {
+      return {
+        label: "Activate — send to vendor",
+        onClick: () => void run(() => activateMut.mutateAsync(selected.id), "Active · vendor can start"),
+      };
+    }
+    return null;
+  })();
+
+  const createFromPlan = (planId: string) =>
+    void fromPlanMut
+      .mutateAsync(planId)
+      .then(({ created }) => {
+        setCreateOpen(false);
+        if (!created.length) {
+          toast.info("Every scheduled month already has a work order");
+          return;
+        }
+        setSelectedId(created[0].id);
+        toast.success(`Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}`);
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Could not create work orders"));
+
+  const addExtra = async () => {
     if (!selected) return;
-    const name = outName.trim();
-    const reason = outReason.trim();
-    if (!name || !reason) {
-      toast.error("Activity name and reason are required");
+    if (!extra.name.trim() || !extra.reason.trim()) {
+      toast.error("Activity and reason are required");
       return;
     }
-    try {
-      await addOutOfPlanMut.mutateAsync({
-        id: selected.id,
-        activityName: name,
-        plannedQty: Number(outQty) || 1,
-        unit: selected.lines[0]?.unit || "ha",
-        etb: Number(outEtb) || 0,
-        blockId: selected.lines[0]?.blockId,
-        blockCode: selected.lines[0]?.blockCode,
-        reason,
-      });
-      setOutName("");
-      setOutReason("");
-      toast.success("Line added");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not add out-of-plan line");
-    }
+    await run(
+      () =>
+        addExtraMut.mutateAsync({
+          id: selected.id,
+          activityName: extra.name.trim(),
+          plannedQty: Number(extra.qty) || 1,
+          unit: selected.lines[0]?.unit || "ha",
+          etb: Number(extra.etb) || 0,
+          blockId: selected.lines[0]?.blockId,
+          blockCode: selected.lines[0]?.blockCode,
+          reason: extra.reason.trim(),
+        }),
+      "Extra work added · needs asset owner approval",
+    );
+    setExtra({ name: "", qty: "1", etb: "", reason: "" });
+    setExtraOpen(false);
   };
 
   return (
     <PageContainer>
       <PageHeader
-        eyebrow={activeProgram?.name || "Plan"}
         title="Monthly Work Orders"
-        breadcrumbs={[
-          { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Monthly Work Orders" },
-        ]}
+        breadcrumbs={[{ label: "Home", href: CROPFORT_ROUTES.dashboard }, { label: "Monthly Work Orders" }]}
+        actions={
+          canEdit ? (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" aria-hidden />
+              Create from plan
+            </Button>
+          ) : null
+        }
       />
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <Label>Month</Label>
-          <Select value={month} onValueChange={(v) => setMonth(v as PlanMonth)}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PLAN_MONTHS.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {PLAN_MONTH_LABELS[m]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button onClick={onCreate} disabled={!canEdit}>
-          Create
-        </Button>
-        {plan ? (
-          <p className="text-xs text-muted-foreground">
-            {plan.farmName} · {plan.budgetYearLabel} · {plan.status}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">No plan</p>
-        )}
-      </div>
-
-      {seedHint ? (
-        <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground">
-          {seedHint}
-        </div>
-      ) : null}
-
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-        <SectionCard title="Register">
-          <ul className="space-y-1">
-            {STATUS_ORDER.map((status) => {
-              const group = orders.filter((o) => o.status === status);
-              if (!group.length) return null;
-              return (
-                <li key={status} className="space-y-1">
-                  <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {status.replace("_", " ")}
-                  </p>
-                  {group.map((o) => (
-                    <button
-                      key={o.id}
-                      type="button"
-                      onClick={() => setSelectedId(o.id)}
-                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm ${
-                        selected?.id === o.id ? "bg-primary/10 text-primary" : "hover:bg-muted/60"
-                      }`}
-                    >
-                      <span>
-                        <span className="font-medium">{o.code}</span>
-                        <span className="ml-1 text-xs text-muted-foreground">
-                          {PLAN_MONTH_LABELS[o.ethiopianMonth]}
-                        </span>
-                      </span>
-                      <StatusBadge status={o.status} />
-                    </button>
-                  ))}
-                </li>
-              );
-            })}
-          </ul>
-        </SectionCard>
-
-        {selected ? (
-          <SectionCard
-            title={selected.code}
-            description={`${selected.farmName} · ${PLAN_MONTH_LABELS[selected.ethiopianMonth]} · ${fmtEtb(selected.totalEtb)}`}
-          >
-            <div className="mb-3 flex flex-wrap gap-2">
-              <StatusBadge status={selected.status} />
-              {selected.loop !== "none" ? (
-                <StatusBadge status="at_risk" label={`Loop ${selected.loop.split("_")[0]}`} />
-              ) : null}
-              {(selected.status === "draft" || selected.status === "returned") && canEdit && (
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    const blocking = schedule7Blocking();
-                    if (blocking.length) {
-                      toast.error(
-                        `Dependency register incomplete: ${blocking.map((b) => b.label).join(", ")}`,
-                      );
-                      return;
-                    }
-                    try {
-                      await submitMut.mutateAsync(selected.id);
-                      toast.success("Submitted");
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : "Submit failed");
-                    }
-                  }}
-                >
-                  Submit
-                </Button>
-              )}
-              {selected.status === "submitted" && canApprove && (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await decideMut.mutateAsync({ id: selected.id, decision: "approve" });
-                        toast.success("Approved");
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Approve failed");
-                      }
-                    }}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        await decideMut.mutateAsync({
-                          id: selected.id,
-                          decision: "return",
-                          comment: "Returned for revision",
-                        });
-                        toast.message("Returned");
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Return failed");
-                      }
-                    }}
-                  >
-                    Return
-                  </Button>
-                </>
-              )}
-              {(selected.status === "approved" ||
-                (selected.status === "submitted" &&
-                  selected.lines.every((l) => l.inPlan) &&
-                  canEdit)) &&
-                canActivateScope && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={async () => {
-                    try {
-                      await activateMut.mutateAsync(selected.id);
-                      toast.success("Monthly WO active");
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : "Activate failed");
-                    }
-                  }}
-                >
-                  Activate
-                </Button>
-              )}
-            </div>
-
-            {selected.lastMonthInsights ? (
-              <div className="mb-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Insights
-                  </p>
-                  {selected.loop === "G_monthly_feedback" ? (
-                    <StatusBadge status="info" label="Loop G" />
-                  ) : null}
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
-                  {selected.lastMonthInsights}
-                </p>
-                {selected.structuredInsights ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    From {selected.structuredInsights.priorReportCode} ·{" "}
-                    {selected.structuredInsights.periodLabel}
-                    {selected.structuredInsights.variancePct != null
-                      ? ` · variance ${selected.structuredInsights.variancePct}%`
-                      : ""}
-                  </p>
-                ) : null}
-              </div>
+      {ordersQuery.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : orders.length === 0 ? (
+        <SectionCard>
+          <div className="py-10 text-center">
+            <p className="font-medium">No monthly work orders yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              They are created from an approved Core Operations plan — one per scheduled month.
+            </p>
+            {canEdit ? (
+              <Button className="mt-4" onClick={() => setCreateOpen(true)}>
+                Create from plan
+              </Button>
             ) : null}
+          </div>
+        </SectionCard>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+          <SectionCard title="Months" flush>
+            <ul className="divide-y divide-border">
+              {orders.map((o) => (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(o.id)}
+                    className={cn(
+                      "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
+                      selected?.id === o.id ? "bg-primary/[0.07]" : "hover:bg-muted/50",
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">
+                        {PLAN_MONTH_LABELS[o.ethiopianMonth]} {o.yearGc}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {o.farmName || "—"} · {fmtEtb(o.totalEtb)}
+                      </span>
+                    </span>
+                    <StatusBadge status={o.status} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
 
-            {selected.recommendedAdjustments.length > 0 ? (
-              <div className="mb-3 overflow-x-auto rounded-lg border border-border">
-                <div className="border-b border-border px-3 py-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Adjustments
-                  </p>
-                </div>
+          {selected ? (
+            <SectionCard
+              title={`${PLAN_MONTH_LABELS[selected.ethiopianMonth]} ${selected.yearGc}`}
+              description={`${selected.farmName || "—"} · ${selected.lines.length} activities · ${fmtEtb(selected.totalEtb)}`}
+            >
+              <ol className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+                {STEPS.map((step, i) => {
+                  const current = stepIndex(selected.status);
+                  const done = i < current;
+                  return (
+                    <li key={step.status} className="flex items-center gap-2">
+                      {i > 0 ? <span className="h-px w-5 bg-border" aria-hidden /> : null}
+                      <span
+                        className={cn(
+                          "flex items-center gap-1 rounded-full px-2.5 py-1 font-medium",
+                          i === current
+                            ? "bg-primary text-primary-foreground"
+                            : done
+                              ? "bg-primary/10 text-primary"
+                              : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {done ? <Check className="h-3 w-3" aria-hidden /> : null}
+                        {step.label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {selected.status === "returned" && selected.returnedComment ? (
+                <p className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+                  Returned: {selected.returnedComment}
+                </p>
+              ) : null}
+
+              <div className="overflow-x-auto rounded-md border border-border">
                 <table className="cf-table w-full text-sm">
                   <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2">Activity</th>
-                      <th className="px-3 py-2">Qty Δ</th>
-                      <th className="px-3 py-2">ETB Δ</th>
-                      <th className="px-3 py-2">Reason</th>
-                      <th className="px-3 py-2">Apply</th>
+                      <th className="px-3 py-2">Block</th>
+                      <th className="px-3 py-2 text-right">Quantity</th>
+                      <th className="px-3 py-2 text-right">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selected.recommendedAdjustments.map((a) => (
-                      <tr key={a.id} className="border-t border-border">
-                        <td className="px-3 py-2 font-medium">{a.activityName}</td>
-                        <td className="cf-numeric px-3 py-2">
-                          {a.qtyDeltaPct > 0 ? "+" : ""}
-                          {a.qtyDeltaPct}%
-                        </td>
-                        <td className="cf-numeric px-3 py-2">
-                          {a.etbDeltaPct > 0 ? "+" : ""}
-                          {a.etbDeltaPct}%
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">{a.reason}</td>
+                    {selected.lines.map((l) => (
+                      <tr key={l.id} className="border-t border-border">
                         <td className="px-3 py-2">
-                          {(selected.status === "draft" || selected.status === "returned") &&
-                          canEdit ? (
-                            <Button
-                              size="sm"
-                              variant={a.accepted ? "secondary" : "outline"}
-                              className="h-7"
-                              onClick={() =>
-                                toast.message("Coming soon")
-                              }
-                            >
-                              {a.accepted ? "Accepted" : "Rejected"}
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              {a.accepted ? "On" : "Off"}
+                          <span className="font-medium">{l.activityName}</span>
+                          {!l.inPlan ? (
+                            <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                              Extra
                             </span>
-                          )}
+                          ) : null}
                         </td>
+                        <td className="px-3 py-2 text-muted-foreground">{l.blockCode || "—"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {l.plannedQty.toLocaleString()} <span className="text-xs text-muted-foreground">{l.unit}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmtEtb(l.etb)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            ) : null}
 
-            {selected.outOfPlanReason ? (
-              <p className="mb-3 text-sm text-amber-700 dark:text-amber-400">
-                Out-of-plan: {selected.outOfPlanReason}
-              </p>
-            ) : null}
+              {selected.outOfPlanReason ? (
+                <p className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">
+                  Extra work reason: {selected.outOfPlanReason}
+                </p>
+              ) : null}
 
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="cf-table w-full text-sm">
-                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2">Activity</th>
-                    <th className="px-3 py-2">Block</th>
-                    <th className="px-3 py-2">Qty</th>
-                    <th className="px-3 py-2">Manual</th>
-                    <th className="px-3 py-2">ETB</th>
-                    <th className="px-3 py-2">In plan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selected.lines.map((l) => (
-                    <tr key={l.id} className="border-t">
-                      <td className="px-3 py-2">
-                        <span className="font-medium">{l.activityName}</span>
-                        <span className="ml-1 text-xs text-muted-foreground">{l.activityCode}</span>
-                      </td>
-                      <td className="px-3 py-2">{l.blockCode}</td>
-                      <td className="px-3 py-2 cf-numeric">
-                        {l.plannedQty} {l.unit}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {l.manualsRef || "—"}
-                      </td>
-                      <td className="px-3 py-2 cf-numeric">{fmtEtb(l.etb)}</td>
-                      <td className="px-3 py-2">
-                        {l.inPlan ? (
-                          <StatusBadge status="approved" label="Yes" />
-                        ) : (
-                          <StatusBadge status="at_risk" label="Silva" />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {(selected.status === "draft" || selected.status === "returned") && canEdit && (
-              <div className="mt-4 grid gap-3 rounded-lg border border-dashed p-3 sm:grid-cols-2">
-                <p className="sm:col-span-2 text-sm font-medium">Out-of-plan line</p>
-                <div className="space-y-1">
-                  <Label>Activity</Label>
-                  <Input value={outName} onChange={(e) => setOutName(e.target.value)} placeholder="Activity" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Qty / ETB</Label>
-                  <div className="flex gap-2">
-                    <Input value={outQty} onChange={(e) => setOutQty(e.target.value)} className="w-20" />
-                    <Input value={outEtb} onChange={(e) => setOutEtb(e.target.value)} />
-                  </div>
-                </div>
-                <div className="sm:col-span-2 space-y-1">
-                  <Label>Reason</Label>
-                  <Textarea value={outReason} onChange={(e) => setOutReason(e.target.value)} rows={2} />
-                </div>
-                <Button size="sm" variant="outline" onClick={onAddOutOfPlan}>
-                  Add line
-                </Button>
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
+                {primary ? <Button onClick={primary.onClick}>{primary.label}</Button> : null}
+                {selected.status === "submitted" && canApprove ? (
+                  <Button variant="outline" onClick={() => setReturnOpen(true)}>
+                    Return
+                  </Button>
+                ) : null}
+                {editable && canEdit ? (
+                  <Button variant="outline" onClick={() => setExtraOpen(true)}>
+                    <Plus className="mr-1 h-4 w-4" aria-hidden />
+                    Add extra work
+                  </Button>
+                ) : null}
+                {selected.status === "active" ? (
+                  <Button variant="outline" asChild>
+                    <Link href={CROPFORT_ROUTES.workOrders}>Go to work orders</Link>
+                  </Button>
+                ) : null}
+                {!primary && selected.status !== "active" ? (
+                  <p className="self-center text-sm text-muted-foreground">
+                    {selected.status === "submitted" ? "Waiting for the asset owner." : "Nothing to do here."}
+                  </p>
+                ) : null}
               </div>
-            )}
-          </SectionCard>
-        ) : (
-          <SectionCard title="Monthly WO">
-            <p className="text-sm text-muted-foreground">None</p>
-          </SectionCard>
-        )}
-      </div>
+            </SectionCard>
+          ) : null}
+        </div>
+      )}
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create from an approved plan</DialogTitle>
+          </DialogHeader>
+          {approvedPlans.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No approved plans yet.{" "}
+              <Link href={CROPFORT_ROUTES.programmePlans} className="font-medium text-primary hover:underline">
+                Open Core Operations plans
+              </Link>
+            </p>
+          ) : (
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {approvedPlans.map((p) => (
+                <li key={p.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{p.name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {p.farmName} · {p.budgetYearLabel} · {fmtEtb(p.plannedCostEtb ?? 0)}
+                    </span>
+                  </span>
+                  <Button size="sm" disabled={fromPlanMut.isPending} onClick={() => createFromPlan(p.id)}>
+                    Create
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Return for changes</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            rows={3}
+            value={returnNote}
+            onChange={(e) => setReturnNote(e.target.value)}
+            placeholder="What needs to change?"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReturnOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!returnNote.trim() || !selected}
+              onClick={() => {
+                if (!selected) return;
+                void run(
+                  () => decideMut.mutateAsync({ id: selected.id, decision: "return", comment: returnNote.trim() }),
+                  "Returned",
+                ).then(() => {
+                  setReturnOpen(false);
+                  setReturnNote("");
+                });
+              }}
+            >
+              Return
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={extraOpen} onOpenChange={setExtraOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add extra work</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="extra-name">Activity</Label>
+              <Input id="extra-name" value={extra.name} onChange={(e) => setExtra((x) => ({ ...x, name: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="extra-qty">Quantity</Label>
+                <Input id="extra-qty" type="number" value={extra.qty} onChange={(e) => setExtra((x) => ({ ...x, qty: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="extra-etb">Cost (ETB)</Label>
+                <Input id="extra-etb" type="number" value={extra.etb} onChange={(e) => setExtra((x) => ({ ...x, etb: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="extra-reason">Why is it needed?</Label>
+              <Textarea id="extra-reason" rows={2} value={extra.reason} onChange={(e) => setExtra((x) => ({ ...x, reason: e.target.value }))} />
+            </div>
+            <p className="text-xs text-muted-foreground">Work outside the plan needs the asset owner&apos;s approval.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtraOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={addExtraMut.isPending} onClick={() => void addExtra()}>
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

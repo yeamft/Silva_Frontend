@@ -61,6 +61,7 @@ import {
   useDuplicateProgrammePlan,
   useProgrammePlans,
   useSubmitProgrammePlanMutation,
+  useCreateWorkOrdersFromPlan,
 } from "@/lib/query/hooks/use-programme-plans";
 import { listFarms } from "@/lib/api/benchmark-surveys";
 import { useQuery } from "@tanstack/react-query";
@@ -121,6 +122,7 @@ export default function ProgrammePlansRegisterView({
   const duplicateMut = useDuplicateProgrammePlan();
   const archiveMut = useArchiveProgrammePlan();
   const submitMut = useSubmitProgrammePlanMutation();
+  const workOrdersMut = useCreateWorkOrdersFromPlan();
 
   const years = useMemo(() => {
     const set = new Set<number>();
@@ -533,6 +535,39 @@ export default function ProgrammePlansRegisterView({
                                 }
                               >
                                 Submit
+                              </DropdownMenuItem>
+                            ) : null}
+                            {canCreate && (row.statusRaw === "approved" || row.statusRaw === "active") ? (
+                              <DropdownMenuItem
+                                disabled={workOrdersMut.isPending}
+                                onClick={() =>
+                                  void workOrdersMut
+                                    .mutateAsync(row.id)
+                                    .then(({ created, skipped }) => {
+                                      if (!created.length) {
+                                        toast.info(
+                                          skipped.length
+                                            ? "Work orders already exist for every scheduled month"
+                                            : "No scheduled activities to turn into work orders",
+                                        );
+                                        return;
+                                      }
+                                      toast.success(
+                                        `Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}`,
+                                        {
+                                          action: {
+                                            label: "Open",
+                                            onClick: () => router.push(CROPFORT_ROUTES.monthlyWorkOrders),
+                                          },
+                                        },
+                                      );
+                                    })
+                                    .catch((e) =>
+                                      toast.error(e instanceof Error ? e.message : "Could not create work orders"),
+                                    )
+                                }
+                              >
+                                Create work orders
                               </DropdownMenuItem>
                             ) : null}
                             {!archiveMode && row.statusRaw === "submitted" ? (

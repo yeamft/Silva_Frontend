@@ -3,6 +3,7 @@
 import {
   archiveProgrammePlan,
   createProgrammePlan,
+  createWorkOrdersFromPlan,
   decideProgrammePlan,
   duplicateProgrammePlan,
   listProgrammePlans,
@@ -89,6 +90,16 @@ export function useSubmitProgrammePlanMutation() {
       return submitProgrammePlan(row.id, hasNewerLocal ? local : undefined);
     },
     onSuccess: () => invalidate(),
+  });
+}
+
+export function useCreateWorkOrdersFromPlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => createWorkOrdersFromPlan(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.monthlyWorkOrders.all });
+    },
   });
 }
 

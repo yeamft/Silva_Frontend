@@ -9,7 +9,6 @@ import {
 } from "@/components/cropfort/attention-panel";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
-import { usePaymentRequests } from "@/lib/query/hooks/use-payment-requests";
 import { mapTicketDto, useWorkOrders } from "@/lib/query/hooks/use-work-orders";
 import { cn } from "@/lib/utils";
 import { ticketWaitingOn } from "@/store/cropfortOpsStore";
@@ -19,7 +18,6 @@ export function VendorDeskHome() {
   const { activeProgram } = useCropfortAuth();
   const enabled = Boolean(activeProgram?.id);
   const woQuery = useWorkOrders(enabled);
-  const prQuery = usePaymentRequests(enabled);
 
   const tickets = useMemo(() => {
     return (woQuery.data || []).flatMap((wo) =>
@@ -39,12 +37,6 @@ export function VendorDeskHome() {
     () => tickets.filter((t) => t.status === "validated").length,
     [tickets],
   );
-  const openPrs = useMemo(() => {
-    const rows = prQuery.data || [];
-    return rows.filter(
-      (r) => r.status === "draft" || r.status === "submitted" || r.status === "returned",
-    ).length;
-  }, [prQuery.data]);
 
   const estate = activeProgram?.name || "Field desk";
   const loading = woQuery.isLoading;
@@ -89,7 +81,7 @@ export function VendorDeskHome() {
         </AttentionPanel>
       ) : null}
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="grid grid-cols-3 gap-3">
         <DeskMetric
           href={CROPFORT_ROUTES.fieldTickets}
           label="Queue"
@@ -102,12 +94,6 @@ export function VendorDeskHome() {
           value={loading ? "—" : String(withSite)}
         />
         <DeskMetric label="Closed" value={loading ? "—" : String(closed)} />
-        <DeskMetric
-          href={CROPFORT_ROUTES.paymentRequests}
-          label="PRs"
-          value={loading ? "—" : String(openPrs)}
-          emphasis={!loading && openPrs > 0}
-        />
       </section>
     </div>
   );

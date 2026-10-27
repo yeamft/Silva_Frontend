@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
@@ -32,7 +33,9 @@ import {
   resolveSettings,
   summarizeAnnualBudget,
   summarizeCategories,
-  summarizeMonthly,
+  summarizeMonthlyPlan,
+  monthlyTasks,
+  toQuarters,
   type AnnualPlanActivityInput,
   type AnnualPlanBudgetData,
   type AnnualPlanMetrics,
@@ -103,7 +106,30 @@ export default function AnnualBudgetView() {
   );
 
   const summary = useMemo(() => summarizeCategories(rows, data), [rows, data]);
-  const monthly = useMemo(() => summarizeMonthly(rows, data), [rows, data]);
+  const monthlyPlan = useMemo(() => summarizeMonthlyPlan(rows, data), [rows, data]);
+  const [monthlyView, setMonthlyView] = useState<"cost" | "manDays">("cost");
+  const [taskMonth, setTaskMonth] = useState(0);
+  const tasks = useMemo(() => monthlyTasks(rows, data, taskMonth), [rows, data, taskMonth]);
+
+  const downloadTasksCsv = () => {
+    const header = ["Month", "Category", "Code", "Activity", "Sub-group", "Unit", "Quantity", "Share %", "Man-days", "Workers", "Cost (birr)"];
+    const lines = PLAN_MONTH_NAMES.flatMap((name, i) =>
+      monthlyTasks(rows, data, i).map((t) => [
+        name, t.category, t.code, t.activity, t.subgroup, t.unit,
+        t.quantity.toFixed(2), t.sharePct.toFixed(0), t.manDays.toFixed(2), t.workers.toFixed(1),
+        t.missingRate ? "" : t.cost.toFixed(2),
+      ]),
+    );
+    const csv = [header, ...lines]
+      .map((cells) => cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "monthly-tasks.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   const settings = resolveSettings(data);
   const [phasingOpen, setPhasingOpen] = useState<string | null>(null);
 
@@ -401,50 +427,180 @@ export default function AnnualBudgetView() {
           </SectionCard>
 
           <SectionCard
-            title="Monthly"
-            description={`Plan man-days and cost by month from each activity's phasing · workers needed = man-days ÷ ${settings.workingDaysPerMonth} working days.`}
+            title="Monthly plan"
+            action={
+              <div className="flex rounded-md border border-border p-0.5 text-xs">
+                {(["cost", "manDays"] as const).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => setMonthlyView(view)}
+                    className={cn(
+                      "rounded px-2.5 py-1 font-medium",
+                      monthlyView === view ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {view === "cost" ? "Cost (birr)" : "Labour (man-days)"}
+                  </button>
+                ))}
+              </div>
+            }
             flush
           >
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead />
-                    {monthly.map((m) => (
-                      <TableHead key={m.name} className="text-right">{m.name}</TableHead>
+                    <TableHead className="sticky left-0 bg-background">Category</TableHead>
+                    <TableHead className="text-right">Annual</TableHead>
+                    {PLAN_MONTH_NAMES.map((name) => (
+                      <TableHead key={name} className="text-right">{name}</TableHead>
                     ))}
-                    <TableHead className="text-right">Year</TableHead>
+                    {["Q1", "Q2", "Q3", "Q4"].map((q) => (
+                      <TableHead key={q} className="bg-muted/40 text-right">{q}</TableHead>
+                    ))}
+                    <TableHead className="text-right">Check</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell className="font-medium">Man-days</TableCell>
-                    {monthly.map((m) => (
-                      <TableCell key={m.name} className="text-right tabular-nums">{fmtNum(m.manDays, 0)}</TableCell>
-                    ))}
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {fmtNum(monthly.reduce((s, m) => s + m.manDays, 0), 0)}
+                  {[
+                    ...monthlyPlan.categories.map((c) => ({
+                      label: c.category,
+                      annual: monthlyView === "cost" ? c.annualCost : c.annualManDays,
+                      months: monthlyView === "cost" ? c.cost : c.manDays,
+                      total: false,
+                    })),
+                    {
+                      label: monthlyView === "cost" ? "Total field activities" : "Total man-days",
+                      annual: monthlyView === "cost" ? monthlyPlan.annualCost : monthlyPlan.annualManDays,
+                      months: monthlyView === "cost" ? monthlyPlan.totalCost : monthlyPlan.totalManDays,
+                      total: true,
+                    },
+                  ].map((row) => {
+                    const check = row.months.reduce((s, v) => s + v, 0) - row.annual;
+                    return (
+                      <TableRow key={row.label} className={cn(row.total && "border-t-2 font-semibold")}>
+                        <TableCell className="sticky left-0 whitespace-nowrap bg-background font-medium">{row.label}</TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">{fmtNum(row.annual, 0)}</TableCell>
+                        {row.months.map((v, i) => (
+                          <TableCell key={i} className={cn("text-right tabular-nums", !v && "text-muted-foreground")}>
+                            {v ? fmtNum(v, 0) : "–"}
+                          </TableCell>
+                        ))}
+                        {toQuarters(row.months).map((v, i) => (
+                          <TableCell key={i} className="bg-muted/40 text-right tabular-nums">{v ? fmtNum(v, 0) : "–"}</TableCell>
+                        ))}
+                        <TableCell
+                          className={cn("text-right tabular-nums", Math.abs(check) >= 1 ? "text-destructive" : "text-muted-foreground")}
+                        >
+                          {Math.abs(check) >= 1 ? fmtNum(check, 0) : "–"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  <TableRow className="text-muted-foreground">
+                    <TableCell className="sticky left-0 whitespace-nowrap bg-background">
+                      {monthlyView === "cost" ? "Cumulative" : `Workers needed (÷ ${settings.workingDaysPerMonth} days)`}
                     </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Cost (birr)</TableCell>
-                    {monthly.map((m) => (
-                      <TableCell key={m.name} className="text-right tabular-nums">{fmtNum(m.cost, 0)}</TableCell>
-                    ))}
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {fmtNum(monthly.reduce((s, m) => s + m.cost, 0), 0)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Workers needed</TableCell>
-                    {monthly.map((m) => (
-                      <TableCell key={m.name} className="text-right tabular-nums">{fmtNum(m.workers, 0)}</TableCell>
-                    ))}
                     <TableCell />
+                    {(monthlyView === "cost" ? monthlyPlan.cumulativeCost : monthlyPlan.workers).map((v, i) => (
+                      <TableCell key={i} className="text-right tabular-nums">{v ? fmtNum(v, 0) : "–"}</TableCell>
+                    ))}
+                    <TableCell colSpan={5} />
                   </TableRow>
                 </TableBody>
               </Table>
             </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Monthly tasks"
+            action={
+              <Button size="sm" variant="outline" onClick={downloadTasksCsv} disabled={!monthlyPlan.annualCost && !monthlyPlan.annualManDays}>
+                <Download className="mr-1.5 h-4 w-4" aria-hidden />
+                Download all months
+              </Button>
+            }
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {PLAN_MONTH_NAMES.map((name, i) => {
+                const count = monthlyTasks(rows, data, i).length;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setTaskMonth(i)}
+                    className={cn(
+                      "rounded-md border px-2.5 py-1 text-xs font-medium",
+                      taskMonth === i
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {name}
+                    <span className="ml-1 opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {tasks.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No work planned in {PLAN_MONTH_NAMES[taskMonth]}.
+              </p>
+            ) : (
+              <div className="mt-3 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Task</TableHead>
+                      <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead className="text-right">Share</TableHead>
+                      <TableHead className="text-right">Man-days</TableHead>
+                      <TableHead className="text-right">Workers</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {PLAN_CATEGORIES.map((category) => {
+                      const group = tasks.filter((t) => t.category === category);
+                      if (!group.length) return null;
+                      return (
+                        <Fragment key={category}>
+                          <TableRow className="bg-muted/40 hover:bg-muted/40">
+                            <TableCell colSpan={6} className="py-1.5 text-xs font-semibold">{category}</TableCell>
+                          </TableRow>
+                          {group.map((t) => (
+                            <TableRow key={t.code}>
+                              <TableCell>
+                                <span className="block font-medium">{t.activity}</span>
+                                <span className="font-mono text-[11px] text-muted-foreground">{t.code}</span>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-right tabular-nums">
+                                {fmtNum(t.quantity, 1)} <span className="text-xs text-muted-foreground">{t.unit}</span>
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-muted-foreground">{fmtNum(t.sharePct, 0)}%</TableCell>
+                              <TableCell className="text-right tabular-nums">{fmtNum(t.manDays, 0)}</TableCell>
+                              <TableCell className="text-right tabular-nums">{fmtNum(t.workers, 0)}</TableCell>
+                              <TableCell className={cn("text-right tabular-nums", t.missingRate && "text-destructive")}>
+                                {t.missingRate ? "No rate" : fmtEtb(t.cost)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </Fragment>
+                      );
+                    })}
+                    <TableRow className="border-t-2 font-semibold">
+                      <TableCell>{tasks.length} tasks</TableCell>
+                      <TableCell colSpan={2} />
+                      <TableCell className="text-right tabular-nums">{fmtNum(tasks.reduce((s, t) => s + t.manDays, 0), 0)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmtNum(tasks.reduce((s, t) => s + t.workers, 0), 0)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmtEtb(tasks.reduce((s, t) => s + t.cost, 0))}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </SectionCard>
 
           {PLAN_CATEGORIES.map((category) => {

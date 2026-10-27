@@ -5,6 +5,9 @@ import {
   summarizeAnnualBudget,
   summarizeCategories,
   summarizeMonthly,
+  summarizeMonthlyPlan,
+  monthlyTasks,
+  toQuarters,
   type BenchmarkActivity,
 } from "@/lib/annual-plan-budget";
 
@@ -163,6 +166,28 @@ describe("annual plan benchmark budgets", () => {
     // Template phases land clearing 100% in Hidar
     expect(months[1].cost).toBeCloseTo(nu01.selected.totalBudget ?? 0);
     expect(months[1].workers).toBeCloseTo((nu01.selected.totalManDays ?? 0) / 26);
+  });
+
+  it("rolls the plan up by category and month, and turns each month into tasks", () => {
+    const data = defaultAnnualPlanBudget();
+    data.activityInputs["NU-01"] = { quantityPerRound: 2, phasing: [0.5, 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
+    const rows = summarizeAnnualBudget(data, activities);
+    const nu01 = rows.find((item) => item.activity.code === "NU-01")!;
+    const annual = nu01.selected.totalBudget ?? 0;
+
+    const plan = summarizeMonthlyPlan(rows, data);
+    const nursery = plan.categories.find((c) => c.category === "Nursery")!;
+    expect(nursery.annualCost).toBeCloseTo(annual);
+    expect(nursery.cost[0]).toBeCloseTo(annual / 2);
+    expect(plan.cumulativeCost[11]).toBeCloseTo(plan.annualCost);
+    expect(toQuarters(plan.totalCost)[0]).toBeCloseTo(annual);
+
+    const tikimt = monthlyTasks(rows, data, 0);
+    expect(tikimt).toHaveLength(1);
+    expect(tikimt[0]).toMatchObject({ code: "NU-01", sharePct: 50 });
+    expect(tikimt[0].quantity).toBeCloseTo(2 * (nu01.selected.frequency ?? 1) * 0.5);
+    expect(tikimt[0].workers).toBeCloseTo(tikimt[0].manDays / 26);
+    expect(monthlyTasks(rows, data, 5)).toHaveLength(0);
   });
 
   it("flags a missing rate without blanking the whole category", () => {
