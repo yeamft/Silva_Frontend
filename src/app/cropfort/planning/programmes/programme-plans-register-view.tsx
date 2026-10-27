@@ -53,6 +53,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { budgetYearLabel } from "@/lib/cropfort/ethiopian-year";
+import { cn } from "@/lib/utils";
+import { PLAN_PERIODS, planPeriodLabel, planPeriodOf, type PlanPeriod } from "@/lib/cropfort/plan-period";
 import { canCreateProgrammePlan } from "@/lib/cropfort/platform-access";
 import { fmtEtb } from "@/store/cropfortOpsStore";
 import {
@@ -101,6 +103,7 @@ export default function ProgrammePlansRegisterView({
   const [name, setName] = useState("");
   const [farmEstateId, setFarmEstateId] = useState("");
   const [planYear, setPlanYear] = useState(String(new Date().getFullYear()));
+  const [planPeriod, setPlanPeriod] = useState<PlanPeriod>("annual");
   const [description, setDescription] = useState("");
   const [archiveTarget, setArchiveTarget] = useState<ProgrammePlanDto | null>(null);
 
@@ -168,6 +171,7 @@ export default function ProgrammePlansRegisterView({
     setName("");
     setFarmEstateId(farms[0]?.id || "");
     setPlanYear(String(new Date().getFullYear()));
+    setPlanPeriod("annual");
     setDescription("");
     setCreateOpen(true);
   };
@@ -191,7 +195,9 @@ export default function ProgrammePlansRegisterView({
         name: name.trim(),
         farmEstateId,
         planYear: year,
-        planningCycleLabel: `${year} Core Operations`,
+        planPeriod,
+        planningCycleLabel:
+          planPeriod === "annual" ? `${year} Core Operations` : `${year} Core Operations · ${planPeriodLabel(planPeriod)}`,
         budgetYearLabel: budgetYearLabel(year).label,
         description: description.trim(),
         notes: "",
@@ -438,6 +444,11 @@ export default function ProgrammePlansRegisterView({
                       <TableCell className="min-w-[140px] text-sm tabular-nums">
                         <span className="whitespace-nowrap">
                           {row.budgetYearLabel || `${row.budgetYearGc} GC`}
+                          {planPeriodOf(row) !== "annual" ? (
+                            <span className="ml-1.5 rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
+                              {planPeriodOf(row) === "first_half" ? "Tikimt–Megabit" : "Miyazya–Meskerem"}
+                            </span>
+                          ) : null}
                         </span>
                       </TableCell>
                       <TableCell className="min-w-[150px]">
@@ -659,6 +670,27 @@ export default function ProgrammePlansRegisterView({
                   value={planYear}
                   onChange={(e) => setPlanYear(e.target.value)}
                 />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Plan covers *</Label>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {PLAN_PERIODS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPlanPeriod(p.id)}
+                    aria-pressed={planPeriod === p.id}
+                    className={cn(
+                      "rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                      planPeriod === p.id
+                        ? "border-primary bg-primary/[0.06] font-medium text-primary"
+                        : "border-border hover:bg-muted/50",
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="space-y-1">

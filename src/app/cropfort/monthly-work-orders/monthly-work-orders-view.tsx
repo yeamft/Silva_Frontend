@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Check, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
@@ -43,6 +44,7 @@ function stepIndex(status: MonthlyWoStatus) {
 
 export default function MonthlyWorkOrdersView() {
   const { activeProgram, user } = useCropfortAuth();
+  const router = useRouter();
   const enabled = Boolean(activeProgram?.id);
   const ordersQuery = useMonthlyWorkOrders(enabled);
   const approvedPlansQuery = useProgrammePlans(enabled, { status: "approved" });
@@ -121,8 +123,20 @@ export default function MonthlyWorkOrdersView() {
       (selected.status === "approved" || (selected.status === "submitted" && !hasExtra))
     ) {
       return {
-        label: "Activate — send to vendor",
-        onClick: () => void run(() => activateMut.mutateAsync(selected.id), "Active · vendor can start"),
+        label: "Activate — issue work orders",
+        onClick: () =>
+          void activateMut
+            .mutateAsync(selected.id)
+            .then((row) => {
+              const { issuedCount = 0, heldBack = [] } = row as Order & { issuedCount?: number; heldBack?: string[] };
+              toast.success(
+                `Issued ${issuedCount} work order${issuedCount === 1 ? "" : "s"} to the vendor` +
+                  (heldBack.length ? ` · ${heldBack.length} kept as draft` : ""),
+                { action: { label: "Open", onClick: () => router.push(CROPFORT_ROUTES.workOrders) } },
+              );
+              if (heldBack.length) toast.warning(heldBack.join("\n"));
+            })
+            .catch((e) => toast.error(e instanceof Error ? e.message : "Activate failed")),
       };
     }
     return null;
@@ -317,6 +331,9 @@ export default function MonthlyWorkOrdersView() {
                   <Button variant="outline" asChild>
                     <Link href={CROPFORT_ROUTES.workOrders}>Go to work orders</Link>
                   </Button>
+                ) : null}
+                {selected.status === "active" && selected.note ? (
+                  <p className="w-full whitespace-pre-wrap text-xs text-muted-foreground">{selected.note}</p>
                 ) : null}
                 {!primary && selected.status !== "active" ? (
                   <p className="self-center text-sm text-muted-foreground">

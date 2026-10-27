@@ -109,6 +109,7 @@ export function createProgrammePlan(input: {
   name: string;
   farmEstateId: string;
   planYear: number;
+  planPeriod?: "annual" | "first_half" | "second_half";
   planningCycleLabel?: string;
   budgetYearLabel?: string;
   description?: string;

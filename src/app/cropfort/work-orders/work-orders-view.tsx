@@ -296,10 +296,15 @@ export default function WorkOrdersView() {
         ]}
         actions={
           canCreate ? (
-            <Button size="sm" onClick={() => setIssueOpen(true)}>
-              <Plus className="h-3.5 w-3.5" />
-              New work order
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" asChild>
+                <Link href={CROPFORT_ROUTES.monthlyWorkOrders}>From monthly orders</Link>
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setIssueOpen(true)}>
+                <Plus className="h-3.5 w-3.5" />
+                One-off
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -464,8 +469,12 @@ export default function WorkOrdersView() {
       <Dialog open={issueOpen} onOpenChange={setIssueOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New work order</DialogTitle>
+            <DialogTitle>One-off work order</DialogTitle>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            For work that isn&apos;t in a plan. Planned work is issued automatically when a monthly work order is
+            activated.
+          </p>
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="wo-title">Activity</Label>

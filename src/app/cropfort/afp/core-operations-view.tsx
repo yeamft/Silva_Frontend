@@ -40,7 +40,6 @@ import { CROPFORT_ROUTES } from "@/config/navigation";
 import { canViewRateCard } from "@/lib/cropfortAccess";
 import { canCreateProgrammePlan, canApproveOperations } from "@/lib/cropfort/platform-access";
 import {
-  PLAN_MONTHS,
   PLAN_MONTH_LABELS,
   budgetYearLabel,
   type PlanMonth,
@@ -51,6 +50,7 @@ import {
   scheduleStatusOf,
   useCoreOpsPlanStore,
 } from "@/store/coreOpsPlanStore";
+import { monthsForPeriod, planPeriodLabel, planPeriodOf } from "@/lib/cropfort/plan-period";
 import { useSpendBandStore } from "@/store/spendBandStore";
 import type { CoreOpsActivity, CoreOpsStep, MonthIntensity } from "@/types/core-ops";
 
@@ -152,6 +152,13 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeFrom, setRangeFrom] = useState<PlanMonth>("oct");
   const [rangeTo, setRangeTo] = useState<PlanMonth>("dec");
+  // A six-month plan only schedules the months in its half of the year
+  const planPeriod = planPeriodOf(plan ?? {});
+  const periodMonths = monthsForPeriod(planPeriod);
+  useEffect(() => {
+    if (!periodMonths.includes(rangeFrom)) setRangeFrom(periodMonths[0]);
+    if (!periodMonths.includes(rangeTo)) setRangeTo(periodMonths[Math.min(2, periodMonths.length - 1)]);
+  }, [periodMonths, rangeFrom, rangeTo]);
   const [rangeIntensity, setRangeIntensity] = useState<MonthIntensity>("active");
   const [brush, setBrush] = useState<MonthIntensity>("active");
   const paintingRef = useRef(false);
@@ -325,7 +332,13 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
         title={plan?.name || "Core Operations plan"}
         description={
           plan
-            ? [plan.farmName, budgetYearLabel(plan.budgetYearGc).label].filter(Boolean).join(" · ")
+            ? [
+                plan.farmName,
+                budgetYearLabel(plan.budgetYearGc).label,
+                planPeriod !== "annual" ? planPeriodLabel(planPeriod) : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
             : undefined
         }
         breadcrumbs={[
@@ -905,7 +918,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                   />
                 </TableHead>
                 <TableHead className="sticky left-10 z-[1] min-w-[11rem] bg-card">Activity</TableHead>
-                {PLAN_MONTHS.map((m) => (
+                {periodMonths.map((m) => (
                   <TableHead key={m} className="px-1 text-center text-[11px]">
                     {PLAN_MONTH_LABELS[m]}
                   </TableHead>
@@ -915,7 +928,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
             <TableBody>
               {pagedSchedule.length === 0 ? (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={14} className="py-12 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={periodMonths.length + 2} className="py-12 text-center text-sm text-muted-foreground">
                     {includedActivities.length === 0
                       ? "No activities included yet — tick some on the Activities step."
                       : "No activities match these filters."}
@@ -944,7 +957,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                           {scheduleStatusOf(act) === "scheduled" ? scheduleLabel(act) : "Not scheduled"}
                         </p>
                       </TableCell>
-                      {PLAN_MONTHS.map((m) => (
+                      {periodMonths.map((m) => (
                         <TableCell key={m} className="p-0.5 text-center">
                           <button
                             type="button"
@@ -1098,7 +1111,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PLAN_MONTHS.map((m) => (
+                    {periodMonths.map((m) => (
                       <SelectItem key={m} value={m}>
                         {PLAN_MONTH_LABELS[m]}
                       </SelectItem>
@@ -1115,7 +1128,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PLAN_MONTHS.map((m) => (
+                    {periodMonths.map((m) => (
                       <SelectItem key={m} value={m}>
                         {PLAN_MONTH_LABELS[m]}
                       </SelectItem>
