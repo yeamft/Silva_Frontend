@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Plus } from "lucide-react";
@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,7 +43,7 @@ function stepIndex(status: MonthlyWoStatus) {
   return status === "returned" ? 0 : STEPS.findIndex((s) => s.status === status);
 }
 
-export default function MonthlyWorkOrdersView() {
+export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string }) {
   const { activeProgram, user } = useCropfortAuth();
   const router = useRouter();
   const enabled = Boolean(activeProgram?.id);
@@ -70,20 +71,19 @@ export default function MonthlyWorkOrdersView() {
     [ordersQuery.data],
   );
   const approvedPlans = approvedPlansQuery.data || [];
+  const allPlansQuery = useProgrammePlans(enabled, {});
+  const planNames = useMemo(
+    () => new Map((allPlansQuery.data || []).map((p) => [p.id, p.name])),
+    [allPlansQuery.data],
+  );
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnNote, setReturnNote] = useState("");
   const [extraOpen, setExtraOpen] = useState(false);
   const [extra, setExtra] = useState({ name: "", qty: "1", etb: "", reason: "" });
 
-  useEffect(() => {
-    if (!orders.length) return;
-    if (!selectedId || !orders.some((o) => o.id === selectedId)) setSelectedId(orders[0].id);
-  }, [orders, selectedId]);
-
-  const selected = orders.find((o) => o.id === selectedId) ?? null;
+  const selected = orderId ? orders.find((o) => o.id === orderId) ?? null : null;
   const editable = selected && (selected.status === "draft" || selected.status === "returned");
   const hasExtra = selected?.lines.some((l) => !l.inPlan) ?? false;
 
@@ -151,7 +151,6 @@ export default function MonthlyWorkOrdersView() {
           toast.info("Every scheduled month already has a work order");
           return;
         }
-        setSelectedId(created[0].id);
         toast.success(`Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}`);
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Could not create work orders"));
@@ -182,65 +181,29 @@ export default function MonthlyWorkOrdersView() {
 
   return (
     <PageContainer>
+      {orderId ? (
+        <>
       <PageHeader
-        title="Monthly Work Orders"
-        breadcrumbs={[{ label: "Home", href: CROPFORT_ROUTES.dashboard }, { label: "Monthly Work Orders" }]}
+        eyebrow={selected ? `${selected.code} · ${selected.farmName || "—"}` : "Monthly work order"}
+        title={
+          selected
+            ? `${PLAN_MONTH_LABELS[selected.ethiopianMonth]} ${selected.yearGc}`
+            : ordersQuery.isLoading
+              ? "Loading…"
+              : "Work order not found"
+        }
+        breadcrumbs={[
+          { label: "Home", href: CROPFORT_ROUTES.dashboard },
+          { label: "Monthly Work Orders", href: CROPFORT_ROUTES.monthlyWorkOrders },
+          { label: selected?.code || "Order" },
+        ]}
         actions={
-          canEdit ? (
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-1 h-4 w-4" aria-hidden />
-              Create from plan
-            </Button>
-          ) : null
+          <Button size="sm" variant="outline" asChild>
+            <Link href={CROPFORT_ROUTES.monthlyWorkOrders}>Back to list</Link>
+          </Button>
         }
       />
-
-      {ordersQuery.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : orders.length === 0 ? (
-        <SectionCard>
-          <div className="py-10 text-center">
-            <p className="font-medium">No monthly work orders yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              They are created from an approved Core Operations plan — one per scheduled month.
-            </p>
-            {canEdit ? (
-              <Button className="mt-4" onClick={() => setCreateOpen(true)}>
-                Create from plan
-              </Button>
-            ) : null}
-          </div>
-        </SectionCard>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-          <SectionCard title="Months" flush>
-            <ul className="divide-y divide-border">
-              {orders.map((o) => (
-                <li key={o.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(o.id)}
-                    className={cn(
-                      "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
-                      selected?.id === o.id ? "bg-primary/[0.07]" : "hover:bg-muted/50",
-                    )}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium">
-                        {PLAN_MONTH_LABELS[o.ethiopianMonth]} {o.yearGc}
-                      </span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {o.farmName || "—"} · {fmtEtb(o.totalEtb)}
-                      </span>
-                    </span>
-                    <StatusBadge status={o.status} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
-
-          {selected ? (
+      {selected ? (
             <SectionCard
               title={`${PLAN_MONTH_LABELS[selected.ethiopianMonth]} ${selected.yearGc}`}
               description={`${selected.farmName || "—"} · ${selected.lines.length} activities · ${fmtEtb(selected.totalEtb)}`}
@@ -342,8 +305,90 @@ export default function MonthlyWorkOrdersView() {
                 ) : null}
               </div>
             </SectionCard>
-          ) : null}
-        </div>
+      ) : !ordersQuery.isLoading ? (
+        <SectionCard>
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            This monthly work order doesn&apos;t exist or isn&apos;t available to you.
+          </p>
+        </SectionCard>
+      ) : null}
+
+        </>
+      ) : (
+        <>
+      <PageHeader
+        title="Monthly Work Orders"
+        breadcrumbs={[{ label: "Home", href: CROPFORT_ROUTES.dashboard }, { label: "Monthly Work Orders" }]}
+        actions={
+          canEdit ? (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" aria-hidden />
+              Create from plan
+            </Button>
+          ) : null
+        }
+      />
+
+      {ordersQuery.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : orders.length === 0 ? (
+        <SectionCard>
+          <div className="py-10 text-center">
+            <p className="font-medium">No monthly work orders yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              They are created from an approved Core Operations plan — one per scheduled month.
+            </p>
+            {canEdit ? (
+              <Button className="mt-4" onClick={() => setCreateOpen(true)}>
+                Create from plan
+              </Button>
+            ) : null}
+          </div>
+        </SectionCard>
+      ) : (
+        <SectionCard flush>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Month</TableHead>
+                <TableHead>Plan</TableHead>
+                <TableHead>Farm area</TableHead>
+                <TableHead className="text-right">Activities</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orders.map((o) => (
+                <TableRow key={o.id} onClick={() => router.push(`${CROPFORT_ROUTES.monthlyWorkOrders}/${o.id}`)}>
+                  <TableCell>
+                    <span className="block font-medium">
+                      {PLAN_MONTH_LABELS[o.ethiopianMonth]} {o.yearGc}
+                    </span>
+                    <span className="font-mono text-[11px] text-muted-foreground">{o.code}</span>
+                  </TableCell>
+                  <TableCell className="text-sm">{(o.sourcePlanId && planNames.get(o.sourcePlanId)) || "—"}</TableCell>
+                  <TableCell className="text-sm">{o.farmName || "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">
+                    {o.lines.length}
+                    {o.lines.some((l) => !l.inPlan) ? (
+                      <span className="ml-1.5 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                        Extra
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">{fmtEtb(o.totalEtb)}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={o.status} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </SectionCard>
+      )}
+
+        </>
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
