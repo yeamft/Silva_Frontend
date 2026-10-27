@@ -10,6 +10,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  FileDown,
   CircleDollarSign,
   ClipboardList,
   FileWarning,
@@ -264,6 +265,79 @@ const INTENSITY_CELL: Record<string, string> = {
   none: "bg-muted/60",
 };
 
+const INTENSITY_PRINT: Record<string, string> = { peak: "#2f6b3a", active: "#8fb996", light: "#d5e6d8" };
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+/** Opens a printable copy of the plan; the browser's print dialog offers "Save as PDF". */
+function savePlanAsPdf(plan: CoreOpsPlan, promotion: AfpPromotion, included: CoreOpsActivity[]) {
+  const win = window.open("", "_blank", "width=1100,height=800");
+  if (!win) {
+    toast.error("Allow pop-ups for this site to save the PDF");
+    return;
+  }
+  const title = plan.name || "Core Operations plan";
+  const byCategory = new Map<string, number>();
+  for (const a of included) byCategory.set(a.category, (byCategory.get(a.category) ?? 0) + a.plannedCost);
+  const facts: [string, string][] = [
+    ["Farm", plan.farmName],
+    ["Budget year", plan.budgetYearLabel],
+    ["Area", plan.totalHa ? `${plan.totalHa.toLocaleString()} ha` : "—"],
+    ["Vendor", plan.vendorLabel || "—"],
+    ["Band", promotion.band],
+    ["Submitted", new Date(promotion.createdAt).toLocaleString()],
+    ["Total", fmtEtb(promotion.totalEtb)],
+  ];
+  const rows = included
+    .map(
+      (a) => `<tr>
+        <td><b>${escapeHtml(a.activityName)}</b><br><small>${escapeHtml(a.activityCode)} · ${escapeHtml(a.category)}</small></td>
+        <td class="n">${escapeHtml(a.plannedQty.toLocaleString())} ${escapeHtml(a.uom)}</td>
+        <td class="n">${a.agreedRate ? escapeHtml(fmtEtb(a.agreedRate.unitRateEtb)) : "—"}</td>
+        <td class="n">${escapeHtml(fmtEtb(a.plannedCost))}</td>
+        ${PLAN_MONTHS.map((m) => {
+          const level = a.intensities?.[m] ?? "none";
+          return `<td class="m"${level !== "none" ? ` style="background:${INTENSITY_PRINT[level]}"` : ""}></td>`;
+        }).join("")}
+      </tr>`,
+    )
+    .join("");
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+  @page { size: A4 landscape; margin: 14mm; }
+  body { font: 12px/1.4 system-ui, sans-serif; color: #111; margin: 0; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 8px 0 14px; }
+  .facts span { color: #666; margin-right: 4px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #f3f3f3; font-size: 11px; }
+  .n { text-align: right; white-space: nowrap; }
+  .m { width: 22px; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  small { color: #666; }
+  .cats { margin: 0 0 12px; color: #444; }
+  .sign { display: flex; gap: 60px; margin-top: 36px; }
+  .sign div { border-top: 1px solid #333; padding-top: 4px; width: 220px; }
+</style></head><body>
+<h1>${escapeHtml(title)}</h1>
+<div class="facts">${facts.map(([k, v]) => `<div><span>${k}</span><b>${escapeHtml(v)}</b></div>`).join("")}</div>
+<p class="cats">${[...byCategory.entries()].map(([c, v]) => `${escapeHtml(c)}: <b>${escapeHtml(fmtEtb(v))}</b>`).join(" · ")}</p>
+<table>
+  <thead><tr><th>Activity</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Cost</th>
+  ${PLAN_MONTHS.map((m) => `<th class="m">${PLAN_MONTH_LABELS[m]}</th>`).join("")}</tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr><th colspan="3">Total · ${included.length} activities</th><th class="n">${escapeHtml(fmtEtb(promotion.totalEtb))}</th><th colspan="12"></th></tr></tfoot>
+</table>
+<div class="sign"><div>Asset owner</div><div>Date</div></div>
+</body></html>`);
+  win.document.close();
+  win.focus();
+  win.onload = () => win.print();
+  setTimeout(() => win.print(), 400);
+}
+
 function AfpDetail({
   plan,
   promotion,
@@ -275,187 +349,112 @@ function AfpDetail({
 }) {
   const included = activities.filter((a) => a.included);
   const byCategory = useMemo(() => {
-    const map = new Map<string, { count: number; cost: number }>();
-    for (const a of included) {
-      const prev = map.get(a.category) ?? { count: 0, cost: 0 };
-      map.set(a.category, {
-        count: prev.count + 1,
-        cost: prev.cost + a.plannedCost,
-      });
-    }
-    return [...map.entries()].sort((a, b) => b[1].cost - a[1].cost);
+    const map = new Map<string, number>();
+    for (const a of included) map.set(a.category, (map.get(a.category) ?? 0) + a.plannedCost);
+    return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [included]);
 
-  const scheduled = included.filter((a) => scheduleStatusOf(a) === "scheduled").length;
-  const missingQty = included.filter((a) => a.plannedQty <= 0).length;
-  const missingRate = included.filter((a) => !a.agreedRate).length;
+  const issues = [
+    included.filter((a) => a.plannedQty <= 0).length && `${included.filter((a) => a.plannedQty <= 0).length} without quantity`,
+    included.filter((a) => !a.agreedRate).length && `${included.filter((a) => !a.agreedRate).length} without rate`,
+    included.filter((a) => scheduleStatusOf(a) !== "scheduled").length &&
+      `${included.filter((a) => scheduleStatusOf(a) !== "scheduled").length} not scheduled`,
+  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <DetailKV label="Estate / farm">{plan.farmName}</DetailKV>
-        <DetailKV label="Budget year">{plan.budgetYearLabel}</DetailKV>
-        <DetailKV label="Band">
-          <span className="font-medium">Band {promotion.band}</span>
-        </DetailKV>
-        <DetailKV label="Core Operations total">
-          <span className="cf-numeric font-medium">{fmtEtb(promotion.totalEtb)}</span>
-        </DetailKV>
-        <DetailKV label="Included lines">
-          {included.length.toLocaleString()} activities
-        </DetailKV>
-        <DetailKV label="Scheduled">
-          {scheduled}/{included.length}
-        </DetailKV>
-        <DetailKV label="Vendor">{plan.vendorLabel || "—"}</DetailKV>
-        <DetailKV label="Area">
-          {plan.totalHa ? `${plan.totalHa.toLocaleString()} ha` : "—"}
-          {plan.applicableBlockIds?.length
-            ? ` · ${plan.applicableBlockIds.length} block${plan.applicableBlockIds.length === 1 ? "" : "s"}`
-            : ""}
-        </DetailKV>
-        <DetailKV label="Submitted">
-          {new Date(promotion.createdAt).toLocaleString()}
-        </DetailKV>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          {(
+            [
+              ["Farm", plan.farmName],
+              ["Budget year", plan.budgetYearLabel],
+              ["Area", plan.totalHa ? `${plan.totalHa.toLocaleString()} ha` : "—"],
+              ["Vendor", plan.vendorLabel || "—"],
+              ["Submitted", new Date(promotion.createdAt).toLocaleDateString()],
+            ] as const
+          ).map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-[11px] text-muted-foreground">{label}</dt>
+              <dd className="font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <Button size="sm" variant="outline" onClick={() => savePlanAsPdf(plan, promotion, included)}>
+          <FileDown className="mr-1.5 h-4 w-4" aria-hidden />
+          Save as PDF
+        </Button>
       </div>
 
-      {plan.description ? (
-        <DetailKV label="Description">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{plan.description}</p>
-        </DetailKV>
-      ) : null}
-
-      {plan.notes ? (
-        <DetailKV label="Plan notes">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{plan.notes}</p>
-        </DetailKV>
-      ) : null}
-
-      {promotion.note ? (
-        <DetailKV label="Promotion note">
-          <p className="text-sm leading-relaxed">{promotion.note}</p>
-        </DetailKV>
-      ) : null}
-
       {byCategory.length > 0 ? (
-        <div>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Cost by category
-          </p>
-          <div className="cf-table-scroll rounded-md border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Lines</TableHead>
-                  <TableHead className="text-right">Cost</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {byCategory.map(([cat, row]) => (
-                  <TableRow key={cat}>
-                    <TableCell className="font-medium">{cat}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.count}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtEtb(row.cost)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          {byCategory.map(([cat, cost]) => (
+            <span key={cat} className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs">
+              {cat} <span className="ml-1 font-semibold tabular-nums">{fmtEtb(cost)}</span>
+            </span>
+          ))}
         </div>
       ) : null}
 
       {included.length > 0 ? (
-        <div>
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Activities and schedule ({included.length})
-            </p>
-            <span className="flex items-center gap-3 text-[10px] text-muted-foreground">
-              {(["peak", "active", "light"] as const).map((level) => (
-                <span key={level} className="flex items-center gap-1 capitalize">
-                  <span className={cn("h-2.5 w-2.5 rounded-sm", INTENSITY_CELL[level])} aria-hidden />
-                  {level}
-                </span>
-              ))}
-            </span>
-          </div>
-          <div className="cf-table-scroll max-h-[28rem] rounded-md border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[12rem]">Activity</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Rate</TableHead>
-                  <TableHead className="text-right">Cost</TableHead>
-                  {PLAN_MONTHS.map((m) => (
-                    <TableHead key={m} className="w-7 px-0.5 text-center text-[10px]">
-                      {PLAN_MONTH_LABELS[m]}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {included.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell>
-                      <p className="text-sm font-medium">{a.activityName}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        <span className="font-mono">{a.activityCode}</span> · {a.category}
-                        {a.blockAllocations?.length
-                          ? ` · ${a.blockAllocations.length} block${a.blockAllocations.length === 1 ? "" : "s"}`
-                          : a.scope === "off_block"
-                            ? " · off-block"
-                            : ""}
-                        {a.manualsRef ? " · manual attached" : ""}
-                      </p>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
-                      {a.plannedQty ? a.plannedQty.toLocaleString() : "—"}{" "}
-                      <span className="text-xs text-muted-foreground">{a.uom}</span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
-                      {a.agreedRate ? fmtEtb(a.agreedRate.unitRateEtb) : "—"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right tabular-nums text-sm font-medium">
-                      {fmtEtb(a.plannedCost)}
-                    </TableCell>
-                    {PLAN_MONTHS.map((m) => {
-                      const level = a.intensities?.[m] ?? "none";
-                      return (
-                        <TableCell key={m} className="px-0.5 text-center">
-                          <span
-                            className={cn("mx-auto block h-4 w-5 rounded-sm", INTENSITY_CELL[level])}
-                            title={`${PLAN_MONTH_LABELS[m]}: ${level === "none" ? "not scheduled" : level}`}
-                          />
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
+        <div className="cf-table-scroll max-h-[28rem] rounded-md border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[12rem]">Activity</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Rate</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                {PLAN_MONTHS.map((m) => (
+                  <TableHead key={m} className="w-7 px-0.5 text-center text-[10px]">
+                    {PLAN_MONTH_LABELS[m]}
+                  </TableHead>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {included.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell>
+                    <p className="text-sm font-medium">{a.activityName}</p>
+                    <p className="font-mono text-[10px] text-muted-foreground">{a.activityCode}</p>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
+                    {a.plannedQty ? a.plannedQty.toLocaleString() : "—"}{" "}
+                    <span className="text-xs text-muted-foreground">{a.uom}</span>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
+                    {a.agreedRate ? fmtEtb(a.agreedRate.unitRateEtb) : "—"}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums text-sm font-medium">
+                    {fmtEtb(a.plannedCost)}
+                  </TableCell>
+                  {PLAN_MONTHS.map((m) => {
+                    const level = a.intensities?.[m] ?? "none";
+                    return (
+                      <TableCell key={m} className="px-0.5 text-center">
+                        <span
+                          className={cn("mx-auto block h-4 w-5 rounded-sm", INTENSITY_CELL[level])}
+                          title={`${PLAN_MONTH_LABELS[m]}: ${level === "none" ? "—" : level}`}
+                        />
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       ) : null}
 
-      <ReviewGate
-        items={[
-          { ok: included.length > 0, label: "Core Operations plan has included activity lines" },
-          { ok: missingQty === 0, label: missingQty === 0 ? "All included lines have quantity" : `${missingQty} lines missing quantity` },
-          { ok: missingRate === 0, label: missingRate === 0 ? "All included lines have approved rates" : `${missingRate} lines missing rates` },
-          {
-            ok: scheduled === included.length && included.length > 0,
-            label:
-              scheduled === included.length && included.length > 0
-                ? "All included lines are scheduled"
-                : `${included.length - scheduled} lines not scheduled`,
-          },
-          { ok: true, label: `Spend band ${promotion.band} — asset owner decision (no AFE needed)` },
-        ]}
-      />
+      <p className={cn("flex items-center gap-1.5 text-sm", issues.length ? "text-warning" : "text-success")}>
+        {issues.length ? (
+          <AlertTriangle className="h-4 w-4" aria-hidden />
+        ) : (
+          <CheckCircle2 className="h-4 w-4" aria-hidden />
+        )}
+        {issues.length ? issues.join(" · ") : "All checks passed"}
+      </p>
     </div>
   );
 }
@@ -709,7 +708,7 @@ export default function ApprovalsView({
         title: p.name || (p.farmName ? `${p.farmName} Core Operations plan` : "Core Operations plan"),
         meta: `${p.budgetYearLabel ?? ""} · Band ${band} · ${included} lines`,
         amount: p.plannedCostEtb ?? 0,
-        risk: `Band ${band} · Silva`,
+        risk: `Band ${band}`,
       };
     });
     const projectsQ: QueueRow[] = projects.map((p) => ({
@@ -1079,7 +1078,7 @@ export default function ApprovalsView({
           {selected ? (
             <SectionCard
               title={selected.title}
-              description="Confirm the facts below, then approve or return with a note."
+              description={selected.kind === "afp" ? undefined : "Confirm the facts below, then approve or return with a note."}
               action={<StatusBadge status="submitted" />}
             >
               <div className="space-y-5">
@@ -1156,9 +1155,9 @@ export default function ApprovalsView({
 
                 <div className="space-y-2 border-t border-border pt-4">
                   <label className="text-sm font-medium" htmlFor="approval-decision-note">
-                    Decision note
+                    Note
                     <span className="ml-1 font-normal text-muted-foreground">
-                      (required to return)
+                      (needed to request changes)
                     </span>
                   </label>
                   <Textarea
@@ -1166,7 +1165,7 @@ export default function ApprovalsView({
                     rows={3}
                     value={decisionNote}
                     onChange={(e) => setDecisionNote(e.target.value)}
-                    placeholder="What did you verify? If returning, what must change?"
+                    placeholder={selected.kind === "afp" ? "Optional" : "What did you verify? If returning, what must change?"}
                     disabled={!canDecide}
                   />
                 </div>
