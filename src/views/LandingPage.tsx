@@ -2,11 +2,8 @@
 
 import {
   FormEvent,
-  KeyboardEvent,
   ReactNode,
-  useCallback,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import Link from "next/link";
@@ -14,15 +11,11 @@ import {
   AnimatePresence,
   MotionConfig,
   motion,
-  useInView,
-  useReducedMotion,
 } from "framer-motion";
 import {
   ArrowRight,
   ArrowUp,
   CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   Coins,
@@ -32,8 +25,6 @@ import {
   Loader2,
   MapPinned,
   Menu,
-  Pause,
-  Play,
   Scale,
   ShieldCheck,
   Sprout,
@@ -53,26 +44,25 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 
 const HERO_IMAGES = [
   {
-    src: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=65",
+    src: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1800&q=70",
     alt: "Tractor working cultivated farmland",
   },
   {
-    src: "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=1600&q=65",
+    src: "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=1800&q=70",
     alt: "Farm workers inspecting crop rows",
   },
   {
-    src: "https://images.unsplash.com/photo-1464226184884-fa280b87c0b0?auto=format&fit=crop&w=1600&q=65",
+    src: "https://images.unsplash.com/photo-1464226184884-fa280b87c0b0?auto=format&fit=crop&w=1800&q=70",
     alt: "Active crop rows across estate land",
   },
   {
-    src: "https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&w=1600&q=65",
+    src: "https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&w=1800&q=70",
     alt: "Vegetable rows across productive estate land",
   },
 ] as const;
 
 const ease = [0.16, 1, 0.3, 1] as const;
-const HERO_ROTATE_MS = 8000;
-const STEP_ROTATE_MS = 4500;
+const HERO_ROTATE_MS = 7000;
 
 const NAV_LINKS = [
   { id: "platform", label: "Platform" },
@@ -123,62 +113,37 @@ function useActiveSection(ids: readonly string[]) {
   return active;
 }
 
+/**
+ * Background photos for the hero. Each is preloaded first and only joins the rotation once it
+ * has loaded, so the hero never shows an empty frame.
+ */
 function useHeroSlides() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [ready, setReady] = useState<boolean[]>(() => HERO_IMAGES.map(() => false));
 
   useEffect(() => {
     let cancelled = false;
-    const markReady = (index: number, ok: boolean) => {
-      if (cancelled || !ok) return;
-      setReady((prev) => {
-        if (prev[index]) return prev;
-        const next = [...prev];
-        next[index] = true;
-        return next;
-      });
-    };
-
-    const load = (index: number) =>
-      new Promise<void>((resolve) => {
-        const img = new window.Image();
-        img.decoding = "async";
-        img.onload = () => {
-          markReady(index, true);
-          resolve();
-        };
-        img.onerror = () => {
-          // Keep this slide out of rotation — never show an empty frame
-          markReady(index, false);
-          resolve();
-        };
-        img.src = HERO_IMAGES[index].src;
-      });
-
-    const preload = document.createElement("link");
-    preload.rel = "preload";
-    preload.as = "image";
-    preload.href = HERO_IMAGES[0].src;
-    document.head.appendChild(preload);
-
-    void (async () => {
-      await load(0);
-      for (let i = 1; i < HERO_IMAGES.length; i += 1) {
+    HERO_IMAGES.forEach((image, index) => {
+      const img = new window.Image();
+      img.decoding = "async";
+      img.onload = () => {
         if (cancelled) return;
-        await load(i);
-      }
-    })();
-
+        setReady((prev) => {
+          if (prev[index]) return prev;
+          const next = [...prev];
+          next[index] = true;
+          return next;
+        });
+      };
+      img.src = image.src;
+    });
     return () => {
       cancelled = true;
-      preload.remove();
     };
   }, []);
 
-  // Restarts on every change so a manual pick gets a full interval before rotating on
   useEffect(() => {
-    if (!ready[0]) return;
-
+    if (!ready.some(Boolean)) return;
     const timer = window.setTimeout(() => {
       setActiveIndex((current) => {
         for (let step = 1; step <= HERO_IMAGES.length; step += 1) {
@@ -188,38 +153,28 @@ function useHeroSlides() {
         return current;
       });
     }, HERO_ROTATE_MS);
-
     return () => window.clearTimeout(timer);
   }, [ready, activeIndex]);
 
-  const goTo = useCallback(
-    (index: number) => {
-      if (ready[index]) setActiveIndex(index);
-    },
-    [ready],
-  );
-
-  return { activeIndex, ready, goTo };
+  // Until the first photo arrives, show whichever one loaded first
+  const shown = ready[activeIndex] ? activeIndex : ready.findIndex(Boolean);
+  return { activeIndex: shown, ready };
 }
 
 function HeroBackground({ activeIndex, ready }: { activeIndex: number; ready: boolean[] }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
       <div className="absolute inset-0 bg-[#0B1F0C]" />
-
       {HERO_IMAGES.map((image, index) => {
         const visible = ready[index] && index === activeIndex;
         return (
           <div
             key={image.src}
             className={cn(
-              "absolute inset-0 bg-cover bg-center bg-no-repeat transition-[opacity,transform] duration-[1200ms] ease-out motion-reduce:transition-none",
-              visible ? "scale-100" : "scale-105",
+              "absolute inset-0 bg-cover bg-center bg-no-repeat transition-[opacity,transform] duration-[1400ms] ease-out motion-reduce:transition-none",
+              visible ? "scale-100 opacity-100" : "scale-105 opacity-0",
             )}
-            style={{
-              opacity: visible ? 1 : 0,
-              backgroundImage: ready[index] ? `url("${image.src}")` : undefined,
-            }}
+            style={{ backgroundImage: ready[index] ? `url("${image.src}")` : undefined }}
           />
         );
       })}
@@ -348,99 +303,41 @@ function SiteHeader() {
 }
 
 function Hero() {
-  const { activeIndex, ready, goTo } = useHeroSlides();
+  const { activeIndex, ready } = useHeroSlides();
 
   return (
-    <section className="relative isolate flex h-[100dvh] min-h-[560px] w-full flex-col bg-[#0B1F0C] shadow-[0_28px_64px_-12px_rgba(6,20,8,0.45),0_12px_28px_-8px_rgba(0,0,0,0.28)]">
+    <section className="relative isolate flex min-h-[100dvh] w-full flex-col bg-[#0B1F0C]">
       <div className="absolute inset-0 overflow-hidden" aria-hidden>
         <HeroBackground activeIndex={activeIndex} ready={ready} />
-
-        {/* Soft green wash — keep photo readable */}
-        <div className="absolute inset-0 z-[1] bg-[#061408]/28" />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#061408]/55 via-[#0B1F0C]/20 to-transparent" />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#061408]/50 via-transparent to-[#061408]/25" />
+        <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#061408]/90 via-[#0B1F0C]/70 to-[#0B1F0C]/40" />
+        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#061408]/70 via-transparent to-[#061408]/30" />
       </div>
 
-      <div className="relative z-20 mx-auto flex w-full max-w-7xl flex-1 items-center px-5 pb-20 pt-[calc(72px+env(safe-area-inset-top))] sm:px-8 lg:px-10">
+      <div className="relative z-20 mx-auto grid w-full max-w-7xl flex-1 items-center gap-12 px-5 pb-16 pt-[calc(96px+env(safe-area-inset-top))] sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease }}
-          className="max-w-3xl"
+          className="w-full"
         >
-          <h1 className="max-w-3xl font-display text-3xl font-semibold leading-[1.1] tracking-[-0.03em] text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.55)] sm:text-4xl lg:text-[52px]">
-            Control field operations
-            <span className="mt-2 block text-[#B7D4B9]">from plan to payment.</span>
+          <h1 className="max-w-3xl font-display text-4xl font-semibold leading-[1.08] tracking-[-0.03em] text-white sm:text-5xl lg:text-[60px]">
+            Plan, deliver and <span className="text-[#B7D4B9]">verify</span>
           </h1>
 
-          <p className="mt-6 max-w-2xl text-base leading-7 text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,0.65)] sm:text-lg sm:leading-8">
-            One controlled environment where estate owners, SPX managers, and delivery partners
-            handle planning, execution, verification, and settlement.
-          </p>
-
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <Button
-              asChild
-              size="lg"
-              className="group h-12 rounded-xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_8px_24px_-8px_rgba(0,0,0,0.55)] hover:bg-[hsl(var(--primary-hover))]"
-            >
-              <Link href="/login">
-                Open Cropfort
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            </Button>
-
-            <a
-              href="#how-it-works"
-              className="inline-flex h-12 items-center justify-center rounded-xl border border-[#B7D4B9]/45 bg-black/25 px-7 text-sm font-medium text-white [text-shadow:0_1px_5px_rgba(0,0,0,0.55)] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.55)] backdrop-blur-sm transition hover:border-[#B7D4B9]/70 hover:bg-black/35"
-            >
-              See how it works
-            </a>
-          </div>
-
-          <p className="mt-6 text-sm text-white/75 [text-shadow:0_1px_5px_rgba(0,0,0,0.65)]">
-            Invited organisations sign in with their Cropfort account.{" "}
-            <a href="#contact" className="text-[#B7D4B9] underline-offset-2 hover:underline">
-              Request access
-            </a>
-            .
-          </p>
+          <dl className="mt-12 grid max-w-3xl grid-cols-3 gap-6 border-t border-white/10 pt-6">
+            {[
+              { term: "Approvals", detail: "Maker-checker on plans, rates and spend" },
+              { term: "Evidence", detail: "Field records before payment" },
+              { term: "Audit", detail: "Every decision traceable" },
+            ].map((item) => (
+              <div key={item.term}>
+                <dt className="text-sm font-semibold text-[#B7D4B9]">{item.term}</dt>
+                <dd className="mt-1 text-xs leading-5 text-white/60">{item.detail}</dd>
+              </div>
+            ))}
+          </dl>
         </motion.div>
-      </div>
 
-      <div className="relative z-20 mx-auto flex w-full max-w-7xl items-center justify-between px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-8 lg:px-10">
-        <div className="flex items-center gap-2" role="group" aria-label="Background images">
-          {HERO_IMAGES.map((image, index) => (
-            <button
-              key={image.src}
-              type="button"
-              onClick={() => goTo(index)}
-              disabled={!ready[index]}
-              aria-label={`Show image ${index + 1}: ${image.alt}`}
-              aria-pressed={index === activeIndex}
-              className="group flex h-6 items-center disabled:cursor-default"
-            >
-              <span
-                className={cn(
-                  "block h-1.5 rounded-full transition-all duration-300",
-                  index === activeIndex
-                    ? "w-8 bg-white"
-                    : "w-4 bg-white/40 group-hover:bg-white/70 group-disabled:bg-white/20",
-                )}
-              />
-            </button>
-          ))}
-        </div>
-
-        <a
-          href="#platform"
-          className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-white/70 transition hover:text-white"
-        >
-          Scroll
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/25 transition group-hover:border-white/50">
-            <ChevronDown className="h-4 w-4 animate-bounce motion-reduce:animate-none" />
-          </span>
-        </a>
       </div>
     </section>
   );
@@ -564,13 +461,11 @@ const CONTROLS = [
 ] as const;
 
 function SectionHeading({
-  eyebrow,
   title,
   children,
   className,
 }: {
-  eyebrow: string;
-  title: string;
+  title: ReactNode;
   children?: ReactNode;
   className?: string;
 }) {
@@ -582,8 +477,7 @@ function SectionHeading({
       transition={{ duration: 0.5, ease }}
       className={className}
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{eyebrow}</p>
-      <h2 className="mt-3 max-w-xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+      <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
         {title}
       </h2>
       {children}
@@ -598,7 +492,13 @@ function PlatformSection() {
       className="scroll-mt-[72px] border-b border-border bg-background py-20 sm:py-28"
     >
       <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.8fr_1.2fr] lg:px-10">
-        <SectionHeading eyebrow="Platform" title="One source of truth for estate execution." />
+        <SectionHeading
+          title={
+            <>
+              One source of truth for <span className="text-primary">estate execution</span>.
+            </>
+          }
+        />
 
         <motion.div
           initial={{ opacity: 0, y: 15 }}
@@ -640,149 +540,65 @@ function PlatformSection() {
 }
 
 function RolesSection() {
-  const [activeRole, setActiveRole] = useState(0);
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const role = ROLES[activeRole];
-  const RoleIcon = role.icon;
-  const roleSteps = STEPS.filter((step) => step.owners.includes(role.label));
-
-  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    const keys: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
-    let next: number | null = null;
-    if (event.key in keys) next = (activeRole + keys[event.key] + ROLES.length) % ROLES.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = ROLES.length - 1;
-    if (next === null) return;
-    event.preventDefault();
-    setActiveRole(next);
-    tabRefs.current[next]?.focus();
-  }
-
   return (
     <section id="roles" className="scroll-mt-[72px] bg-muted/25 py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
-        <SectionHeading eyebrow="Who it's for" title="Clear access for every participant.">
+        <SectionHeading
+          title={
+            <>
+              Clear responsibilities for <span className="text-primary">every participant</span>.
+            </>
+          }
+        >
           <p className="mt-4 max-w-2xl leading-7 text-muted-foreground">
-            Each organisation works within its responsibilities while sharing the same controlled
-            operating record. Pick a role to see where it fits.
+            Each organisation works within its own role while sharing the same controlled operating
+            record.
           </p>
         </SectionHeading>
 
-        <div className="mt-12 grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
-          <div role="tablist" aria-label="Participants" aria-orientation="vertical" className="grid gap-3">
-            {ROLES.map((item, index) => {
-              const Icon = item.icon;
-              const selected = index === activeRole;
-              return (
-                <button
-                  key={item.label}
-                  ref={(el) => {
-                    tabRefs.current[index] = el;
-                  }}
-                  type="button"
-                  role="tab"
-                  id={`role-tab-${index}`}
-                  aria-selected={selected}
-                  aria-controls="role-panel"
-                  tabIndex={selected ? 0 : -1}
-                  onClick={() => setActiveRole(index)}
-                  onKeyDown={onTabKeyDown}
-                  className={cn(
-                    "group flex w-full items-center gap-4 rounded-2xl border p-5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    selected
-                      ? "border-primary/40 bg-card shadow-[0_14px_32px_-20px_hsl(114_45%_22%/0.45)]"
-                      : "border-border bg-card/60 hover:border-primary/25 hover:bg-card",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-colors",
-                      selected
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-primary/20 bg-accent text-primary",
-                    )}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      {item.label}
-                    </span>
-                    <span className="mt-0.5 block font-display text-lg font-semibold tracking-tight">
-                      {item.title}
-                    </span>
-                  </span>
-                  <ChevronRight
-                    className={cn(
-                      "h-5 w-5 shrink-0 transition-all",
-                      selected
-                        ? "translate-x-0 text-primary"
-                        : "-translate-x-1 text-muted-foreground/50 group-hover:translate-x-0",
-                    )}
-                  />
-                </button>
-              );
-            })}
-          </div>
-
-          <div
-            id="role-panel"
-            role="tabpanel"
-            aria-labelledby={`role-tab-${activeRole}`}
-            className="relative overflow-hidden rounded-2xl border border-border bg-card p-7 sm:p-9"
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
+          {ROLES.map((role, index) => {
+            const Icon = role.icon;
+            const steps = STEPS.filter((step) => step.owners.includes(role.label));
+            return (
+              <motion.article
                 key={role.label}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25, ease }}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.45, ease, delay: index * 0.08 }}
+                className="flex flex-col rounded-2xl border border-border bg-card p-7"
               >
-                <div className="flex items-center gap-3">
-                  <RoleIcon className="h-5 w-5 text-primary" />
-                  <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">
-                    {role.label}
-                  </span>
-                </div>
-
-                <h3 className="mt-6 font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {role.title}
-                </h3>
-                <p className="mt-4 max-w-xl leading-7 text-muted-foreground">{role.copy}</p>
-
-                <ul className="mt-7 grid gap-3 sm:grid-cols-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  {role.label}
+                </p>
+                <h3 className="mt-1 font-display text-xl font-semibold tracking-tight">{role.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">{role.copy}</p>
+                <ul className="mt-6 space-y-2.5 text-sm">
                   {role.points.map((point) => (
-                    <li
-                      key={point}
-                      className="flex items-start gap-2.5 rounded-xl bg-muted/50 p-3.5 text-sm"
-                    >
+                    <li key={point} className="flex items-start gap-2.5">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                       {point}
                     </li>
                   ))}
                 </ul>
-
-                <div className="mt-7 border-t border-border pt-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    Leads these workflow steps
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {roleSteps.map((step) => (
-                      <a
-                        key={step.title}
-                        href="#how-it-works"
-                        className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm transition hover:border-primary/40 hover:bg-accent"
-                      >
-                        <span className="font-mono text-xs text-muted-foreground">{step.number}</span>
-                        {step.title}
-                      </a>
-                    ))}
-                  </div>
+                <div className="mt-auto flex flex-wrap gap-1.5 border-t border-border pt-5">
+                  {steps.map((step) => (
+                    <span
+                      key={step.title}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium"
+                    >
+                      <span className="font-mono text-muted-foreground">{step.number}</span>
+                      {step.title}
+                    </span>
+                  ))}
                 </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
+              </motion.article>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -790,179 +606,56 @@ function RolesSection() {
 }
 
 function WorkflowSection() {
-  const [activeStep, setActiveStep] = useState(0);
-  const [autoplay, setAutoplay] = useState(true);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inView = useInView(containerRef, { amount: 0.35 });
-  const reduceMotion = useReducedMotion();
-  const playing = autoplay && inView && !reduceMotion;
-  const step = STEPS[activeStep];
-  const StepIcon = step.icon;
-
-  useEffect(() => {
-    if (!playing) return;
-    const timer = window.setTimeout(
-      () => setActiveStep((current) => (current + 1) % STEPS.length),
-      STEP_ROTATE_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, [playing, activeStep]);
-
-  // Any manual choice stops the tour so the content doesn't move under the reader
-  function selectStep(index: number) {
-    setAutoplay(false);
-    setActiveStep((index + STEPS.length) % STEPS.length);
-  }
-
   return (
-    <section
-      id="how-it-works"
-      className="scroll-mt-[72px] border-y border-border bg-background py-20 sm:py-28"
-    >
+    <section id="how-it-works" className="scroll-mt-[72px] border-y border-border bg-background py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
-        <div className="grid gap-10 lg:grid-cols-[0.75fr_1.25fr]">
-          <SectionHeading eyebrow="How it works" title="From approved plan to verified settlement.">
-            <p className="mt-5 max-w-md leading-7 text-muted-foreground">
-              A controlled workflow keeps operational and financial accountability connected
-              throughout the season. Select a step to see who leads it and what it produces.
-            </p>
+        <SectionHeading
+          title={
+            <>
+              From approved plan to <span className="text-primary">verified settlement</span>.
+            </>
+          }
+        >
+          <p className="mt-4 max-w-2xl leading-7 text-muted-foreground">
+            Six controlled steps keep operational and financial accountability connected throughout
+            the season.
+          </p>
+        </SectionHeading>
 
-            {!reduceMotion ? (
-              <button
-                type="button"
-                onClick={() => setAutoplay((value) => !value)}
-                className="mt-6 inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+        <ol className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+          {STEPS.map((step, index) => {
+            const Icon = step.icon;
+            return (
+              <motion.li
+                key={step.title}
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, ease, delay: index * 0.05 }}
+                className="flex flex-col bg-card p-7"
               >
-                {autoplay ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                {autoplay ? "Pause walkthrough" : "Play walkthrough"}
-              </button>
-            ) : null}
-          </SectionHeading>
-
-          <div ref={containerRef}>
-            <ol className="grid grid-cols-3 gap-2 sm:gap-3" aria-label="Workflow steps">
-              {STEPS.map((item, index) => {
-                const Icon = item.icon;
-                const selected = index === activeStep;
-                const done = index < activeStep;
-                return (
-                  <li key={item.title}>
-                    <button
-                      type="button"
-                      onClick={() => selectStep(index)}
-                      aria-current={selected ? "step" : undefined}
-                      className={cn(
-                        "relative flex w-full flex-col items-start overflow-hidden rounded-xl border p-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-5",
-                        selected
-                          ? "border-primary/40 bg-card shadow-[0_14px_32px_-22px_hsl(114_45%_22%/0.5)]"
-                          : "border-border bg-card/60 hover:border-primary/25 hover:bg-card",
-                      )}
-                    >
-                      <div className="flex w-full items-center justify-between">
-                        <span className="font-mono text-xs text-muted-foreground">{item.number}</span>
-                        <span
-                          className={cn(
-                            "flex h-8 w-8 items-center justify-center rounded-lg transition-colors sm:h-9 sm:w-9",
-                            selected
-                              ? "bg-primary text-primary-foreground"
-                              : done
-                                ? "bg-secondary text-primary"
-                                : "bg-accent text-primary",
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </span>
-                      </div>
-                      <span className="mt-4 font-display text-base font-semibold sm:mt-6 sm:text-lg">
-                        {item.title}
-                      </span>
-
-                      {selected && playing ? (
-                        <motion.span
-                          key={`progress-${activeStep}`}
-                          className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-primary"
-                          initial={{ scaleX: 0 }}
-                          animate={{ scaleX: 1 }}
-                          transition={{ duration: STEP_ROTATE_MS / 1000, ease: "linear" }}
-                        />
-                      ) : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-
-            <div
-              className="mt-4 rounded-2xl border border-border bg-muted/30 p-6 sm:p-7"
-              aria-live={playing ? "off" : "polite"}
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={step.title}
-                  initial={{ opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -12 }}
-                  transition={{ duration: 0.25, ease }}
-                  className="flex flex-col gap-5 sm:flex-row sm:items-start"
-                >
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                    <StepIcon className="h-5 w-5" />
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm font-medium text-muted-foreground">{step.number}</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-primary">
+                    <Icon className="h-4 w-4" />
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Step {activeStep + 1} of {STEPS.length}
-                    </p>
-                    <h3 className="mt-1 font-display text-xl font-semibold">{step.title}</h3>
-                    <p className="mt-2 leading-7 text-muted-foreground">{step.description}</p>
-
-                    <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
-                      <div>
-                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                          Led by
-                        </dt>
-                        <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                          {step.owners.map((owner) => (
-                            <span
-                              key={owner}
-                              className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold"
-                            >
-                              {owner}
-                            </span>
-                          ))}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                          Produces
-                        </dt>
-                        <dd className="mt-1.5 font-medium">{step.output}</dd>
-                      </div>
-                    </dl>
+                </div>
+                <h3 className="mt-6 font-display text-lg font-semibold">{step.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.description}</p>
+                <dl className="mt-auto grid grid-cols-2 gap-3 pt-6 text-xs">
+                  <div>
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-muted-foreground">Led by</dt>
+                    <dd className="mt-1 font-medium text-foreground">{step.owners.join(" · ")}</dd>
                   </div>
-                </motion.div>
-              </AnimatePresence>
-
-              <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
-                <button
-                  type="button"
-                  onClick={() => selectStep(activeStep - 1)}
-                  className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectStep(activeStep + 1)}
-                  className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm font-medium text-primary transition hover:bg-accent"
-                >
-                  {activeStep === STEPS.length - 1 ? "Start over" : "Next step"}
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+                  <div>
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-muted-foreground">Produces</dt>
+                    <dd className="mt-1 font-medium text-foreground">{step.output}</dd>
+                  </div>
+                </dl>
+              </motion.li>
+            );
+          })}
+        </ol>
       </div>
     </section>
   );
@@ -972,7 +665,13 @@ function ControlsSection() {
   return (
     <section className="bg-[#E7EFE8] py-20 text-foreground sm:py-28">
       <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:px-10">
-        <SectionHeading eyebrow="Built-in controls" title="Field execution you can verify before you pay.">
+        <SectionHeading
+          title={
+            <>
+              Field execution you can <span className="text-primary">verify before you pay</span>.
+            </>
+          }
+        >
           <p className="mt-5 max-w-xl leading-7 text-muted-foreground">
             Cropfort separates work assignment, execution, verification, and approval so
             operational evidence is reviewed before it becomes a commercial obligation.
@@ -1272,7 +971,13 @@ function ContactSection() {
       className="scroll-mt-[72px] border-t border-border bg-background py-20 sm:py-28"
     >
       <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start lg:px-10">
-        <SectionHeading eyebrow="Contact" title="Talk to us about Cropfort.">
+        <SectionHeading
+          title={
+            <>
+              Talk to us about <span className="text-primary">Cropfort</span>.
+            </>
+          }
+        >
           <p className="mt-5 max-w-md leading-7 text-muted-foreground">
             For partnerships, demos, or onboarding questions, send a message and the SPX team will
             follow up.
@@ -1344,26 +1049,55 @@ export default function LandingPage() {
         <ControlsSection />
         <ContactSection />
 
-        <footer className="border-t border-border bg-background">
-          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-7 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
-            <div className="flex items-center gap-2">
-              <Sprout className="h-4 w-4" />
-              <span className="font-medium text-foreground">Cropfort</span>
-              <span>·</span>
-              <span>Farm Operations Platform</span>
+        <footer className="bg-[#0B1F0C] text-white/70">
+          <div className="mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.5fr_1fr_1fr] lg:px-10">
+            <div>
+              <div className="flex items-center gap-3 text-white">
+                <BrandMark className="h-9 w-9" />
+                <span className="font-display text-lg font-semibold">Cropfort</span>
+              </div>
+              <p className="mt-4 max-w-sm text-sm leading-6">
+                The farm operations platform for estate owners, programme managers and delivery
+                partners. Powered by SPX.
+              </p>
             </div>
-
-            <div className="flex flex-wrap items-center gap-4">
-              <a href="#contact" className="hover:text-foreground">
-                Contact
-              </a>
-              <a href="mailto:noreply@cropfort.com" className="hover:text-foreground">
-                Support
-              </a>
-              <Link href="/login" className="hover:text-foreground">
-                Sign in
-              </Link>
-              <p>Powered by SPX</p>
+            <nav aria-label="Footer · platform" className="text-sm">
+              <p className="font-semibold text-white">Platform</p>
+              <ul className="mt-4 space-y-2.5">
+                {NAV_LINKS.filter((link) => link.id !== "contact").map((link) => (
+                  <li key={link.id}>
+                    <a href={`#${link.id}`} className="transition hover:text-white">
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            <nav aria-label="Footer · access" className="text-sm">
+              <p className="font-semibold text-white">Access</p>
+              <ul className="mt-4 space-y-2.5">
+                <li>
+                  <Link href="/login" className="transition hover:text-white">
+                    Sign in
+                  </Link>
+                </li>
+                <li>
+                  <a href="#contact" className="transition hover:text-white">
+                    Request access
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:noreply@cropfort.com" className="transition hover:text-white">
+                    Support
+                  </a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+          <div className="border-t border-white/10">
+            <div className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-5 text-xs sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
+              <p>© {new Date().getFullYear()} Cropfort. All rights reserved.</p>
+              <p>Built for Silva, SPX and delivery partners.</p>
             </div>
           </div>
         </footer>
