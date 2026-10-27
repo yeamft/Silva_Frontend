@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,8 @@ import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -169,6 +171,9 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
   const [returnOpen, setReturnOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [returnNote, setReturnNote] = useState("");
+  const wantsEdit = params.get("edit") === "1";
+  const [form, setForm] = useState<Record<"title" | (typeof REPORT_SECTIONS)[number]["key"], string> | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<OpsReport | null>(null);
   const [cadence, setCadence] = useState<ReportCadence>("monthly");
   const [planId, setPlanId] = useState("");
   const [periodLabel, setPeriodLabel] = useState("");
@@ -296,6 +301,54 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
 
   const editable =
     selected && (selected.status === "draft" || selected.status === "returned");
+  /** SPX can edit or delete anything the asset owner hasn't accepted yet. */
+  const canChange = (r: OpsReport) => canAuthor && r.status !== "released";
+
+  const startEditing = () => {
+    if (!selected) return;
+    setForm({
+      title: cleanText(selected.title),
+      summary: selected.summary,
+      highlights: selected.highlights,
+      risks: selected.risks,
+      recommendations: selected.recommendations,
+      outlook: selected.outlook,
+    });
+  };
+
+  // ?edit=1 (from the table's Edit action) opens the report straight in edit mode
+  useEffect(() => {
+    if (wantsEdit && selected && !form && canChange(selected)) startEditing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsEdit, selected?.id]);
+
+  const saveEdits = async () => {
+    if (!selected || !form) return;
+    if (!form.title.trim()) {
+      toast.error("Give the report a title");
+      return;
+    }
+    const wasSubmitted = selected.status === "submitted";
+    try {
+      await updateMut.mutateAsync({ id: selected.id, patch: { ...form, title: form.title.trim() } });
+      setForm(null);
+      toast.success(wasSubmitted ? "Saved · taken back from review, submit again when ready" : "Saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await removeMut.mutateAsync(deleteTarget.id);
+      toast.success(`${deleteTarget.code} deleted`);
+      setDeleteTarget(null);
+      if (reportId) router.push(CROPFORT_ROUTES.reports);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    }
+  };
 
   return (
     <PageContainer>
@@ -340,35 +393,44 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
 
           <SectionCard title="Report">
             <div className="space-y-4">
-              {editable ? (
-                <div className="space-y-1">
-                  <Label>Title</Label>
-                  <Input
-                    value={cleanText(selected.title)}
-                    onChange={(e) => void updateMut.mutateAsync({ id: selected.id, patch: { title: e.target.value } })}
-                  />
-                </div>
-              ) : null}
-              {REPORT_SECTIONS.map(({ key, label, rows }) =>
-                editable ? (
-                  <div key={key} className="space-y-1">
-                    <Label>{label}</Label>
-                    <Textarea
-                      rows={rows}
-                      value={selected[key]}
-                      onChange={(e) =>
-                        void updateMut.mutateAsync({ id: selected.id, patch: { [key]: e.target.value } })
-                      }
+              {form ? (
+                <>
+                  {selected.status === "submitted" ? (
+                    <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+                      Saving takes this report back from the asset owner&apos;s review. Submit it again when it&apos;s ready.
+                    </p>
+                  ) : null}
+                  <div className="space-y-1">
+                    <Label htmlFor="report-title">Title</Label>
+                    <Input
+                      id="report-title"
+                      value={form.title}
+                      onChange={(e) => setForm((f) => f && { ...f, title: e.target.value })}
                     />
                   </div>
-                ) : selected[key].trim() ? (
-                  <div key={key}>
-                    <h3 className="text-sm font-semibold">{label}</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                      {selected[key]}
-                    </p>
-                  </div>
-                ) : null,
+                  {REPORT_SECTIONS.map(({ key, label, rows }) => (
+                    <div key={key} className="space-y-1">
+                      <Label htmlFor={`report-${key}`}>{label}</Label>
+                      <Textarea
+                        id={`report-${key}`}
+                        rows={rows}
+                        value={form[key]}
+                        onChange={(e) => setForm((f) => f && { ...f, [key]: e.target.value })}
+                      />
+                    </div>
+                  ))}
+                </>
+              ) : (
+                REPORT_SECTIONS.map(({ key, label }) =>
+                  selected[key].trim() ? (
+                    <div key={key}>
+                      <h3 className="text-sm font-semibold">{label}</h3>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                        {selected[key]}
+                      </p>
+                    </div>
+                  ) : null,
+                )
               )}
             </div>
           </SectionCard>
@@ -473,39 +535,45 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
           ) : null}
 
           <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border bg-background py-3">
-            {editable && canAuthor ? (
+            {form ? (
               <>
-                <Button
-                  onClick={() => {
-                    if (!selected.summary.trim()) {
-                      toast.error("Add a summary before submitting");
-                      return;
-                    }
-                    void submitMut
-                      .mutateAsync(selected.id)
-                      .then(() => toast.success("Sent to the asset owner for review"))
-                      .catch((e) => toast.error(e instanceof Error ? e.message : "Submit failed"));
-                  }}
-                >
-                  Submit to asset owner
+                <Button onClick={() => void saveEdits()} disabled={updateMut.isPending}>
+                  Save
                 </Button>
-                <Button variant="outline" onClick={onRefresh}>
-                  Refresh figures
+                <Button variant="outline" onClick={() => setForm(null)}>
+                  Cancel
                 </Button>
-                <Button
-                  variant="ghost"
-                  className="text-destructive"
-                  onClick={() => {
-                    void removeMut
-                      .mutateAsync(selected.id)
-                      .then(() => {
-                        toast.message("Draft removed");
-                        router.push(CROPFORT_ROUTES.reports);
-                      })
-                      .catch((e) => toast.error(e instanceof Error ? e.message : "Delete failed"));
-                  }}
-                >
-                  Delete draft
+              </>
+            ) : canChange(selected) ? (
+              <>
+                {editable ? (
+                  <Button
+                    onClick={() => {
+                      if (!selected.summary.trim()) {
+                        toast.error("Add a summary before submitting");
+                        return;
+                      }
+                      void submitMut
+                        .mutateAsync(selected.id)
+                        .then(() => toast.success("Sent to the asset owner for review"))
+                        .catch((e) => toast.error(e instanceof Error ? e.message : "Submit failed"));
+                    }}
+                  >
+                    Submit to asset owner
+                  </Button>
+                ) : null}
+                <Button variant="outline" onClick={startEditing}>
+                  <Pencil className="mr-1.5 h-4 w-4" aria-hidden />
+                  Edit
+                </Button>
+                {editable ? (
+                  <Button variant="outline" onClick={onRefresh}>
+                    Refresh figures
+                  </Button>
+                ) : null}
+                <Button variant="ghost" className="text-destructive" onClick={() => setDeleteTarget(selected)}>
+                  <Trash2 className="mr-1.5 h-4 w-4" aria-hidden />
+                  Delete
                 </Button>
               </>
             ) : null}
@@ -571,18 +639,19 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
               <TableHead className="text-right">Variance</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Updated</TableHead>
+              <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {reportsQuery.isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             ) : reports.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
                   No reports yet.
                   {canAuthor ? (
                     <Button size="sm" variant="link" onClick={() => setGenerateOpen(true)}>
@@ -616,6 +685,27 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                     {new Date(r.updatedAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {canChange(r) ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon-sm" variant="ghost" aria-label={`Actions for ${r.code}`}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => router.push(`${CROPFORT_ROUTES.reports}/${r.id}?edit=1`)}>
+                            <Pencil className="mr-2 h-4 w-4" aria-hidden />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(r)}>
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))
@@ -704,6 +794,20 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={`Delete ${deleteTarget?.code ?? "report"}?`}
+        description={
+          deleteTarget?.status === "submitted"
+            ? "It is waiting for the asset owner's review and will be removed from it. This can't be undone."
+            : "This can't be undone."
+        }
+        confirmLabel="Delete"
+        loading={removeMut.isPending}
+        onConfirm={() => void confirmDelete()}
+      />
 
       <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
         <DialogContent>
