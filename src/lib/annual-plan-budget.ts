@@ -115,6 +115,8 @@ export type BenchmarkActivity = {
   activity: string;
   unit: string;
   farms: Record<string, FarmRate>;
+  dataNotes?: string;
+  taxonomyActivityId?: string | null;
 };
 
 export type MetricDefinition = {

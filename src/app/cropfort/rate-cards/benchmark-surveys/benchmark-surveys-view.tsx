@@ -19,6 +19,7 @@ import { DataTable } from "@/components/cropfort/tanstack-data-table";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { AuditTimelineDrawer } from "@/components/rate-cards/audit-timeline-drawer";
 import { BenchmarkFarmDataFields } from "@/components/rate-cards/benchmark-farm-data-fields";
+import { BenchmarkSourcePicker } from "@/components/rate-cards/benchmark-source-picker";
 import { RateWorkflowImportDialog } from "@/components/rate-cards/rate-workflow-import-dialog";
 import {
   loadWorkflowContext,
@@ -100,6 +101,7 @@ export default function BenchmarkSurveysListView() {
   const [sourceEvidence, setSourceEvidence] = useState("");
   const [notes, setNotes] = useState("");
   const benchmarkSummary = buildBenchmarkData(farmInputs, notes);
+  const selectedActivity = activities.find((a) => a.id === activityId);
 
   // The farm area chosen in the context bar narrows the list; "all" means program-wide
   const listFilters = useMemo(() => {
@@ -460,9 +462,26 @@ export default function BenchmarkSurveysListView() {
               <div>
                 <p className="text-sm font-medium">Source farm rates</p>
                 <p className="text-xs text-muted-foreground">
-                  Add farms and enter available rates. Mark farms to include in the industry average.
+                  Import rates from the benchmark data, or add farms and enter rates by hand. Mark farms to include
+                  in the industry average.
                 </p>
               </div>
+              <BenchmarkSourcePicker
+                activityId={activityId || undefined}
+                activityCode={selectedActivity?.code}
+                activityUnit={selectedActivity?.unitOfMeasure}
+                onApply={(imported, meta) => {
+                  // Imported farms replace same-named ones; manually added farms stay.
+                  const names = new Set(imported.map((f) => f.name.toLocaleLowerCase()));
+                  setFarmInputs((current) => [
+                    ...current.filter((f) => f.name.trim() && !names.has(f.name.trim().toLocaleLowerCase())),
+                    ...imported,
+                  ]);
+                  if (!notes.trim() && meta.dataNotes) setNotes(meta.dataNotes);
+                  if (!sourceEvidence.trim()) setSourceEvidence(meta.sourceEvidence);
+                  toast.success(`Imported ${imported.length} source farm${imported.length === 1 ? "" : "s"}`);
+                }}
+              />
               <BenchmarkFarmDataFields value={farmInputs} onChange={setFarmInputs} />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/30 p-3 sm:col-span-2">
