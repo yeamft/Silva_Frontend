@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type { CropfortRole } from "@/types/cropfort";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
+import { SHOW_SPEND_BANDS } from "@/config/features";
 
 export type WorkspaceId =
   | "overview"
@@ -381,12 +382,16 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         href: CROPFORT_ROUTES.programs,
         description: "Core Operations register",
       },
-      {
-        id: "spend-bands",
-        label: "Spend Bands",
-        href: CROPFORT_ROUTES.spendBands,
-        description: "Schedule 3 plan / AFE spend bands",
-      },
+      ...(SHOW_SPEND_BANDS
+        ? [
+            {
+              id: "spend-bands",
+              label: "Spend Bands",
+              href: CROPFORT_ROUTES.spendBands,
+              description: "Schedule 3 plan / AFE spend bands",
+            },
+          ]
+        : []),
       {
         id: "access",
         label: "Access & Security",

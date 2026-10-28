@@ -25,6 +25,7 @@ import {
 } from "@/components/rate-cards/workflow-context-bar";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,9 @@ import {
 import { enrichRateCard } from "@/lib/mock-api/rate-card-workflow";
 import { useWorkflowFarmAreas } from "@/lib/query/hooks/use-rate-card-workflow";
 import { useRateCardStore } from "@/store/rateCardStore";
+import { cn } from "@/lib/utils";
+import { createRateCardImport } from "@/lib/api/rate-card-proposals";
+import { useActivities } from "@/lib/query";
 import type {
   StandingKind,
   WorkflowContextFilters,
@@ -94,7 +98,7 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
 
   const [ctx, setCtx] = useState<WorkflowContextFilters>(() => loadWorkflowContext());
   const [status, setStatus] = useState<WorkflowStatus | "all">(() =>
-    archiveMode ? "archived" : isAssetOwner ? "submitted" : "all",
+    archiveMode ? "archived" : isAssetOwner ? "approved" : "all",
   );
   const [kind, setKind] = useState<StandingKind | "all">("all");
   const [auditId, setAuditId] = useState<string | null>(null);
@@ -102,6 +106,15 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [sourceSurveyId, setSourceSurveyId] = useState("");
+  // Labour cards come from a benchmark; materials and services are priced by expert input
+  const [costType, setCostType] = useState<StandingKind>("labor");
+  const [manualActivityId, setManualActivityId] = useState("");
+  const [manualRate, setManualRate] = useState("");
+  const activitiesQuery = useActivities({}, open);
+  const activityOptions = useMemo(
+    () => (activitiesQuery.data || []).filter((a) => a.active !== false),
+    [activitiesQuery.data],
+  );
   // Locked benchmarks are listed per farm area, so the dialog always works against one farm
   const [dialogFarmId, setDialogFarmId] = useState("");
   const farmAreas = useWorkflowFarmAreas(ctx.programId || activeProgram?.id || "").data ?? [];
@@ -234,7 +247,15 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
       col.accessor("status", {
         header: "Status",
         size: 120,
-        cell: (c) => <StatusBadge status={c.getValue()} />,
+        cell: (c) => {
+          const status = c.getValue();
+          return (
+            <StatusBadge
+              status={status}
+              label={status === "approved" ? "Published" : status === "archived" ? undefined : "Draft"}
+            />
+          );
+        },
       }),
       col.display({
         id: "actions",
@@ -244,11 +265,6 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
           const row = c.row.original;
           return (
             <div className="flex items-center justify-end gap-1 pr-2" onClick={(e) => e.stopPropagation()}>
-              {row.status === "submitted" && isAssetOwner ? (
-                <Button size="sm" asChild>
-                  <Link href={`${CROPFORT_ROUTES.rateCardProposals}/${row.id}`}>Review</Link>
-                </Button>
-              ) : null}
               <Button
                 variant="ghost"
                 size="icon"
@@ -285,7 +301,7 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
   if (!canView) return <NotAuthorized title="Rate cards" />;
 
   const totalCount = rows.length;
-  const submittedCount = rows.filter((r) => r.status === "submitted").length;
+  const submittedCount = rows.filter((r) => r.status !== "approved" && r.status !== "archived").length;
   const approvedCount = rows.filter((r) => r.status === "approved").length;
   const pageTitle = archiveMode ? "Archive" : "Rate cards";
 
@@ -326,8 +342,8 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
         label="Rate card summary"
         items={[
           { id: "total", label: "Total rates", value: listLoading ? "—" : String(totalCount), icon: ClipboardList },
-          { id: "submitted", label: "Submitted", value: listLoading ? "—" : String(submittedCount), icon: Clock },
-          { id: "approved", label: "Approved", value: listLoading ? "—" : String(approvedCount), icon: CheckCircle2 },
+          { id: "submitted", label: "Not published", value: listLoading ? "—" : String(submittedCount), icon: Clock },
+          { id: "approved", label: "Published", value: listLoading ? "—" : String(approvedCount), icon: CheckCircle2 },
         ]}
       />
 
@@ -353,22 +369,9 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {isAssetOwner ? (
-                    <>
-                      <SelectItem value="submitted">Pending review</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="returned">Returned</SelectItem>
-                      <SelectItem value="all">All statuses</SelectItem>
-                    </>
-                  ) : (
-                    <>
-                      <SelectItem value="all">All statuses</SelectItem>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="submitted">Submitted</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="returned">Returned</SelectItem>
-                    </>
-                  )}
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="approved">Published</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -425,48 +428,138 @@ export default function RateCardProposalsListView({ archiveMode = false }: { arc
               )}
             />
             <FormField
-              label="Benchmark survey"
+              label="Cost type"
               required
               render={() => (
-                <Select value={sourceSurveyId} onValueChange={setSourceSurveyId} disabled={!dialogFarmId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select locked benchmark" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {dialogFarmId && locked.length === 0 ? (
-                      <SelectItem value="__none" disabled>
-                        No unused locked benchmarks for this farm area
-                      </SelectItem>
-                    ) : (
-                      locked.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.activityName || s.activityId} · recommended {fmtEtb(s.recommendedRate)}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      ["labor", "Labour"],
+                      ["materials", "Materials"],
+                      ["services", "Services"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={costType === value}
+                      onClick={() => setCostType(value)}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-sm transition-colors",
+                        costType === value
+                          ? "border-primary bg-primary/[0.06] font-medium text-primary"
+                          : "border-border hover:bg-muted/50",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               )}
             />
-            {dialogFarmId && locked.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Lock a benchmark survey first, then return here — or open the survey and use{" "}
-                <Link href={CROPFORT_ROUTES.benchmarkSurveys} className="underline underline-offset-2">
-                  Benchmark surveys
-                </Link>.
-              </p>
-            ) : sourceSurveyId ? (
-              <p className="text-xs text-muted-foreground">
-                Rate card fields are prefilled from the benchmark. Edit the draft, then submit for review.
-              </p>
-            ) : null}
+            {costType === "labor" ? (
+              <>
+                <FormField
+                  label="Benchmark survey"
+                  required
+                  render={() => (
+                    <Select value={sourceSurveyId} onValueChange={setSourceSurveyId} disabled={!dialogFarmId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select locked benchmark" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dialogFarmId && locked.length === 0 ? (
+                          <SelectItem value="__none" disabled>
+                            No unused locked benchmarks for this farm area
+                          </SelectItem>
+                        ) : (
+                          locked.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.activityName || s.activityId} · recommended {fmtEtb(s.recommendedRate)}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {dialogFarmId && locked.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Lock a benchmark survey first, then return here — or open the survey and use{" "}
+                    <Link href={CROPFORT_ROUTES.benchmarkSurveys} className="underline underline-offset-2">
+                      Benchmark surveys
+                    </Link>.
+                  </p>
+                ) : sourceSurveyId ? (
+                  <p className="text-xs text-muted-foreground">
+                    Rate card fields are prefilled from the benchmark. Edit the draft, then submit for review.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <FormField
+                  label="Activity"
+                  required
+                  render={({ id }) => (
+                    <Select value={manualActivityId} onValueChange={setManualActivityId}>
+                      <SelectTrigger id={id}>
+                        <SelectValue placeholder="Select activity" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activityOptions.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.code} · {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <FormField
+                  label="Expert input rate (ETB per unit)"
+                  required
+                  render={(props) => (
+                    <Input
+                      {...props}
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={manualRate}
+                      onChange={(e) => setManualRate(e.target.value)}
+                    />
+                  )}
+                />
+                <p className="text-xs text-muted-foreground">
+                  An activity can have labour, materials and services cards — its plan cost per unit is the sum of the
+                  approved ones.
+                </p>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button
-              disabled={actionPending || !sourceSurveyId || !dialogFarmId}
+              disabled={
+                actionPending ||
+                !dialogFarmId ||
+                (costType === "labor" ? !sourceSurveyId : !manualActivityId || manualRate.trim() === "" || Number(manualRate) < 0)
+              }
               onClick={async () => {
                 try {
+                  if (costType !== "labor") {
+                    const created = await createRateCardImport(dialogFarmId, {
+                      activityId: manualActivityId,
+                      kind: costType,
+                      proposedRate: Number(manualRate),
+                      budgetYear: budgetYearOf(ctx.budgetYearId),
+                      sourceBasis: "Expert input",
+                    });
+                    toast.success(`Draft ${costType} rate card created`);
+                    setOpen(false);
+                    router.push(`${CROPFORT_ROUTES.rateCardProposals}/${created.id}`);
+                    return;
+                  }
                   const card = await createFromSurvey(dialogFarmId, { sourceSurveyId, budgetYear: budgetYearOf(ctx.budgetYearId) });
                   toast.success("Draft rate card created from benchmark");
                   setOpen(false);

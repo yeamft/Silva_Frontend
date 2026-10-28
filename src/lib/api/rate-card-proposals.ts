@@ -35,6 +35,9 @@ export type RateCardProposalDto = {
   sourceSurveyId: string | null;
   recommendedRate: number | null;
   proposedRate: number;
+  planBasis?: "industry_average" | "plus_25" | "plus_50" | "expert_input";
+  expertRate?: number | null;
+  scenarios?: Record<"industry_average" | "plus_25" | "plus_50" | "expert_input", number | null>;
   variancePct: number | null;
   flagged: boolean;
   norm: number | null;
@@ -144,6 +147,8 @@ export const createRateCardImport = (
     budgetYear?: number;
     norm?: number | null;
     sourceBasis?: string;
+    sourceEvidence?: string;
+    justificationNote?: string;
     availableFrom?: string;
     availableTo?: string | null;
   },

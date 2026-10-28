@@ -72,8 +72,9 @@ function isNurseryCategory(category: string) {
 
 export function recomputeActivity(act: CoreOpsActivity): CoreOpsActivity {
   const plannedQty = Math.max(0, act.plannedQty);
+  const frequency = act.frequency && act.frequency > 0 ? act.frequency : 1;
   const rate = act.agreedRate?.unitRateEtb ?? 0;
-  const plannedCost = Math.round(plannedQty * rate * 100) / 100;
+  const plannedCost = Math.round(plannedQty * frequency * rate * 100) / 100;
   const manualsRef =
     act.manualsRef?.trim() ||
     resolveManualRef({
@@ -202,6 +203,7 @@ type CoreOpsPlanStore = {
   setActivityIncluded: (activityRowId: string, included: boolean) => void;
   setActivitiesIncluded: (activityRowIds: string[], included: boolean) => number;
   setPlannedQty: (activityRowId: string, qty: number) => void;
+  setFrequency: (activityRowId: string, frequency: number) => void;
   setActivitiesPlannedQty: (activityRowIds: string[], qty: number) => number;
   setBlockAllocations: (
     activityRowId: string,
@@ -317,16 +319,21 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
               )
               .map((a) => a.id),
           );
-          const approvedByFarmActivity = new Map<string, (typeof approvedRes)[number]>();
+          // Latest approved card per farm, activity and cost type (labour / materials / services)
+          type ApprovedCard = (typeof approvedRes)[number];
+          const approvedByFarmActivity = new Map<string, Map<string, ApprovedCard>>();
           for (const card of approvedRes) {
             const farmId = card.farmEstateId || card.farmAreaId;
             if (!farmId) continue;
             if (coreOpsIds.size > 0 && !coreOpsIds.has(card.activityId)) continue;
             const key = `${farmId}:${card.activityId}`;
-            const prev = approvedByFarmActivity.get(key);
+            const byKind = approvedByFarmActivity.get(key) ?? new Map<string, ApprovedCard>();
+            const prev = byKind.get(card.kind);
             if (prev && (prev.approvedAt || "") >= (card.approvedAt || "")) continue;
-            approvedByFarmActivity.set(key, card);
+            byKind.set(card.kind, card);
+            approvedByFarmActivity.set(key, byKind);
           }
+          const KIND_ORDER = ["labor", "materials", "services"];
 
           const eligible: EligibleRateActivity[] = taxonomy
             .filter(
@@ -336,7 +343,13 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             )
             .flatMap((activity) =>
               farms.map((farm) => {
-                const card = approvedByFarmActivity.get(`${farm.id}:${activity.id}`);
+                const byKind = approvedByFarmActivity.get(`${farm.id}:${activity.id}`);
+                const cards = byKind
+                  ? KIND_ORDER.map((k) => byKind.get(k)).filter((c): c is ApprovedCard => Boolean(c))
+                  : [];
+                // One activity can be priced by labour, materials and services; its unit rate is the sum
+                const card = cards[0];
+                const unitRate = cards.reduce((sum, c) => sum + (c.proposedRate ?? 0), 0);
                 const axes = enrichActivityAxes(activity);
                 return {
                   activityId: activity.id,
@@ -344,13 +357,13 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
                   activityName: activity.name,
                   category: activity.category || "Core Operations",
                   uom: activity.unitOfMeasure || "unit",
-                  costKind: card?.kind || axes.costKind || "labor",
+                  costKind: cards.length ? cards.map((c) => c.kind).join("+") : axes.costKind || "labor",
                   rateCardId: card?.id || null,
-                  unitRateEtb: card?.proposedRate ?? 0,
-                  normMdPerUnit: card?.norm ?? null,
+                  unitRateEtb: unitRate,
+                  normMdPerUnit: byKind?.get("labor")?.norm ?? null,
                   farmEstateId: farm.id,
                   farmEstateName: farm.name,
-                  approvedAt: card?.approvedAt ?? null,
+                  approvedAt: cards.map((c) => c.approvedAt || "").sort().pop() || null,
                   rateReadiness: card ? "approved" as const : "missing" as const,
                 };
               }),
@@ -660,6 +673,23 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
           },
         });
         return changed;
+      },
+
+      setFrequency: (activityRowId, frequency) => {
+        const plan = get().plan;
+        if (!plan || !plan.activities[activityRowId]) return;
+        const act = recomputeActivity({
+          ...plan.activities[activityRowId],
+          frequency: frequency > 0 ? frequency : 1,
+        });
+        set({
+          plan: {
+            ...plan,
+            activities: { ...plan.activities, [activityRowId]: act },
+            status: plan.status === "submitted" ? plan.status : "draft",
+            updatedAt: nowIso(),
+          },
+        });
       },
 
       setPlannedQty: (activityRowId, qty) => {

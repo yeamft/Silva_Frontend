@@ -117,8 +117,14 @@ export interface BenchmarkSurveyRecord {
  * Created from a locked Benchmark Survey (evidence + recommended rate).
  * Field shape mirrors Standing: Code/Activity/Scope/UoM/Norm/Approved/Fallback/Source/Effective/Status.
  */
+export type RatePlanBasis = "industry_average" | "plus_25" | "plus_50" | "expert_input";
+
 export interface RateCardProposal {
   id: string;
+  /** Scenario used as the Chaka Buna plan rate; proposedRate follows it. */
+  planBasis?: RatePlanBasis;
+  expertRate?: number | null;
+  scenarios?: Record<RatePlanBasis, number | null>;
   programId: string;
   budgetYearId: string;
   farmAreaId: string;

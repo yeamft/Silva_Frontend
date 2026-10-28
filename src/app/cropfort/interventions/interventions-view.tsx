@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_SPEND_BANDS } from "@/config/features";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Clock3, FileEdit, MoreHorizontal, Plus, Zap } from "lucide-react";
@@ -181,7 +182,7 @@ export default function InterventionsView() {
       });
       await linkInterventionAfe.mutateAsync({ id: row.id, cropfortAfeId: afe.id });
       toast.success(`AFE drafted`, {
-        description: `${afe.title} · Band ${afe.band}`,
+        description: SHOW_SPEND_BANDS ? `${afe.title} · Band ${afe.band}` : afe.title,
         action: {
           label: "Open AFE",
           onClick: () => {

@@ -1,5 +1,8 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import type { RatePlanBasis } from "@/types/rate-card-workflow";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -10,7 +13,6 @@ import { NotAuthorized } from "@/components/cropfort/not-authorized";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { AuditTimelineDrawer } from "@/components/rate-cards/audit-timeline-drawer";
-import { MakerCheckerPanel } from "@/components/rate-cards/maker-checker-panel";
 import {
   DirectRateCardForm,
   type RateCardFormValues,
@@ -110,7 +112,6 @@ export default function RateCardProposalDetailView() {
   const update = useRateCardStore((s) => s.update);
   const submit = useRateCardStore((s) => s.submit);
   const approve = useRateCardStore((s) => s.approve);
-  const reject = useRateCardStore((s) => s.reject);
   const archive = useRateCardStore((s) => s.archive);
   const restore = useRateCardStore((s) => s.restore);
 
@@ -125,6 +126,8 @@ export default function RateCardProposalDetailView() {
     justificationNote: "",
     notes: "",
   });
+  const [basis, setBasis] = useState<RatePlanBasis>("expert_input");
+  const [expertRate, setExpertRate] = useState("");
   const [auditOpen, setAuditOpen] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
 
@@ -146,6 +149,8 @@ export default function RateCardProposalDetailView() {
       justificationNote: selected.justificationNote || "",
       notes: selected.notes,
     });
+    setBasis(selected.planBasis || "expert_input");
+    setExpertRate(selected.expertRate != null ? String(selected.expertRate) : String(selected.proposedRate ?? ""));
   }, [selected, id]);
 
   const card = selected && selected.id === id ? enrichRateCard(selected) : null;
@@ -182,13 +187,12 @@ export default function RateCardProposalDetailView() {
   }
 
   const editable = canPropose && (card.status === "draft" || card.status === "returned");
-  const isAoReview = canDecide && card.status === "submitted";
   const showSpxEdit = canPropose && !canDecide;
   const busy = actionPending;
   const uom = card.activity?.uom || "unit";
 
+  // The rate itself is set through the scenario table, not this form
   const patch = {
-    proposedRate: Number(form.proposedRate),
     availableFrom: form.availableFrom,
     availableTo: form.availableTo.trim() ? form.availableTo.trim() : null,
     fallbackRate: form.fallbackRate.trim() === "" ? null : Number(form.fallbackRate),
@@ -229,14 +233,14 @@ export default function RateCardProposalDetailView() {
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Rates", href: CROPFORT_ROUTES.rateCardProposals },
           {
-            label: isAoReview ? "Pending review" : "Rate cards",
+            label: "Rate cards",
             href: CROPFORT_ROUTES.rateCardProposals,
           },
           { label: activityLabel },
         ]}
         meta={
           <>
-            <StatusBadge status={card.status} />
+            <StatusBadge status={card.status} label={card.status === "approved" ? "Published" : card.status === "archived" ? undefined : "Draft"} />
             <span className="text-xs capitalize text-muted-foreground">
               {card.kind} · per {uom}
               {card.year?.name ? ` · budget year ${card.year.name}` : ""}
@@ -245,7 +249,7 @@ export default function RateCardProposalDetailView() {
         }
         actions={
           <div className="flex items-center gap-2">
-            {canDecide && card.status === "approved" ? (
+            {(canDecide || canPropose) && card.status === "approved" ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -284,9 +288,9 @@ export default function RateCardProposalDetailView() {
 
       {/* What happens now — the decision sits at the top so reviewers don't scroll past the evidence */}
       <section
-        aria-label="Approval"
+        aria-label="Status"
         className={`rounded-xl border p-4 sm:p-5 ${
-          isAoReview ? "border-primary/40 bg-primary/[0.04]" : card.status === "returned" ? "border-warning/40 bg-warning/5" : "border-border bg-card"
+          card.status === "returned" ? "border-warning/40 bg-warning/5" : "border-border bg-card"
         }`}
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -300,22 +304,18 @@ export default function RateCardProposalDetailView() {
             )}
             <div className="min-w-0">
               <p className="font-semibold">
-                {isAoReview
-                  ? "Waiting for your decision"
-                  : card.status === "submitted"
-                    ? "Submitted — waiting for the asset owner"
-                    : card.status === "approved"
-                      ? `Approved${card.approvedByName ? ` by ${card.approvedByName}` : ""}${card.approvedAt ? ` on ${fmtDate(card.approvedAt)}` : ""}`
-                      : card.status === "returned"
-                        ? "Returned for changes"
-                        : card.status === "archived"
-                          ? "Archived — no longer used for rate resolution"
-                          : editable
-                            ? "Draft — check the rate, then submit it for approval"
-                            : "Draft"}
+                {card.status === "approved"
+                  ? `Published${card.approvedAt ? ` on ${fmtDate(card.approvedAt)}` : ""} — plans use this rate`
+                  : card.status === "archived"
+                    ? "Archived — no longer used in plans"
+                    : card.status === "submitted"
+                      ? "Not published yet"
+                      : editable
+                        ? "Draft — check the rate, then publish it"
+                        : "Draft"}
               </p>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Proposed <span className="font-medium text-foreground">{fmtEtb(Number(form.proposedRate) || card.proposedRate)}</span> per {uom}
+                Plan rate <span className="font-medium text-foreground">{fmtEtb(card.proposedRate)}</span> per {uom}
                 {variance != null ? (
                   <>
                     {" · "}
@@ -325,7 +325,7 @@ export default function RateCardProposalDetailView() {
                     </span>
                   </>
                 ) : null}
-                {card.status === "approved" ? " · used for rate resolution within its effective period" : ""}
+                {card.status === "approved" ? " · within its effective period" : ""}
               </p>
               {card.returnComment && (card.status === "returned" || card.status === "draft") ? (
                 <p className="mt-2 rounded-md bg-background/80 px-3 py-2 text-sm">
@@ -333,50 +333,37 @@ export default function RateCardProposalDetailView() {
                   {card.returnComment}
                 </p>
               ) : null}
-              {flagged && (isAoReview || editable) ? (
+              {flagged && editable ? (
                 <p className="mt-2 text-xs text-muted-foreground">
                   {card.justificationNote
                     ? `More than 10% from the benchmark. Justification: ${card.justificationNote}`
-                    : "More than 10% from the benchmark — add a variance justification before submitting."}
+                    : "More than 10% from the benchmark — add a short justification."}
                 </p>
               ) : null}
             </div>
           </div>
           <div className="shrink-0">
-            <MakerCheckerPanel
-              status={card.status}
-              canSubmit={showSpxEdit}
-              canDecide={canDecide}
-              busy={busy}
-              entityLabel={`${card.kind} · ${activityLabel} · ${fmtEtb(card.proposedRate)}`}
-              onSubmit={async () => {
-                try {
-                  if (editable) await update(card.id, patch);
-                  await submit(card.id);
-                  toast.success("Rate card submitted for review");
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Submit failed");
-                }
-              }}
-              onApprove={async () => {
-                try {
-                  await approve(card.id);
-                  toast.success("Approved");
-                  router.push(CROPFORT_ROUTES.rateCardProposals);
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Approve failed");
-                }
-              }}
-              onReturn={async (comment) => {
-                try {
-                  await reject(card.id, comment);
-                  toast.success("Returned to SPX for revision");
-                  router.push(CROPFORT_ROUTES.rateCardProposals);
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Return failed");
-                }
-              }}
-            />
+            {canPropose && (editable || card.status === "submitted") ? (
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={async () => {
+                  try {
+                    if (editable) {
+                      await update(card.id, patch);
+                      await submit(card.id);
+                    } else {
+                      await approve(card.id);
+                    }
+                    toast.success("Rate card published — plans can use it now");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Publish failed");
+                  }
+                }}
+              >
+                Publish rate card
+              </Button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -385,8 +372,8 @@ export default function RateCardProposalDetailView() {
       <SectionCard title="Rate summary">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MetricTile
-            label="Proposed rate"
-            value={fmtEtb(Number(form.proposedRate) || card.proposedRate)}
+            label="Chaka Buna plan rate"
+            value={fmtEtb(card.proposedRate)}
             sub={`per ${uom}`}
             highlight
           />
@@ -414,6 +401,104 @@ export default function RateCardProposalDetailView() {
           </div>
         )}
 
+      </SectionCard>
+
+      {/* ── Rate scenarios: the chosen one is the Chaka Buna plan rate ── */}
+      <SectionCard
+        title="Rate scenarios"
+        description="Pick the scenario used as the Chaka Buna plan rate. Without an industry average, only the expert input can be used."
+      >
+        {(() => {
+          const industry = card.scenarios?.industry_average ?? card.recommendedRate ?? null;
+          const expert = expertRate.trim() === "" ? null : Number(expertRate);
+          const rows: { id: RatePlanBasis; label: string; rate: number | null }[] = [
+            { id: "industry_average", label: "Industry average", rate: industry },
+            // +25% / +50% follow the programme's Band 1 / Band 2 settings (worked out on the server)
+            { id: "plus_25", label: "+25%", rate: card.scenarios?.plus_25 ?? null },
+            { id: "plus_50", label: "+50%", rate: card.scenarios?.plus_50 ?? null },
+            { id: "expert_input", label: "Expert input", rate: expert },
+          ];
+          const canChoose = showSpxEdit && editable;
+          const dirty =
+            basis !== (card.planBasis || "expert_input") ||
+            (expert ?? null) !== (card.expertRate ?? null);
+          return (
+            <div className="space-y-3">
+              <div className="overflow-hidden rounded-md border border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2">Rate scenario</th>
+                      <th className="px-3 py-2 text-right">ETB per {uom}</th>
+                      <th className="px-3 py-2 text-right">Chaka Buna plan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => {
+                      const selectedRow = basis === row.id;
+                      const available = row.rate != null;
+                      return (
+                        <tr key={row.id} className={cn("border-t border-border", selectedRow && "bg-primary/[0.06]")}>
+                          <td className="px-3 py-2 font-medium">{row.label}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {row.id === "expert_input" && canChoose ? (
+                              <Input
+                                type="number"
+                                min={0}
+                                step="any"
+                                value={expertRate}
+                                onChange={(e) => setExpertRate(e.target.value)}
+                                className="ml-auto h-8 w-32 text-right"
+                                aria-label="Expert input rate"
+                              />
+                            ) : available ? (
+                              fmtEtb(row.rate)
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {canChoose ? (
+                              <input
+                                type="radio"
+                                name="plan-basis"
+                                checked={selectedRow}
+                                disabled={!available}
+                                onChange={() => setBasis(row.id)}
+                                aria-label={`Use ${row.label} as the Chaka Buna plan rate`}
+                                className="h-4 w-4 accent-[hsl(var(--primary))]"
+                              />
+                            ) : selectedRow ? (
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                                Plan rate
+                              </span>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {canChoose ? (
+                <Button
+                  size="sm"
+                  disabled={busy || !dirty || (basis === "expert_input" && (expert == null || expert < 0))}
+                  onClick={async () => {
+                    try {
+                      await update(card.id, { planBasis: basis, expertRate: expert ?? undefined });
+                      toast.success("Plan rate saved");
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Save failed");
+                    }
+                  }}
+                >
+                  Save plan rate
+                </Button>
+              ) : null}
+            </div>
+          );
+        })()}
       </SectionCard>
 
       {/* ── Section 2: Rate details ── */}
@@ -466,6 +551,7 @@ export default function RateCardProposalDetailView() {
               flagged={flagged}
               uom={uom}
               disabled={false}
+              hideRate
             />
             <Button
               className="mt-3"

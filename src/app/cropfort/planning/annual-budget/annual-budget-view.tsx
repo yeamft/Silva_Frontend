@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Download } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
@@ -21,7 +21,12 @@ import {
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { canCreateProgrammePlan } from "@/lib/cropfort/platform-access";
 import { fmtEtb } from "@/lib/cropfort/planning-helpers";
-import { getAnnualPlanBenchmarks } from "@/lib/api/annual-plan-benchmarks";
+import {
+  getAnnualPlanBenchmarks,
+  getScenarioSettings,
+  importAnnualPlanBenchmarks,
+  updateScenarioSettings,
+} from "@/lib/api/annual-plan-benchmarks";
 import {
   BUDGET_SCENARIOS,
   METRIC_DEFINITIONS,
@@ -47,7 +52,7 @@ import { cn } from "@/lib/utils";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
 import { usePlanningContextStore } from "@/store/planningContextStore";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 function currentData(planData: AnnualPlanBudgetData | null | undefined, version?: string | null) {
   return {
@@ -96,10 +101,58 @@ export default function AnnualBudgetView() {
     enabled: Boolean(activeProgram?.id),
   });
   const benchmarkSet = benchmarkQuery.data;
-  const data = useMemo(
-    () => currentData(plan?.annualPlanData, benchmarkSet?.version),
-    [plan?.annualPlanData, benchmarkSet?.version],
-  );
+  const queryClient = useQueryClient();
+  // Band 1 / Band 2 are programme settings, shared with the rate card scenarios
+  const scenarioQuery = useQuery({
+    queryKey: ["scenario-settings", activeProgram?.id],
+    queryFn: getScenarioSettings,
+    enabled: Boolean(activeProgram?.id),
+  });
+  const programBands = scenarioQuery.data;
+  const data = useMemo(() => {
+    const base = currentData(plan?.annualPlanData, benchmarkSet?.version);
+    if (!programBands) return base;
+    return {
+      ...base,
+      settings: { ...base.settings, band1Pct: programBands.band1Pct / 100, band2Pct: programBands.band2Pct / 100 },
+    };
+  }, [plan?.annualPlanData, benchmarkSet?.version, programBands]);
+
+  const [bandDraft, setBandDraft] = useState<{ band1Pct: string; band2Pct: string } | null>(null);
+  useEffect(() => {
+    if (programBands) setBandDraft({ band1Pct: String(programBands.band1Pct), band2Pct: String(programBands.band2Pct) });
+  }, [programBands]);
+  const saveBand = async (key: "band1Pct" | "band2Pct") => {
+    const value = Number(bandDraft?.[key]);
+    if (!programBands || !Number.isFinite(value) || value < 0 || value === programBands[key]) return;
+    try {
+      await updateScenarioSettings({ [key]: value });
+      await queryClient.invalidateQueries({ queryKey: ["scenario-settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["rate-cards"] });
+      toast.success(`${key === "band1Pct" ? "Band 1" : "Band 2"} set to ${value}% — rate card scenarios use it too`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the band");
+    }
+  };
+
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const onImportFile = async (file: File | undefined) => {
+    if (!file) return;
+    setImporting(true);
+    try {
+      const result = await importAnnualPlanBenchmarks(file);
+      await queryClient.invalidateQueries({ queryKey: ["annual-plan-benchmarks"] });
+      toast.success(
+        `Imported ${result.activities} benchmark activities from ${result.sourceFile} (${result.matchedActivities} matched to the activity list)`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  };
   const rows = useMemo(
     () => summarizeAnnualBudget(data, benchmarkSet?.activities || []),
     [data, benchmarkSet?.activities],
@@ -151,11 +204,6 @@ export default function AnnualBudgetView() {
   };
   const updateSetting = <K extends keyof AnnualPlanSettings>(key: K, value: AnnualPlanSettings[K]) =>
     updateData({ ...data, settings: { ...data.settings, [key]: value } });
-  const updatePercentSetting = (key: "band1Pct" | "band2Pct", value: string) => {
-    const pct = Number(value);
-    if (value.trim() === "" || !Number.isFinite(pct) || pct < 0) return;
-    updateSetting(key, pct / 100);
-  };
   const updatePhasing = (code: string, phasing: number[], month: number, value: string) => {
     const pct = value.trim() === "" ? 0 : Number(value);
     if (!Number.isFinite(pct) || pct < 0) return;
@@ -221,6 +269,21 @@ export default function AnnualBudgetView() {
                 ))}
               </SelectContent>
             </Select>
+            {canEdit ? (
+              <>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={(e) => void onImportFile(e.target.files?.[0])}
+                />
+                <Button size="sm" variant="outline" disabled={importing} onClick={() => importInputRef.current?.click()}>
+                  <Upload className="mr-1.5 h-4 w-4" aria-hidden />
+                  {importing ? "Importing…" : "Import benchmark data"}
+                </Button>
+              </>
+            ) : null}
             <Button size="sm" disabled={!plan || !canEdit || loading} onClick={() => void onSave()}>
               Save draft
             </Button>
@@ -242,8 +305,15 @@ export default function AnnualBudgetView() {
       ) : !benchmarkSet?.activities.length ? (
         <SectionCard title="Benchmark set unavailable">
           <p className="text-sm text-muted-foreground">
-            Import the approved annual-plan workbook benchmark set before entering scenarios.
+            Import the annual-plan workbook (.xlsx). Its &quot;Benchmark Data&quot; sheet — 124 activities with each
+            farm&apos;s cost, man-days and frequency — becomes the benchmark set.
           </p>
+          {canEdit ? (
+            <Button className="mt-3" size="sm" disabled={importing} onClick={() => importInputRef.current?.click()}>
+              <Upload className="mr-1.5 h-4 w-4" aria-hidden />
+              {importing ? "Importing…" : "Import benchmark data"}
+            </Button>
+          ) : null}
         </SectionCard>
       ) : (
         <>
@@ -273,9 +343,10 @@ export default function AnnualBudgetView() {
                   type="number"
                   min={0}
                   step="any"
-                  value={fmtNum(settings.band1Pct * 100, 2)}
-                  disabled={locked}
-                  onChange={(e) => updatePercentSetting("band1Pct", e.target.value)}
+                  value={bandDraft?.band1Pct ?? fmtNum(settings.band1Pct * 100, 2)}
+                  disabled={!canEdit || !bandDraft}
+                  onChange={(e) => setBandDraft((d) => d && { ...d, band1Pct: e.target.value })}
+                  onBlur={() => void saveBand("band1Pct")}
                 />
               </label>
               <label className="grid gap-1 text-xs">
@@ -284,9 +355,10 @@ export default function AnnualBudgetView() {
                   type="number"
                   min={0}
                   step="any"
-                  value={fmtNum(settings.band2Pct * 100, 2)}
-                  disabled={locked}
-                  onChange={(e) => updatePercentSetting("band2Pct", e.target.value)}
+                  value={bandDraft?.band2Pct ?? fmtNum(settings.band2Pct * 100, 2)}
+                  disabled={!canEdit || !bandDraft}
+                  onChange={(e) => setBandDraft((d) => d && { ...d, band2Pct: e.target.value })}
+                  onBlur={() => void saveBand("band2Pct")}
                 />
               </label>
               <label className="grid gap-1 text-xs">
@@ -305,7 +377,8 @@ export default function AnnualBudgetView() {
               </label>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Bands raise the wage per man-day; man-days stay the same. The scenario labels stay &quot;+25%&quot; and &quot;+50%&quot; if you change them.
+              Bands raise the wage per man-day; man-days stay the same. They apply to the whole programme, including the
+              rate card scenarios. The scenario labels stay &quot;+25%&quot; and &quot;+50%&quot; if you change them.
             </p>
           </SectionCard>
 

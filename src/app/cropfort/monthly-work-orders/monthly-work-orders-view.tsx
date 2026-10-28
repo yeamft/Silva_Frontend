@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, Send } from "lucide-react";
 import { toast } from "sonner";
+import { TablePagination } from "@/components/cropfort/data-table";
+import { OpsDeskControlPanel, OpsDeskFilterChips } from "@/components/cropfort/ops-desk";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -43,7 +45,26 @@ function stepIndex(status: MonthlyWoStatus) {
   return status === "returned" ? 0 : STEPS.findIndex((s) => s.status === status);
 }
 
-export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string }) {
+type RowFilter = "all" | "approval" | "ready" | "active" | "draft";
+
+const PAGE_SIZES = [12, 24, 48];
+
+function matchesFilter(o: Order, filter: RowFilter) {
+  switch (filter) {
+    case "approval":
+      return o.status === "submitted";
+    case "ready":
+      return o.status === "approved";
+    case "active":
+      return o.status === "active";
+    case "draft":
+      return o.status === "draft" || o.status === "returned";
+    default:
+      return true;
+  }
+}
+
+export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: string; planId?: string }) {
   const { activeProgram, user } = useCropfortAuth();
   const router = useRouter();
   const enabled = Boolean(activeProgram?.id);
@@ -71,6 +92,7 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
     [ordersQuery.data],
   );
   const approvedPlans = approvedPlansQuery.data || [];
+  const planHref = (key: string) => `${CROPFORT_ROUTES.monthlyWorkOrders}/plan/${encodeURIComponent(key)}`;
   const allPlansQuery = useProgrammePlans(enabled, {});
   const planNames = useMemo(
     () => new Map((allPlansQuery.data || []).map((p) => [p.id, p.name])),
@@ -78,14 +100,47 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
   );
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [returnOpen, setReturnOpen] = useState(false);
+  /** Order being returned — set from the detail view or a list row. */
+  const [returnTarget, setReturnTarget] = useState<Order | null>(null);
   const [returnNote, setReturnNote] = useState("");
+  const [bulkApproving, setBulkApproving] = useState(false);
+  /** Orders waiting on the activate confirmation. */
+  const [activateTargets, setActivateTargets] = useState<Order[] | null>(null);
+  const [activating, setActivating] = useState(false);
+  const [query, setQuery] = useState("");
+  const [rowFilter, setRowFilter] = useState<RowFilter>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
   const [extraOpen, setExtraOpen] = useState(false);
   const [extra, setExtra] = useState({ name: "", qty: "1", etb: "", reason: "" });
 
+  /** One row per plan: its months, totals and how many orders sit in each status. */
+  const planGroups = useMemo(() => {
+    const groups = new Map<string, Order[]>();
+    for (const o of orders) {
+      const key = o.sourcePlanId || "none";
+      groups.set(key, [...(groups.get(key) || []), o]);
+    }
+    return [...groups.entries()].map(([key, items]) => {
+      const counts = new Map<MonthlyWoStatus, number>();
+      for (const o of items) counts.set(o.status, (counts.get(o.status) || 0) + 1);
+      return {
+        key,
+        name: key === "none" ? "Not from a plan" : planNames.get(key) || "Core Operations plan",
+        farmName: items[0].farmName,
+        orders: items,
+        activities: items.reduce((sum, o) => sum + o.lines.length, 0),
+        total: items.reduce((sum, o) => sum + o.totalEtb, 0),
+        statuses: [...counts.entries()],
+      };
+    });
+  }, [orders, planNames]);
+
+  const planGroup = planId ? planGroups.find((g) => g.key === planId) ?? null : null;
+  const pendingApproval = planGroup?.orders.filter((o) => o.status === "submitted") ?? [];
+
   const selected = orderId ? orders.find((o) => o.id === orderId) ?? null : null;
   const editable = selected && (selected.status === "draft" || selected.status === "returned");
-  const hasExtra = selected?.lines.some((l) => !l.inPlan) ?? false;
 
   const run = async (action: () => Promise<unknown>, success: string) => {
     try {
@@ -95,6 +150,76 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
       toast.error(e instanceof Error ? e.message : "Something went wrong");
     }
   };
+
+  const approve = (o: Order) =>
+    void run(() => decideMut.mutateAsync({ id: o.id, decision: "approve" }), `${o.code} approved`);
+
+  const approveAll = async (items: Order[]) => {
+    setBulkApproving(true);
+    const results = await Promise.allSettled(
+      items.map((o) => decideMut.mutateAsync({ id: o.id, decision: "approve" })),
+    );
+    setBulkApproving(false);
+    const failed = results.filter((r) => r.status === "rejected").length;
+    const ok = items.length - failed;
+    if (ok) toast.success(`Approved ${ok} work order${ok === 1 ? "" : "s"}`);
+    if (failed) toast.error(`${failed} could not be approved`);
+  };
+
+  const canActivate = (o: Order) =>
+    canEdit && (o.status === "approved" || (o.status === "submitted" && !o.lines.some((l) => !l.inPlan)));
+
+  /** Activates one by one so the vendor work orders are issued in month order. */
+  const activateAll = async (items: Order[]) => {
+    setActivating(true);
+    let issued = 0;
+    const heldBack: string[] = [];
+    const failed: string[] = [];
+    for (const o of items) {
+      try {
+        const row = (await activateMut.mutateAsync(o.id)) as Order & { issuedCount?: number; heldBack?: string[] };
+        issued += row.issuedCount ?? 0;
+        heldBack.push(...(row.heldBack ?? []));
+      } catch (e) {
+        failed.push(`${o.code}: ${e instanceof Error ? e.message : "Activate failed"}`);
+      }
+    }
+    setActivating(false);
+    setActivateTargets(null);
+    if (items.length > failed.length) {
+      toast.success(
+        `Issued ${issued} work order${issued === 1 ? "" : "s"} to the vendor` +
+          (heldBack.length ? ` · ${heldBack.length} kept as draft` : ""),
+        { action: { label: "Open", onClick: () => router.push(CROPFORT_ROUTES.workOrders) } },
+      );
+    }
+    if (heldBack.length) toast.warning(heldBack.join("\n"));
+    if (failed.length) toast.error(failed.join("\n"));
+  };
+
+  const readyToActivate = planGroup?.orders.filter(canActivate) ?? [];
+  const filterOptions: { id: RowFilter; label: string; count: number }[] = (
+    [
+      { id: "all", label: "All" },
+      { id: "approval", label: "Needs approval" },
+      { id: "ready", label: "Ready to activate" },
+      { id: "active", label: "Active" },
+      { id: "draft", label: "Draft / returned" },
+    ] as const
+  ).map((f) => ({ ...f, count: planGroup?.orders.filter((o) => matchesFilter(o, f.id)).length ?? 0 }));
+  const q = query.trim().toLowerCase();
+  const visibleOrders = (planGroup?.orders ?? []).filter(
+    (o) =>
+      matchesFilter(o, rowFilter) &&
+      (!q ||
+        o.code.toLowerCase().includes(q) ||
+        `${PLAN_MONTH_LABELS[o.ethiopianMonth]} ${o.yearGc}`.toLowerCase().includes(q) ||
+        o.lines.some((l) => l.activityName.toLowerCase().includes(q) || l.blockCode?.toLowerCase().includes(q))),
+  );
+  const pageCount = Math.max(1, Math.ceil(visibleOrders.length / pageSize));
+  // Clamp rather than reset so an approve/activate that shrinks the list keeps you near where you were.
+  const currentPage = Math.min(page, pageCount);
+  const pagedOrders = visibleOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   /** The one thing to do next on the selected order, for this user. */
   const primary = (() => {
@@ -118,26 +243,8 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
         onClick: () => void run(() => decideMut.mutateAsync({ id: selected.id, decision: "approve" }), "Approved"),
       };
     }
-    if (
-      canEdit &&
-      (selected.status === "approved" || (selected.status === "submitted" && !hasExtra))
-    ) {
-      return {
-        label: "Activate — issue work orders",
-        onClick: () =>
-          void activateMut
-            .mutateAsync(selected.id)
-            .then((row) => {
-              const { issuedCount = 0, heldBack = [] } = row as Order & { issuedCount?: number; heldBack?: string[] };
-              toast.success(
-                `Issued ${issuedCount} work order${issuedCount === 1 ? "" : "s"} to the vendor` +
-                  (heldBack.length ? ` · ${heldBack.length} kept as draft` : ""),
-                { action: { label: "Open", onClick: () => router.push(CROPFORT_ROUTES.workOrders) } },
-              );
-              if (heldBack.length) toast.warning(heldBack.join("\n"));
-            })
-            .catch((e) => toast.error(e instanceof Error ? e.message : "Activate failed")),
-      };
+    if (canActivate(selected)) {
+      return { label: "Activate — issue work orders", onClick: () => setActivateTargets([selected]) };
     }
     return null;
   })();
@@ -181,7 +288,181 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
 
   return (
     <PageContainer>
-      {orderId ? (
+      {planId ? (
+        <>
+          <PageHeader
+            eyebrow={planGroup ? `${planGroup.farmName || "—"} · ${planGroup.orders.length} months` : "Plan"}
+            title={planGroup?.name || (ordersQuery.isLoading ? "Loading…" : "No monthly work orders for this plan")}
+            breadcrumbs={[
+              { label: "Home", href: CROPFORT_ROUTES.dashboard },
+              { label: "Monthly Work Orders", href: CROPFORT_ROUTES.monthlyWorkOrders },
+              { label: planGroup?.name || "Plan" },
+            ]}
+            actions={
+              <Button size="sm" variant="outline" asChild>
+                <Link href={CROPFORT_ROUTES.monthlyWorkOrders}>Back to list</Link>
+              </Button>
+            }
+          />
+          {planGroup ? (
+            <>
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <SectionCard>
+                  <p className="text-xs text-muted-foreground">Total cost</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">{fmtEtb(planGroup.total)}</p>
+                </SectionCard>
+                <SectionCard>
+                  <p className="text-xs text-muted-foreground">Activities across months</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">{planGroup.activities}</p>
+                </SectionCard>
+                <SectionCard>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <span className="mt-1.5 flex flex-wrap gap-1">
+                    {planGroup.statuses.map(([status, count]) => (
+                      <StatusBadge key={status} status={status} label={`${count} ${status}`} />
+                    ))}
+                  </span>
+                </SectionCard>
+              </div>
+              <SectionCard
+                title="Monthly work orders"
+                flush
+                action={
+                  <span className="flex flex-wrap gap-2">
+                    {canApprove && pendingApproval.length > 1 ? (
+                      <Button size="sm" variant="outline" disabled={bulkApproving} onClick={() => void approveAll(pendingApproval)}>
+                        <Check className="mr-1 h-4 w-4" aria-hidden />
+                        Approve all ({pendingApproval.length})
+                      </Button>
+                    ) : null}
+                    {readyToActivate.length > 1 ? (
+                      <Button size="sm" disabled={activating} onClick={() => setActivateTargets(readyToActivate)}>
+                        <Send className="mr-1 h-4 w-4" aria-hidden />
+                        Activate all ({readyToActivate.length})
+                      </Button>
+                    ) : null}
+                  </span>
+                }
+              >
+                <OpsDeskControlPanel
+                  className="rounded-none border-x-0 border-t-0"
+                  search={query}
+                  onSearchChange={(value) => {
+                    setQuery(value);
+                    setPage(1);
+                  }}
+                  searchPlaceholder="Search month, code, activity or block"
+                  filters={
+                    <OpsDeskFilterChips
+                      value={rowFilter}
+                      onChange={(id) => {
+                        setRowFilter(id as RowFilter);
+                        setPage(1);
+                      }}
+                      options={filterOptions}
+                    />
+                  }
+                />
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead>Activities</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                      <TableHead>Status</TableHead>
+                      {canApprove || canEdit ? <TableHead className="text-right">Actions</TableHead> : null}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleOrders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={canApprove || canEdit ? 5 : 4} className="py-8 text-center text-sm text-muted-foreground">
+                          No months match these filters.{" "}
+                          <button
+                            type="button"
+                            className="font-medium text-primary hover:underline"
+                            onClick={() => {
+                              setQuery("");
+                              setRowFilter("all");
+                              setPage(1);
+                            }}
+                          >
+                            Clear filters
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                    {pagedOrders.map((o) => (
+                      <TableRow key={o.id} onClick={() => router.push(`${CROPFORT_ROUTES.monthlyWorkOrders}/${o.id}`)}>
+                        <TableCell>
+                          <span className="block font-medium">
+                            {PLAN_MONTH_LABELS[o.ethiopianMonth]} {o.yearGc}
+                          </span>
+                          <span className="font-mono text-[11px] text-muted-foreground">{o.code}</span>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {o.lines
+                            .slice(0, 3)
+                            .map((l) => l.activityName)
+                            .join(", ")}
+                          {o.lines.length > 3 ? ` +${o.lines.length - 3} more` : ""}
+                          {o.lines.some((l) => !l.inPlan) ? (
+                            <span className="ml-1.5 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                              Extra
+                            </span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">{fmtEtb(o.totalEtb)}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={o.status} />
+                        </TableCell>
+                        {canApprove || canEdit ? (
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <span className="inline-flex gap-1.5">
+                              {o.status === "submitted" && canApprove ? (
+                                <>
+                                  <Button size="sm" disabled={decideMut.isPending || bulkApproving} onClick={() => approve(o)}>
+                                    Approve
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => setReturnTarget(o)}>
+                                    Return
+                                  </Button>
+                                </>
+                              ) : canActivate(o) ? (
+                                <Button
+                                  size="sm"
+                                  disabled={activating}
+                                  title="Issue this month's work orders to the vendor"
+                                  onClick={() => setActivateTargets([o])}
+                                >
+                                  <Send className="mr-1 h-3.5 w-3.5" aria-hidden />
+                                  Activate
+                                </Button>
+                              ) : null}
+                            </span>
+                          </TableCell>
+                        ) : null}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <TablePagination
+                  page={currentPage}
+                  pageCount={pageCount}
+                  total={visibleOrders.length}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  pageSizeOptions={PAGE_SIZES}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(1);
+                  }}
+                />
+              </SectionCard>
+            </>
+          ) : null}
+        </>
+      ) : orderId ? (
         <>
       <PageHeader
         eyebrow={selected ? `${selected.code} · ${selected.farmName || "—"}` : "Monthly work order"}
@@ -195,11 +476,21 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
           { label: "Monthly Work Orders", href: CROPFORT_ROUTES.monthlyWorkOrders },
+          ...(selected
+            ? [
+                {
+                  label: planGroups.find((g) => g.key === (selected.sourcePlanId || "none"))?.name || "Plan",
+                  href: planHref(selected.sourcePlanId || "none"),
+                },
+              ]
+            : []),
           { label: selected?.code || "Order" },
         ]}
         actions={
           <Button size="sm" variant="outline" asChild>
-            <Link href={CROPFORT_ROUTES.monthlyWorkOrders}>Back to list</Link>
+            <Link href={selected ? planHref(selected.sourcePlanId || "none") : CROPFORT_ROUTES.monthlyWorkOrders}>
+              Back to plan
+            </Link>
           </Button>
         }
       />
@@ -280,7 +571,7 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
               <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
                 {primary ? <Button onClick={primary.onClick}>{primary.label}</Button> : null}
                 {selected.status === "submitted" && canApprove ? (
-                  <Button variant="outline" onClick={() => setReturnOpen(true)}>
+                  <Button variant="outline" onClick={() => setReturnTarget(selected)}>
                     Return
                   </Button>
                 ) : null}
@@ -350,39 +641,41 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Month</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Farm area</TableHead>
+                <TableHead>Months</TableHead>
                 <TableHead className="text-right">Activities</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map((o) => (
-                <TableRow key={o.id} onClick={() => router.push(`${CROPFORT_ROUTES.monthlyWorkOrders}/${o.id}`)}>
-                  <TableCell>
-                    <span className="block font-medium">
-                      {PLAN_MONTH_LABELS[o.ethiopianMonth]} {o.yearGc}
-                    </span>
-                    <span className="font-mono text-[11px] text-muted-foreground">{o.code}</span>
-                  </TableCell>
-                  <TableCell className="text-sm">{(o.sourcePlanId && planNames.get(o.sourcePlanId)) || "—"}</TableCell>
-                  <TableCell className="text-sm">{o.farmName || "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums text-sm">
-                    {o.lines.length}
-                    {o.lines.some((l) => !l.inPlan) ? (
-                      <span className="ml-1.5 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                        Extra
+              {planGroups.map((group) => {
+                const first = group.orders[0];
+                const last = group.orders[group.orders.length - 1];
+                return (
+                  <TableRow key={group.key} onClick={() => router.push(planHref(group.key))}>
+                    <TableCell className="font-medium">{group.name}</TableCell>
+                    <TableCell className="text-sm">{group.farmName || "—"}</TableCell>
+                    <TableCell className="text-sm">
+                      {PLAN_MONTH_LABELS[first.ethiopianMonth]} {first.yearGc}
+                      {group.orders.length > 1 ? ` – ${PLAN_MONTH_LABELS[last.ethiopianMonth]} ${last.yearGc}` : ""}
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        ({group.orders.length} month{group.orders.length === 1 ? "" : "s"})
                       </span>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-sm">{fmtEtb(o.totalEtb)}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={o.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">{group.activities}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">{fmtEtb(group.total)}</TableCell>
+                    <TableCell>
+                      <span className="flex flex-wrap gap-1">
+                        {group.statuses.map(([status, count]) => (
+                          <StatusBadge key={status} status={status} label={`${count} ${status}`} />
+                        ))}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </SectionCard>
@@ -423,10 +716,10 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
         </DialogContent>
       </Dialog>
 
-      <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
+      <Dialog open={Boolean(returnTarget)} onOpenChange={(open) => !open && setReturnTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Return for changes</DialogTitle>
+            <DialogTitle>Return for changes{returnTarget ? ` · ${returnTarget.code}` : ""}</DialogTitle>
           </DialogHeader>
           <Textarea
             rows={3}
@@ -435,23 +728,62 @@ export default function MonthlyWorkOrdersView({ orderId }: { orderId?: string })
             placeholder="What needs to change?"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReturnOpen(false)}>
+            <Button variant="outline" onClick={() => setReturnTarget(null)}>
               Cancel
             </Button>
             <Button
-              disabled={!returnNote.trim() || !selected}
+              disabled={!returnNote.trim() || !returnTarget}
               onClick={() => {
-                if (!selected) return;
+                if (!returnTarget) return;
+                const id = returnTarget.id;
                 void run(
-                  () => decideMut.mutateAsync({ id: selected.id, decision: "return", comment: returnNote.trim() }),
+                  () => decideMut.mutateAsync({ id, decision: "return", comment: returnNote.trim() }),
                   "Returned",
                 ).then(() => {
-                  setReturnOpen(false);
+                  setReturnTarget(null);
                   setReturnNote("");
                 });
               }}
             >
               Return
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(activateTargets)} onOpenChange={(open) => !open && !activating && setActivateTargets(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Issue work orders for {activateTargets?.length === 1 ? "this month" : `${activateTargets?.length ?? 0} months`}?
+            </DialogTitle>
+          </DialogHeader>
+          <ul className="max-h-60 divide-y divide-border overflow-y-auto rounded-md border border-border text-sm">
+            {activateTargets?.map((o) => (
+              <li key={o.id} className="flex items-center gap-3 px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">
+                    {PLAN_MONTH_LABELS[o.ethiopianMonth]} {o.yearGc}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {o.lines.length} activit{o.lines.length === 1 ? "y" : "ies"} · {o.code}
+                  </span>
+                </span>
+                <span className="tabular-nums">{fmtEtb(o.totalEtb)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            Total {fmtEtb(activateTargets?.reduce((sum, o) => sum + o.totalEtb, 0) ?? 0)}. Work orders are sent to the
+            vendor; any that can&apos;t be issued yet are kept as drafts.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" disabled={activating} onClick={() => setActivateTargets(null)}>
+              Cancel
+            </Button>
+            <Button disabled={activating} onClick={() => activateTargets && void activateAll(activateTargets)}>
+              <Send className="mr-1 h-4 w-4" aria-hidden />
+              {activating ? "Issuing…" : "Activate — issue work orders"}
             </Button>
           </DialogFooter>
         </DialogContent>

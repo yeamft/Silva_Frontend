@@ -24,31 +24,36 @@ export function DirectRateCardForm({
   flagged,
   uom,
   disabled,
+  hideRate = false,
 }: {
   values: RateCardFormValues;
   onChange: (next: RateCardFormValues) => void;
   flagged?: boolean;
   uom?: string | null;
   disabled?: boolean;
+  /** The rate is set through the scenario table instead. */
+  hideRate?: boolean;
 }) {
   const set = <K extends keyof RateCardFormValues>(key: K, value: RateCardFormValues[K]) =>
     onChange({ ...values, [key]: value });
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <FormField
-        label={`Approved / proposed (ETB${uom ? ` / ${uom}` : ""})`}
-        required
-        render={(props) => (
-          <Input
-            {...props}
-            type="number"
-            value={values.proposedRate}
-            disabled={disabled}
-            onChange={(e) => set("proposedRate", e.target.value)}
-          />
-        )}
-      />
+      {hideRate ? null : (
+        <FormField
+          label={`Approved / proposed (ETB${uom ? ` / ${uom}` : ""})`}
+          required
+          render={(props) => (
+            <Input
+              {...props}
+              type="number"
+              value={values.proposedRate}
+              disabled={disabled}
+              onChange={(e) => set("proposedRate", e.target.value)}
+            />
+          )}
+        />
+      )}
       <FormField
         label="Fallback (ETB)"
         render={(props) => (

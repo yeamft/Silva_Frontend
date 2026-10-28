@@ -113,8 +113,8 @@ export function SetupGuide({
       },
       {
         id: "rates",
-        title: "Get rate cards approved",
-        hint: "Run a rate survey, create a rate card from it and submit it to the asset owner.",
+        title: "Publish rate cards",
+        hint: "Run a rate survey, create a rate card from it, choose the plan rate and publish it.",
         href: CROPFORT_ROUTES.rateCardProposals,
         action: "Open rate cards",
         done: rateCards.some((c) => c.status === "approved"),
@@ -156,20 +156,13 @@ export function SetupGuide({
         action: "Open plan",
       };
     }
-    const returnedCards = rateCards.filter((c) => c.status === "returned").length;
-    if (returnedCards) {
-      return {
-        title: `${returnedCards} rate card${returnedCards === 1 ? " was" : "s were"} returned`,
-        hint: "Review the comments, adjust the rates and resubmit.",
-        href: CROPFORT_ROUTES.rateCardProposals,
-        action: "Open rate cards",
-      };
-    }
-    const draftCards = rateCards.filter((c) => c.status === "draft").length;
+    const draftCards = rateCards.filter(
+      (c) => c.status === "draft" || c.status === "returned" || c.status === "submitted",
+    ).length;
     if (draftCards) {
       return {
-        title: `${draftCards} draft rate card${draftCards === 1 ? "" : "s"} not yet submitted`,
-        hint: "Submit them so the asset owner can approve the rates.",
+        title: `${draftCards} rate card${draftCards === 1 ? "" : "s"} not yet published`,
+        hint: "Publish them so plans can use the rates.",
         href: CROPFORT_ROUTES.rateCardProposals,
         action: "Open rate cards",
       };

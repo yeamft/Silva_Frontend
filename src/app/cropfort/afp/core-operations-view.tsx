@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_SPEND_BANDS } from "@/config/features";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
@@ -51,6 +52,7 @@ import {
   useCoreOpsPlanStore,
 } from "@/store/coreOpsPlanStore";
 import { monthsForPeriod, planPeriodLabel, planPeriodOf } from "@/lib/cropfort/plan-period";
+import { createRateCardImport, submitRateCardProposal } from "@/lib/api/rate-card-proposals";
 import { useSpendBandStore } from "@/store/spendBandStore";
 import type { CoreOpsActivity, CoreOpsStep, MonthIntensity } from "@/types/core-ops";
 
@@ -112,6 +114,30 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
   const step = useCoreOpsPlanStore((s) => s.step);
   const focusActivityId = useCoreOpsPlanStore((s) => s.focusActivityId);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
+  const syncActivitiesFromEligible = useCoreOpsPlanStore((s) => s.syncActivitiesFromEligible);
+  const setFrequency = useCoreOpsPlanStore((s) => s.setFrequency);
+
+  // Expert Input from a plan line: saved and published as the activity's rate card (no approval step)
+  const [expertTarget, setExpertTarget] = useState<CoreOpsActivity | null>(null);
+  const [expertForm, setExpertForm] = useState({
+    kind: "labor" as "labor" | "materials" | "services",
+    rate: "",
+    manDays: "",
+    justification: "",
+    evidence: "",
+  });
+  const [expertSaving, setExpertSaving] = useState(false);
+  const openExpertInput = (act: CoreOpsActivity) => {
+    // The cost type comes from the registered activity and isn't changed here
+    const own = (
+      eligible.find((e) => e.activityId === act.activityId && e.farmEstateId === plan?.farmEstateId)?.costKind ||
+      act.agreedRate?.costKind ||
+      "labor"
+    ).split("+")[0];
+    const kind = own === "materials" || own === "services" ? own : "labor";
+    setExpertForm({ kind, rate: "", manDays: "", justification: "", evidence: "" });
+    setExpertTarget(act);
+  };
   const loadPlanById = useCoreOpsPlanStore((s) => s.loadPlanById);
   const ensurePlan = useCoreOpsPlanStore((s) => s.ensurePlan);
   const setStep = useCoreOpsPlanStore((s) => s.setStep);
@@ -317,7 +343,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
     setSubmitting(true);
     try {
       const promo = await submitToAfps();
-      toast.success(`Submitted to the asset owner · Band ${promo.band}`);
+      toast.success(SHOW_SPEND_BANDS ? `Submitted to the asset owner · Band ${promo.band}` : "Submitted to the asset owner");
       setSubmitOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Submit failed");
@@ -408,9 +434,9 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
               <dd className="font-medium tabular-nums">{fmtEtb(completion.budgetEtb)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Approval band</dt>
+              <dt className="text-xs text-muted-foreground">Approval</dt>
               <dd className="font-medium">
-                {band} · goes to the asset owner
+                {SHOW_SPEND_BANDS ? `${band} · ` : ""}Asset owner
               </dd>
             </div>
           </dl>
@@ -721,10 +747,16 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                           </p>
                           {!hasRate ? (
                             <p className="mt-0.5 text-[11px] text-destructive">
-                              No approved rate —{" "}
-                              <Link className="underline" href={CROPFORT_ROUTES.rateCardProposals}>
-                                add one in Rate cards
-                              </Link>
+                              No rate yet —{" "}
+                              {canEdit ? (
+                                <button type="button" className="font-medium underline" onClick={() => openExpertInput(act)}>
+                                  enter expert input
+                                </button>
+                              ) : (
+                                <Link className="underline" href={CROPFORT_ROUTES.rateCardProposals}>
+                                  see Rate cards
+                                </Link>
+                              )}
                             </p>
                           ) : null}
                         </TableCell>
@@ -746,10 +778,33 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                               }}
                             />
                             <span className="text-xs text-muted-foreground">{act.uom}</span>
+                            <span className="text-xs text-muted-foreground">×</span>
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              min={1}
+                              step="any"
+                              className="h-8 w-14"
+                              value={act.frequency ?? 1}
+                              disabled={!canEdit || !hasRate}
+                              title="Times per year"
+                              aria-label={`Times per year for ${act.activityName}`}
+                              onChange={(e) => setFrequency(act.id, Number(e.target.value) || 1)}
+                            />
+                            <span className="text-xs text-muted-foreground">/yr</span>
                           </div>
                         </TableCell>
                         <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
                           {hasRate ? fmtEtb(act.agreedRate!.unitRateEtb) : "—"}
+                          {hasRate && canEdit ? (
+                            <button
+                              type="button"
+                              className="block w-full text-right text-[11px] text-primary underline-offset-2 hover:underline"
+                              onClick={() => openExpertInput(act)}
+                            >
+                              Expert input
+                            </button>
+                          ) : null}
                         </TableCell>
                         <TableCell className="text-right text-sm font-medium tabular-nums">
                           {act.included ? fmtEtb(act.plannedCost) : "—"}
@@ -1059,8 +1114,8 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
 
           {plan.promotions[0] ? (
             <p className="mt-4 text-xs text-muted-foreground">
-              Last submission: Band {plan.promotions[0].band}
-              {plan.promotions[0].note ? ` · ${plan.promotions[0].note}` : ""}
+              Last submitted{SHOW_SPEND_BANDS ? ` · Band ${plan.promotions[0].band}` : ""}
+              {SHOW_SPEND_BANDS && plan.promotions[0].note ? ` · ${plan.promotions[0].note}` : ""}
             </p>
           ) : null}
         </SectionCard>
@@ -1173,14 +1228,138 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
         </DialogContent>
       </Dialog>
 
+      <Dialog open={Boolean(expertTarget)} onOpenChange={(open) => !open && setExpertTarget(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Expert input</DialogTitle>
+          </DialogHeader>
+          {expertTarget ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-mono">{expertTarget.activityCode}</span> · {expertTarget.activityName} · per{" "}
+                {expertTarget.uom}
+                {expertTarget.agreedRate ? ` · current rate ${fmtEtb(expertTarget.agreedRate.unitRateEtb)}` : " · no benchmark rate"}
+              </p>
+              <p className="text-sm">
+                Cost type:{" "}
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">
+                  {expertForm.kind === "labor" ? "Labour" : expertForm.kind === "materials" ? "Materials" : "Services"}
+                </span>
+                <span className="ml-1.5 text-xs text-muted-foreground">from the registered activity</span>
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <FormField
+                  label={`Cost per ${expertTarget.uom} (ETB)`}
+                  required
+                  render={(p) => (
+                    <Input
+                      {...p}
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={expertForm.rate}
+                      onChange={(e) => setExpertForm((f) => ({ ...f, rate: e.target.value }))}
+                    />
+                  )}
+                />
+                <FormField
+                  label={`Man-days per ${expertTarget.uom}`}
+                  optional={expertForm.kind !== "labor"}
+                  render={(p) => (
+                    <Input
+                      {...p}
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={expertForm.manDays}
+                      onChange={(e) => setExpertForm((f) => ({ ...f, manDays: e.target.value }))}
+                    />
+                  )}
+                />
+              </div>
+              <FormField
+                label="Justification"
+                required
+                render={(p) => (
+                  <Textarea
+                    {...p}
+                    rows={2}
+                    value={expertForm.justification}
+                    placeholder={expertTarget.agreedRate ? "Why this farm needs a different rate" : "No industry benchmark available"}
+                    onChange={(e) => setExpertForm((f) => ({ ...f, justification: e.target.value }))}
+                  />
+                )}
+              />
+              <FormField
+                label="Source / evidence"
+                optional
+                render={(p) => (
+                  <Input
+                    {...p}
+                    value={expertForm.evidence}
+                    onChange={(e) => setExpertForm((f) => ({ ...f, evidence: e.target.value }))}
+                  />
+                )}
+              />
+              <p className="text-xs text-muted-foreground">
+                Saved as this activity&apos;s {expertForm.kind === "labor" ? "labour" : expertForm.kind} rate card and
+                published straight away.
+              </p>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExpertTarget(null)} disabled={expertSaving}>
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                expertSaving ||
+                !plan ||
+                expertForm.rate.trim() === "" ||
+                Number(expertForm.rate) < 0 ||
+                !expertForm.justification.trim() ||
+                (expertForm.kind === "labor" && expertForm.manDays.trim() === "")
+              }
+              onClick={async () => {
+                if (!expertTarget || !plan) return;
+                setExpertSaving(true);
+                try {
+                  const card = await createRateCardImport(plan.farmEstateId, {
+                    activityId: expertTarget.activityId,
+                    kind: expertForm.kind,
+                    proposedRate: Number(expertForm.rate),
+                    norm: expertForm.manDays.trim() === "" ? null : Number(expertForm.manDays),
+                    budgetYear: plan.budgetYearGc,
+                    sourceBasis: "Expert input · Core Operations plan",
+                    sourceEvidence: expertForm.evidence.trim(),
+                    justificationNote: expertForm.justification.trim(),
+                  });
+                  await submitRateCardProposal(card.id);
+                  await loadContext();
+                  syncActivitiesFromEligible();
+                  toast.success(`Expert input saved · ${expertTarget.activityName} now uses it`);
+                  setExpertTarget(null);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Could not save expert input");
+                } finally {
+                  setExpertSaving(false);
+                }
+              }}
+            >
+              {expertSaving ? "Saving…" : "Save expert input"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Submit plan for approval?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {completion.includedCount} activities · {fmtEtb(completion.budgetEtb)} · Band {band} — goes to
-            the Silva asset owner for approval.
+            {completion.includedCount} activities · {fmtEtb(completion.budgetEtb)}
+            {SHOW_SPEND_BANDS ? ` · Band ${band}` : ""} — goes to the Silva asset owner for approval.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={submitting}>

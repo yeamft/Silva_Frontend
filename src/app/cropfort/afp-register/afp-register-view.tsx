@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_SPEND_BANDS } from "@/config/features";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
@@ -52,7 +53,7 @@ export default function AfpRegisterView() {
         sourceId: plan.id,
       });
       toast.success(`AFE drafted`, {
-        description: `${afe.title} · Band ${afe.band}`,
+        description: SHOW_SPEND_BANDS ? `${afe.title} · Band ${afe.band}` : afe.title,
         action: {
           label: "Open AFE",
           onClick: () => {
@@ -125,7 +126,7 @@ export default function AfpRegisterView() {
                           : "submitted"
                     }
                   />
-                  <StatusBadge status="draft" label={`Band ${promo.band}`} />
+                  {SHOW_SPEND_BANDS ? <StatusBadge status="draft" label={`Band ${promo.band}`} /> : null}
                   {approved ? (
                     <Button
                       size="sm"

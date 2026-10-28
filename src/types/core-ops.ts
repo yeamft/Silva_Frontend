@@ -41,6 +41,8 @@ export type CoreOpsActivity = {
   included: boolean;
   /** Annual planned quantity (primary field). */
   plannedQty: number;
+  /** Times per year (planning assumption, not on the rate card). Annual quantity = plannedQty × frequency. */
+  frequency?: number;
   /** Optional per-block split; sum should match plannedQty when used. */
   blockAllocations: BlockAllocation[];
   agreedRate: AgreedRateSnapshot | null;

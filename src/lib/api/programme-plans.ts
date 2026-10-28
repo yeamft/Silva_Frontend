@@ -78,6 +78,7 @@ function linesFromPlan(plan: CoreOpsPlan) {
       scope: a.scope,
       included: a.included,
       plannedQty: a.plannedQty,
+      frequency: a.frequency ?? 1,
       agreedRate: a.agreedRate,
       rateReadiness: a.rateReadiness,
       rateStatus: a.rateStatus,

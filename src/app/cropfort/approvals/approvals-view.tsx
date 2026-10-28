@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_SPEND_BANDS } from "@/config/features";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -93,7 +94,6 @@ const APPROVAL_TYPES: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "interventions", label: "Interventions", icon: ClipboardList },
   { id: "monthly", label: "Monthly work orders", icon: CalendarDays },
   { id: "weekly", label: "Weekly plans", icon: CalendarCheck2 },
-  { id: "rates", label: "Rate cards", icon: WalletCards },
   { id: "reports", label: "Reports", icon: FileText },
 ];
 
@@ -106,9 +106,11 @@ function ProjectDetail({ project }: { project: ProjectDto }) {
         <DetailKV label="Code">
           <span className="font-mono text-xs">{project.code}</span>
         </DetailKV>
-        <DetailKV label="Band">
-          <span className="font-medium">Band {project.band}</span>
-        </DetailKV>
+        {SHOW_SPEND_BANDS ? (
+          <DetailKV label="Band">
+            <span className="font-medium">Band {project.band}</span>
+          </DetailKV>
+        ) : null}
         <DetailKV label="Budget">
           <span className="cf-numeric font-medium">{fmtEtb(project.budgetEtb)}</span>
         </DetailKV>
@@ -146,9 +148,11 @@ function InterventionDetail({ intervention }: { intervention: InterventionDto })
         <DetailKV label="Code">
           <span className="font-mono text-xs">{intervention.code}</span>
         </DetailKV>
-        <DetailKV label="Band">
-          <span className="font-medium">Band {intervention.band}</span>
-        </DetailKV>
+        {SHOW_SPEND_BANDS ? (
+          <DetailKV label="Band">
+            <span className="font-medium">Band {intervention.band}</span>
+          </DetailKV>
+        ) : null}
         <DetailKV label="Cost">
           <span className="cf-numeric font-medium">{fmtEtb(intervention.costEtb)}</span>
         </DetailKV>
@@ -230,9 +234,11 @@ function AfeDetail({ afe }: { afe: CropfortAfeDto }) {
         <DetailKV label="AFE id">
           <span className="font-mono text-xs">{afe.id.slice(0, 12)}</span>
         </DetailKV>
-        <DetailKV label="Band">
-          <span className="font-medium">Band {afe.band}</span>
-        </DetailKV>
+        {SHOW_SPEND_BANDS ? (
+          <DetailKV label="Band">
+            <span className="font-medium">Band {afe.band}</span>
+          </DetailKV>
+        ) : null}
         <DetailKV label="Amount">
           <span className="cf-numeric font-medium">{fmtEtb(afe.amountEtb)}</span>
         </DetailKV>
@@ -248,13 +254,17 @@ function AfeDetail({ afe }: { afe: CropfortAfeDto }) {
         items={[
           { ok: afe.amountEtb > 0, label: "Authority amount is stated" },
           { ok: afe.status === "submitted", label: "AFE is awaiting decision" },
-          {
-            ok: afe.band === "C" || afe.band === "D",
-            label:
-              afe.band === "C" || afe.band === "D"
-                ? "Band requires Silva / asset-owner gate"
-                : `Band ${afe.band} — confirm routing is correct`,
-          },
+          ...(SHOW_SPEND_BANDS
+            ? [
+                {
+                  ok: afe.band === "C" || afe.band === "D",
+                  label:
+                    afe.band === "C" || afe.band === "D"
+                      ? "Band requires Silva / asset-owner gate"
+                      : `Band ${afe.band} — confirm routing is correct`,
+                },
+              ]
+            : []),
         ]}
       />
     </div>
@@ -289,7 +299,7 @@ function savePlanAsPdf(plan: CoreOpsPlan, promotion: AfpPromotion, included: Cor
     ["Budget year", plan.budgetYearLabel],
     ["Area", plan.totalHa ? `${plan.totalHa.toLocaleString()} ha` : "—"],
     ["Vendor", plan.vendorLabel || "—"],
-    ["Band", promotion.band],
+    ...(SHOW_SPEND_BANDS ? ([["Band", promotion.band]] as [string, string][]) : []),
     ["Submitted", new Date(promotion.createdAt).toLocaleString()],
     ["Total", fmtEtb(promotion.totalEtb)],
   ];
@@ -297,7 +307,7 @@ function savePlanAsPdf(plan: CoreOpsPlan, promotion: AfpPromotion, included: Cor
     .map(
       (a) => `<tr>
         <td><b>${escapeHtml(a.activityName)}</b><br><small>${escapeHtml(a.activityCode)} · ${escapeHtml(a.category)}</small></td>
-        <td class="n">${escapeHtml(a.plannedQty.toLocaleString())} ${escapeHtml(a.uom)}</td>
+        <td class="n">${escapeHtml(a.plannedQty.toLocaleString())} ${escapeHtml(a.uom)}${(a.frequency ?? 1) !== 1 ? ` × ${escapeHtml(a.frequency)}/yr` : ""}</td>
         <td class="n">${a.agreedRate ? escapeHtml(fmtEtb(a.agreedRate.unitRateEtb)) : "—"}</td>
         <td class="n">${escapeHtml(fmtEtb(a.plannedCost))}</td>
         ${PLAN_MONTHS.map((m) => {
@@ -424,7 +434,10 @@ function AfpDetail({
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
                     {a.plannedQty ? a.plannedQty.toLocaleString() : "—"}{" "}
-                    <span className="text-xs text-muted-foreground">{a.uom}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {a.uom}
+                      {(a.frequency ?? 1) !== 1 ? ` × ${a.frequency}/yr` : ""}
+                    </span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
                     {a.agreedRate ? fmtEtb(a.agreedRate.unitRateEtb) : "—"}
@@ -645,7 +658,8 @@ export default function ApprovalsView({
   const rateCardsQuery = useQuery({
     queryKey: ["approval-rate-cards", activeProgram?.id],
     queryFn: () => listProgramRateCardProposals({ status: "submitted", programWide: true }),
-    enabled: canDecideRateCards && Boolean(activeProgram?.id),
+    // Rate cards no longer need approval — SPX publishes them directly
+    enabled: false,
     refetchInterval: 10_000,
   });
   const pendingRateCards = useMemo(() => rateCardsQuery.data ?? [], [rateCardsQuery.data]);
@@ -702,9 +716,9 @@ export default function ApprovalsView({
       id: p.id,
       kind: "afe" as const,
       title: p.title,
-      meta: `${p.id.slice(0, 10)} · Band ${p.band} · ${p.sourceType}`,
+      meta: [p.id.slice(0, 10), SHOW_SPEND_BANDS ? `Band ${p.band}` : null, p.sourceType].filter(Boolean).join(" · "),
       amount: p.amountEtb,
-      risk: p.band === "C" || p.band === "D" ? `Band ${p.band} gate` : undefined,
+      risk: SHOW_SPEND_BANDS && (p.band === "C" || p.band === "D") ? `Band ${p.band} gate` : undefined,
     }));
     const afp: QueueRow[] = afpPlans.map((p) => {
       const included = Object.values(p.activities ?? {}).filter((a) => a.included).length;
@@ -713,26 +727,26 @@ export default function ApprovalsView({
         id: p.id,
         kind: "afp" as const,
         title: p.name || (p.farmName ? `${p.farmName} Core Operations plan` : "Core Operations plan"),
-        meta: `${p.budgetYearLabel ?? ""} · Band ${band} · ${included} lines`,
+        meta: [p.budgetYearLabel, SHOW_SPEND_BANDS ? `Band ${band}` : null, `${included} lines`].filter(Boolean).join(" · "),
         amount: p.plannedCostEtb ?? 0,
-        risk: `Band ${band}`,
+        risk: SHOW_SPEND_BANDS ? `Band ${band}` : undefined,
       };
     });
     const projectsQ: QueueRow[] = projects.map((p) => ({
       id: p.id,
       kind: "projects" as const,
       title: p.title,
-      meta: `${p.code} · Band ${p.band} · ${p.blockCode || p.blockId}`,
+      meta: [p.code, SHOW_SPEND_BANDS ? `Band ${p.band}` : null, p.blockCode || p.blockId].filter(Boolean).join(" · "),
       amount: p.budgetEtb,
-      risk: p.band === "C" || p.band === "D" ? `Band ${p.band}` : undefined,
+      risk: SHOW_SPEND_BANDS && (p.band === "C" || p.band === "D") ? `Band ${p.band}` : undefined,
     }));
     const interventionsQ: QueueRow[] = interventions.map((i) => ({
       id: i.id,
       kind: "interventions" as const,
       title: i.title,
-      meta: `${i.code} · Band ${i.band} · ${i.blockCode || i.blockId}`,
+      meta: [i.code, SHOW_SPEND_BANDS ? `Band ${i.band}` : null, i.blockCode || i.blockId].filter(Boolean).join(" · "),
       amount: i.costEtb,
-      risk: i.band === "C" || i.band === "D" ? `Band ${i.band}` : undefined,
+      risk: SHOW_SPEND_BANDS && (i.band === "C" || i.band === "D") ? `Band ${i.band}` : undefined,
     }));
     const monthly: QueueRow[] = monthlyOrders.map((o) => {
       const out = o.lines.filter((l) => !l.inPlan).length;

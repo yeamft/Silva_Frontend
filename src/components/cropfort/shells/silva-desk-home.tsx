@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_SPEND_BANDS } from "@/config/features";
 import { ArrowRight, ClipboardCheck, Leaf, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
@@ -76,7 +77,8 @@ export function SilvaDeskHome() {
   const rateCardsQuery = useQuery({
     queryKey: ["approval-rate-cards", activeProgram?.id],
     queryFn: () => listProgramRateCardProposals({ status: "submitted", programWide: true }),
-    enabled,
+    // Rate cards no longer go through the asset owner
+    enabled: false,
     refetchInterval: 10_000,
   });
   const afesQuery = useAfes(enabled, "submitted");
@@ -116,7 +118,7 @@ export function SilvaDeskHome() {
         id: `afe-${a.id}`,
         type: "Spending request",
         title: a.title,
-        meta: `Band ${a.band}`,
+        meta: SHOW_SPEND_BANDS ? `Band ${a.band}` : a.sourceType || "Spending request",
         detail: fmtEtb(a.amountEtb),
         href: reviewHref("afe", a.id),
       });
@@ -190,10 +192,10 @@ export function SilvaDeskHome() {
         />
         <OwnerMetric
           href={CROPFORT_ROUTES.approvals}
-          label="Rate cards to approve"
-          value={approvalsReady ? String(rateCardsQuery.data?.length ?? 0) : "—"}
+          label="Reports to review"
+          value={approvalsReady ? String(reportsQuery.data?.length ?? 0) : "—"}
           icon={WalletCards}
-          emphasis={approvalsReady && (rateCardsQuery.data?.length ?? 0) > 0}
+          emphasis={approvalsReady && (reportsQuery.data?.length ?? 0) > 0}
         />
       </section>
 

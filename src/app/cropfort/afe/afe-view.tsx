@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_SPEND_BANDS } from "@/config/features";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Clock3, FileText, MoreHorizontal, Plus, RotateCcw, Wallet } from "lucide-react";
@@ -279,7 +280,7 @@ export default function AfeView() {
                 <TableHead className="w-[7rem]">ID</TableHead>
                 <TableHead className="min-w-[12rem]">Title</TableHead>
                 <TableHead className="hidden md:table-cell">Source</TableHead>
-                <TableHead className="w-16">Band</TableHead>
+                {SHOW_SPEND_BANDS ? <TableHead className="w-16">Band</TableHead> : null}
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead className="w-[7rem]">Status</TableHead>
                 <TableHead className="w-12">
@@ -324,13 +325,16 @@ export default function AfeView() {
                       <TableCell>
                         <p className="truncate text-sm font-medium">{row.title}</p>
                         <p className="truncate text-[11px] text-muted-foreground md:hidden">
-                          {row.sourceType} · Band {row.band}
+                          {row.sourceType}
+                          {SHOW_SPEND_BANDS ? ` · Band ${row.band}` : ""}
                         </p>
                       </TableCell>
                       <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
                         {row.sourceType}
                       </TableCell>
-                      <TableCell className="tabular-nums text-sm font-medium">{row.band}</TableCell>
+                      {SHOW_SPEND_BANDS ? (
+                        <TableCell className="tabular-nums text-sm font-medium">{row.band}</TableCell>
+                      ) : null}
                       <TableCell className="text-right tabular-nums text-sm font-medium">
                         {fmtEtb(row.amountEtb)}
                       </TableCell>
@@ -445,9 +449,10 @@ export default function AfeView() {
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Band / amount</dt>
+              <dt className="text-muted-foreground">{SHOW_SPEND_BANDS ? "Band / amount" : "Amount"}</dt>
               <dd className="font-medium">
-                {selected.band} · {fmtEtb(selected.amountEtb)}
+                {SHOW_SPEND_BANDS ? `${selected.band} · ` : ""}
+                {fmtEtb(selected.amountEtb)}
               </dd>
             </div>
             <div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_SPEND_BANDS } from "@/config/features";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Clock3, FolderKanban, FolderOpen, MoreHorizontal, Plus } from "lucide-react";
@@ -181,7 +182,7 @@ export default function ProjectsView() {
       });
       await linkProjectAfe.mutateAsync({ id: p.id, cropfortAfeId: row.id });
       toast.success(`AFE drafted`, {
-        description: `${row.title} · Band ${row.band}`,
+        description: SHOW_SPEND_BANDS ? `${row.title} · Band ${row.band}` : row.title,
         action: {
           label: "Open AFE",
           onClick: () => {
@@ -308,7 +309,7 @@ export default function ProjectsView() {
               <TableHead scope="col" className="text-right">
                 Budget
               </TableHead>
-              <TableHead scope="col">Band</TableHead>
+              {SHOW_SPEND_BANDS ? <TableHead scope="col">Band</TableHead> : null}
               <TableHead scope="col">Status</TableHead>
               <TableHead scope="col">AFE</TableHead>
               <TableHead scope="col" className="text-right">
@@ -340,7 +341,7 @@ export default function ProjectsView() {
                     </TableCell>
                     <TableCell>{p.vendor}</TableCell>
                     <TableCell className="cf-numeric text-right">{fmtEtb(p.budgetEtb)}</TableCell>
-                    <TableCell>{p.band}</TableCell>
+                    {SHOW_SPEND_BANDS ? <TableCell>{p.band}</TableCell> : null}
                     <TableCell>
                       <StatusBadge status={p.status} />
                     </TableCell>
