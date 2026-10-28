@@ -313,32 +313,73 @@ function Hero() {
         <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#061408]/70 via-transparent to-[#061408]/30" />
       </div>
 
-      <div className="relative z-20 mx-auto grid w-full max-w-7xl flex-1 items-center gap-12 px-5 pb-16 pt-[calc(96px+env(safe-area-inset-top))] sm:px-8 lg:px-10">
+      <div className="relative z-20 mx-auto flex w-full max-w-7xl flex-1 items-center px-5 pb-24 pt-[calc(112px+env(safe-area-inset-top))] sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease }}
-          className="w-full"
+          className="w-full max-w-3xl"
         >
-          <h1 className="max-w-3xl font-display text-4xl font-semibold leading-[1.08] tracking-[-0.03em] text-white sm:text-5xl lg:text-[60px]">
-            Plan, deliver and <span className="text-[#B7D4B9]">verify</span>
+          <h1 className="font-display text-4xl font-semibold leading-[1.06] tracking-[-0.03em] text-white sm:text-5xl lg:text-[64px]">
+            Plan, deliver and <span className="text-[#B7D4B9]">verify</span> every hectare of estate work.
           </h1>
 
-          <dl className="mt-12 grid max-w-3xl grid-cols-3 gap-6 border-t border-white/10 pt-6">
+          <p className="mt-6 max-w-2xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
+            Cropfort connects estate owners, program managers and field vendors in one workflow, from the annual
+            plan and approved rates to work orders, field evidence and settlement.
+          </p>
+
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              asChild
+              size="lg"
+              className="h-12 rounded-xl bg-primary px-6 text-base font-semibold text-primary-foreground shadow-[0_14px_30px_-14px_hsl(120_35%_28%/0.6)] hover:bg-[hsl(var(--primary-hover))]"
+            >
+              <Link href="/login">
+                Sign in to Cropfort
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="h-12 rounded-xl border-white/25 bg-white/5 px-6 text-base font-semibold text-white backdrop-blur-sm hover:bg-white/10 hover:text-white"
+            >
+              <a href="#how-it-works">See how it works</a>
+            </Button>
+          </div>
+
+          <dl className="mt-14 grid gap-5 border-t border-white/10 pt-6 sm:grid-cols-3 sm:gap-8">
             {[
-              { term: "Approvals", detail: "Maker-checker on plans, rates and spend" },
-              { term: "Evidence", detail: "Field records before payment" },
-              { term: "Audit", detail: "Every decision traceable" },
+              { term: "Approvals", detail: "Maker-checker on plans, rates and spend", icon: ShieldCheck },
+              { term: "Evidence", detail: "Field records before payment", icon: Camera },
+              { term: "Audit", detail: "Every decision traceable", icon: History },
             ].map((item) => (
-              <div key={item.term}>
-                <dt className="text-sm font-semibold text-[#B7D4B9]">{item.term}</dt>
-                <dd className="mt-1 text-xs leading-5 text-white/60">{item.detail}</dd>
+              <div key={item.term} className="flex gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[#B7D4B9]">
+                  <item.icon className="h-4 w-4" aria-hidden />
+                </span>
+                <div>
+                  <dt className="text-sm font-semibold text-white">{item.term}</dt>
+                  <dd className="mt-0.5 text-sm leading-5 text-white/60">{item.detail}</dd>
+                </div>
               </div>
             ))}
           </dl>
         </motion.div>
-
       </div>
+
+      <a
+        href="#platform"
+        aria-label="Scroll to platform overview"
+        className="absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 text-xs font-medium text-white/60 transition-colors hover:text-white sm:flex"
+      >
+        Explore
+        <span className="flex h-9 w-6 justify-center rounded-full border border-white/30 pt-1.5">
+          <span className="h-2 w-1 animate-bounce rounded-full bg-white/70 motion-reduce:animate-none" />
+        </span>
+      </a>
     </section>
   );
 }
