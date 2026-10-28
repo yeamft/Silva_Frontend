@@ -77,8 +77,8 @@ export type CoreOpsPlan = {
   farmEstateId: string;
   farmName: string;
   budgetYearGc: number;
-  /** annual, first_half (Tikimt–Megabit) or second_half (Miyazya–Meskerem). */
-  planPeriod?: "annual" | "first_half" | "second_half";
+  /** "annual" or any six months as "months:<m>,…"; older plans may hold first_half / second_half. */
+  planPeriod?: string;
   budgetYearLabel: string;
   /** Program band set id (Schedule 3) used for AFE routing. */
   programBandSetId: string | null;

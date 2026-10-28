@@ -57,6 +57,8 @@ export type WorkOrderDto = {
   attention?: "insurance" | null;
   status: WorkOrderStatus;
   statusRaw: string;
+  vendorOutcome?: "done" | "not_done" | "returned" | null;
+  vendorNote?: string;
   blocks: { blockId: string; blockCode: string | null; blockName: string | null }[];
   block: string | null;
   ticketsDone: number;
@@ -97,6 +99,22 @@ export function createWorkOrder(input: {
 
 export function updateWorkOrder(id: string, input: Record<string, unknown>) {
   return apiFetch<WorkOrderDto>(`/work-orders/${id}`, { method: "PATCH", body: input });
+}
+
+/** Vendor reports an issued order: "done" completes it, "not_done" keeps it open with a reason. */
+export function reportWorkOrderOutcome(id: string, outcome: "done" | "not_done", note?: string) {
+  return apiFetch<WorkOrderDto>(`/work-orders/${id}/vendor-report`, {
+    method: "POST",
+    body: note ? { outcome, note } : { outcome },
+  });
+}
+
+/** SPX reviews work sent by the vendor: approve closes it, return sends it back with a comment. */
+export function reviewWorkOrder(id: string, decision: "approve" | "return", comment?: string) {
+  return apiFetch<WorkOrderDto>(`/work-orders/${id}/review`, {
+    method: "POST",
+    body: comment ? { decision, comment } : { decision },
+  });
 }
 
 export function transitionWorkOrder(id: string, status: WorkOrderStatus) {

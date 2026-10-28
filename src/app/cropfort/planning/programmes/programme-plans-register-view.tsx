@@ -20,13 +20,6 @@ import { StatusBadge } from "@/components/cropfort/status-badge";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -34,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -50,16 +42,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { budgetYearLabel } from "@/lib/cropfort/ethiopian-year";
 import { cn } from "@/lib/utils";
-import { PLAN_PERIODS, planPeriodLabel, planPeriodOf, type PlanPeriod } from "@/lib/cropfort/plan-period";
+import { isAnnualPeriod, monthsForPeriod, monthsLabel } from "@/lib/cropfort/plan-period";
 import { canCreateProgrammePlan } from "@/lib/cropfort/platform-access";
 import { fmtEtb } from "@/store/cropfortOpsStore";
 import {
   useArchiveProgrammePlan,
-  useCreateProgrammePlan,
   useDuplicateProgrammePlan,
   useProgrammePlans,
   useSubmitProgrammePlanMutation,
@@ -73,10 +62,20 @@ const PAGE_SIZES = [10, 25, 50];
 
 type StatusFilter = "all" | "draft" | "submitted" | "returned" | "approved";
 
+const STATUS_TABS: { id: StatusFilter; label: string; match: (raw?: string) => boolean }[] = [
+  { id: "all", label: "All", match: () => true },
+  { id: "draft", label: "Draft", match: (r) => !r || r === "draft" || r === "ready_for_review" },
+  { id: "submitted", label: "Waiting approval", match: (r) => r === "submitted" },
+  { id: "returned", label: "Returned", match: (r) => r === "returned" },
+  { id: "approved", label: "Approved", match: (r) => r === "approved" || r === "active" },
+];
+
 function statusLabel(raw?: string) {
   if (!raw) return "draft";
   return raw.replace(/_/g, " ");
 }
+
+const NEW_PLAN_HREF = `${CROPFORT_ROUTES.programmePlans}/new`;
 
 function planHref(id: string) {
   return `${CROPFORT_ROUTES.programmePlans}/${id}`;
@@ -97,14 +96,7 @@ export default function ProgrammePlansRegisterView({
   const [farmFilter, setFarmFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [createOpen, setCreateOpen] = useState(false);
-
-  const [name, setName] = useState("");
-  const [farmEstateId, setFarmEstateId] = useState("");
-  const [planYear, setPlanYear] = useState(String(new Date().getFullYear()));
-  const [planPeriod, setPlanPeriod] = useState<PlanPeriod>("annual");
-  const [description, setDescription] = useState("");
+  const [pageSize, setPageSize] = useState(10);
   const [archiveTarget, setArchiveTarget] = useState<ProgrammePlanDto | null>(null);
 
   const farmsQuery = useQuery({
@@ -121,7 +113,6 @@ export default function ProgrammePlansRegisterView({
     planYear: yearFilter !== "all" ? Number(yearFilter) : undefined,
   });
   const allPlans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
-  const createMut = useCreateProgrammePlan();
   const duplicateMut = useDuplicateProgrammePlan();
   const archiveMut = useArchiveProgrammePlan();
   const submitMut = useSubmitProgrammePlanMutation();
@@ -167,87 +158,383 @@ export default function ProgrammePlansRegisterView({
     yearFilter !== "all" ||
     (!archiveMode && statusFilter !== "all");
 
-  const openCreate = () => {
-    setName("");
-    setFarmEstateId(farms[0]?.id || "");
-    setPlanYear(String(new Date().getFullYear()));
-    setPlanPeriod("annual");
-    setDescription("");
-    setCreateOpen(true);
-  };
-
-  const onCreate = async () => {
-    if (!canCreate) {
-      toast.error("Only SPX can create Core Operations plans");
-      return;
-    }
-    if (!name.trim() || !farmEstateId) {
-      toast.error("Name and farm area are required");
-      return;
-    }
-    const year = Number(planYear);
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      toast.error("Enter a valid budget year, e.g. 2027");
-      return;
-    }
-    try {
-      const row = await createMut.mutateAsync({
-        name: name.trim(),
-        farmEstateId,
-        planYear: year,
-        planPeriod,
-        planningCycleLabel:
-          planPeriod === "annual" ? `${year} Core Operations` : `${year} Core Operations · ${planPeriodLabel(planPeriod)}`,
-        budgetYearLabel: budgetYearLabel(year).label,
-        description: description.trim(),
-        notes: "",
-      });
-      setCreateOpen(false);
-      toast.success(`Created ${row.name}`);
-      router.push(planHref(row.id));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not create plan");
-    }
-  };
-
   const canEditRow = (p: ProgrammePlanDto) =>
     canCreate &&
     (p.statusRaw === "draft" ||
       p.statusRaw === "returned" ||
       p.statusRaw === "ready_for_review");
 
+  /** The one obvious next step for a plan, shown as the row's button. */
+  const nextActionFor = (
+    p: ProgrammePlanDto,
+  ): { label: string; href?: string; onClick?: () => void; primary: boolean; disabled?: boolean } | null => {
+    if (archiveMode) return null;
+    if (p.statusRaw === "returned" && canEditRow(p)) return { label: "Fix", primary: true };
+    if (canEditRow(p)) return { label: "Continue", primary: true };
+    if (p.statusRaw === "submitted") return { label: "View approval", href: CROPFORT_ROUTES.approvals, primary: false };
+    if (canCreate && (p.statusRaw === "approved" || p.statusRaw === "active"))
+      return {
+        label: "Work orders",
+        primary: false,
+        disabled: workOrdersMut.isPending,
+        onClick: () =>
+          void workOrdersMut
+            .mutateAsync(p.id)
+            .then(({ created, skipped }) => {
+              if (!created.length) {
+                toast.info(
+                  skipped.length
+                    ? "Work orders already exist for every scheduled month"
+                    : "No scheduled activities to turn into work orders",
+                );
+                return;
+              }
+              toast.success(`Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}`, {
+                action: { label: "Open", onClick: () => router.push(CROPFORT_ROUTES.monthlyWorkOrders) },
+              });
+            })
+            .catch((e) => toast.error(e instanceof Error ? e.message : "Could not create work orders")),
+      };
+    return { label: "Open", primary: false };
+  };
+
+  const renderTable = (list: ProgrammePlanDto[]) => (
+          <div className="cf-table-scroll">
+            <Table aria-label={archiveMode ? "Archived plans" : "Plans"}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Plan</TableHead>
+                  <TableHead className="hidden md:table-cell">Scheduled</TableHead>
+                  <TableHead className="text-right">Budget</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {plansQuery.isLoading ? (
+                  <TableSkeleton rows={5} columns={5} />
+                ) : list.length === 0 ? (
+                  <TableMessageRow
+                    colSpan={5}
+                    icon={ClipboardList}
+                    title={
+                      !hasActiveFilters
+                        ? archiveMode
+                          ? "No archived plans"
+                          : "No plans"
+                        : "No results"
+                    }
+                    description={
+                      !hasActiveFilters
+                        ? archiveMode
+                          ? "Archived plans will appear here."
+                          : "Create a Core Operations plan to start planning work for a farm area."
+                        : "Try changing your search or filters."
+                    }
+                    action={
+                      !hasActiveFilters && canCreate ? (
+                        <Button size="sm" asChild>
+                          <Link href={NEW_PLAN_HREF}>
+                            <Plus className="h-3.5 w-3.5" />
+                            New Core Operations plan
+                          </Link>
+                        </Button>
+                      ) : hasActiveFilters ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setQuery("");
+                            setStatusFilter("all");
+                            setFarmFilter("all");
+                            setYearFilter("all");
+                            setPage(1);
+                          }}
+                        >
+                          Clear filters
+                        </Button>
+                      ) : null
+                    }
+                  />
+                ) : (
+                  list.map((row) => {
+                    const included = row.includedCount ?? 0;
+                    const scheduled = row.scheduledCount ?? 0;
+                    return (
+                      <TableRow
+                        key={row.id}
+                        onClick={(event) => {
+                          const target = event.target as HTMLElement;
+                          // Let links and menu actions handle their own navigation.
+                          if (
+                            event.defaultPrevented ||
+                            !event.currentTarget.contains(target) ||
+                            target.closest("a, button, [role='menuitem']")
+                          ) return;
+                          router.push(planHref(row.id));
+                        }}
+                      >
+                        <TableCell className="h-auto min-w-[240px] py-3.5">
+                          <Link
+                            href={planHref(row.id)}
+                            aria-label={`Open ${row.name || "untitled Core Operations plan"}`}
+                            className="block truncate rounded-sm font-semibold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {row.name || "Untitled plan"}
+                          </Link>
+                          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground/80">{row.farmName || "—"}</span>
+                            <span aria-hidden>·</span>
+                            <span className="tabular-nums">{row.budgetYearGc} GC</span>
+                            {!isAnnualPeriod(row.planPeriod) ? (
+                              <span className="rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
+                                {monthsLabel(monthsForPeriod(row.planPeriod))}
+                              </span>
+                            ) : null}
+                          </p>
+                        </TableCell>
+                        <TableCell className="hidden min-w-[140px] md:table-cell">
+                          <div className="max-w-36">
+                            <p className="text-xs tabular-nums">
+                              <span className="font-semibold text-foreground">{scheduled}</span>
+                              <span className="text-muted-foreground"> / {included} activities</span>
+                            </p>
+                            <div
+                              className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+                              role="progressbar"
+                              aria-label={`${scheduled} of ${included} activities scheduled`}
+                              aria-valuemin={0}
+                              aria-valuemax={Math.max(included, 1)}
+                              aria-valuenow={Math.min(scheduled, included)}
+                            >
+                              <div
+                                className="h-full rounded-full bg-primary transition-[width]"
+                                style={{
+                                  width: `${included > 0 ? Math.min(100, (scheduled / included) * 100) : 0}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="min-w-[130px] text-right font-semibold tabular-nums text-foreground">
+                          {fmtEtb(row.plannedCostEtb || 0)}
+                        </TableCell>
+                        <TableCell className="min-w-[110px]">
+                          <StatusBadge
+                            status={
+                              row.statusRaw === "archived"
+                                ? "archived"
+                                : row.statusRaw === "approved" || row.statusRaw === "active"
+                                ? "approved"
+                                : row.statusRaw === "submitted"
+                                  ? "submitted"
+                                  : row.statusRaw === "returned"
+                                    ? "returned"
+                                    : "draft"
+                            }
+                            label={statusLabel(row.statusRaw)}
+                            className="whitespace-nowrap"
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="inline-flex items-center gap-1">
+                            {(() => {
+                              const next = nextActionFor(row);
+                              return next ? (
+                                next.onClick ? (
+                                  <Button size="sm" variant={next.primary ? "default" : "outline"} className="h-8" disabled={next.disabled} onClick={next.onClick}>
+                                    {next.label}
+                                  </Button>
+                                ) : (
+                                  <Button size="sm" variant={next.primary ? "default" : "outline"} className="h-8" asChild>
+                                    <Link href={next.href ?? planHref(row.id)}>{next.label}</Link>
+                                  </Button>
+                                )
+                              ) : null;
+                            })()}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                aria-label={`Actions for ${row.name || "Core Operations plan"}`}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={planHref(row.id)}>Open</Link>
+                              </DropdownMenuItem>
+                              {canDuplicate ? (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    void duplicateMut
+                                      .mutateAsync(row.id)
+                                      .then((p) => {
+                                        toast.success(
+                                          archiveMode
+                                            ? "Duplicated into a new draft"
+                                            : "Duplicated",
+                                        );
+                                        router.push(planHref(p.id));
+                                      })
+                                      .catch((e) =>
+                                        toast.error(
+                                          e instanceof Error ? e.message : "Duplicate failed",
+                                        ),
+                                      )
+                                  }
+                                >
+                                  Duplicate
+                                </DropdownMenuItem>
+                              ) : null}
+                              {!archiveMode && canEditRow(row) ? (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    void submitMut
+                                      .mutateAsync(row)
+                                      .then(() => toast.success("Submitted for Silva approval"))
+                                      .catch((e) =>
+                                        toast.error(
+                                          e instanceof Error ? e.message : "Submit failed",
+                                        ),
+                                      )
+                                  }
+                                >
+                                  Submit
+                                </DropdownMenuItem>
+                              ) : null}
+                              {canCreate && (row.statusRaw === "approved" || row.statusRaw === "active") ? (
+                                <DropdownMenuItem
+                                  disabled={workOrdersMut.isPending}
+                                  onClick={() =>
+                                    void workOrdersMut
+                                      .mutateAsync(row.id)
+                                      .then(({ created, skipped }) => {
+                                        if (!created.length) {
+                                          toast.info(
+                                            skipped.length
+                                              ? "Work orders already exist for every scheduled month"
+                                              : "No scheduled activities to turn into work orders",
+                                          );
+                                          return;
+                                        }
+                                        toast.success(
+                                          `Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}`,
+                                          {
+                                            action: {
+                                              label: "Open",
+                                              onClick: () => router.push(CROPFORT_ROUTES.monthlyWorkOrders),
+                                            },
+                                          },
+                                        );
+                                      })
+                                      .catch((e) =>
+                                        toast.error(e instanceof Error ? e.message : "Could not create work orders"),
+                                      )
+                                  }
+                                >
+                                  Create work orders
+                                </DropdownMenuItem>
+                              ) : null}
+                              {!archiveMode && row.statusRaw === "submitted" ? (
+                                <DropdownMenuItem asChild>
+                                  <Link href={CROPFORT_ROUTES.approvals}>View approval</Link>
+                                </DropdownMenuItem>
+                              ) : null}
+                              {!archiveMode &&
+                              canCreate &&
+                              row.statusRaw !== "archived" &&
+                              row.statusRaw !== "submitted" ? (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-destructive" onClick={() => setArchiveTarget(row)}>
+                                    Archive
+                                  </DropdownMenuItem>
+                                </>
+                              ) : null}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+  );
+
   return (
     <PageContainer>
       <PageHeader
-        eyebrow={activeProgram?.name || "Workspace"}
-        title={archiveMode ? "Archive" : "Core Operations plans"}
+        title={archiveMode ? "Archived plans" : "Plans"}
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Planning" },
-          { label: "Core Operations plans", href: CROPFORT_ROUTES.programmePlans },
-          ...(archiveMode ? [{ label: "Archive" }] : []),
+          ...(archiveMode ? [{ label: "Plans", href: CROPFORT_ROUTES.programmePlans }, { label: "Archive" }] : [{ label: "Plans" }]),
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {archiveMode ? (
               <Button size="sm" variant="outline" asChild>
-                <Link href={CROPFORT_ROUTES.programmePlans}>Register</Link>
+                <Link href={CROPFORT_ROUTES.programmePlans}>Back to plans</Link>
               </Button>
-            ) : null}
+            ) : (
+              <Button size="sm" variant="outline" asChild>
+                <Link href={CROPFORT_ROUTES.activityTaxonomy}>Activities</Link>
+              </Button>
+            )}
             {canCreate ? (
-              <Button size="sm" onClick={openCreate}>
-                <Plus className="h-3.5 w-3.5" />
-                New plan
+              <Button size="sm" asChild>
+                <Link href={NEW_PLAN_HREF}>
+                  <Plus className="h-3.5 w-3.5" />
+                  New plan
+                </Link>
               </Button>
             ) : null}
           </div>
         }
       />
 
-      <SectionCard title={archiveMode ? "Archived plans" : "All Core Operations plans"} flush>
-        <div className="border-b border-border bg-muted/15 px-4 py-4 sm:px-5">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="relative min-w-0 flex-1 xl:max-w-md">
+      <SectionCard flush>
+        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:px-5 xl:flex-row xl:items-center xl:justify-between">
+          {!archiveMode ? (
+            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter by status">
+              {STATUS_TABS.map((tab) => {
+                const active = statusFilter === tab.id;
+                const count = allPlans.filter((p) => tab.match(p.statusRaw)).length;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => {
+                      setStatusFilter(tab.id);
+                      setPage(1);
+                    }}
+                    className={cn(
+                      "cf-focus inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {tab.label}
+                    <span className={cn("rounded-full px-1.5 text-[10px] tabular-nums", active ? "bg-primary-foreground/20" : "bg-muted")}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:justify-end">
+            <div className="relative min-w-0 sm:w-60">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden
@@ -259,33 +546,13 @@ export default function ProgrammePlansRegisterView({
                   setQuery(event.target.value);
                   setPage(1);
                 }}
-                placeholder="Search by plan, code, farm area, or cycle"
-                aria-label="Search Core Operations plans"
-                className="h-10 bg-background pl-9"
+                placeholder="Search plans"
+                aria-label="Search plans"
+                className="h-9 rounded-xl bg-background pl-9"
               />
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-              {!archiveMode ? (
-                <Select
-                  value={statusFilter}
-                  aria-label="Filter by status"
-                  onValueChange={(v) => {
-                    setStatusFilter(v as StatusFilter);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-10 w-full bg-background sm:w-[150px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All statuses</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="submitted">Submitted</SelectItem>
-                    <SelectItem value="returned">Returned</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : null}
+
                 <Select
                   value={farmFilter}
                   aria-label="Filter by farm area"
@@ -294,7 +561,7 @@ export default function ProgrammePlansRegisterView({
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-10 w-full bg-background sm:w-[170px]">
+                  <SelectTrigger className="h-9 w-full rounded-xl bg-background sm:w-[150px]">
                     <SelectValue placeholder="Farm area" />
                   </SelectTrigger>
                   <SelectContent>
@@ -314,7 +581,7 @@ export default function ProgrammePlansRegisterView({
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-10 w-full bg-background sm:w-[140px]">
+                  <SelectTrigger className="h-9 w-full rounded-xl bg-background sm:w-[120px]">
                     <SelectValue placeholder="Budget year" />
                   </SelectTrigger>
                   <SelectContent>
@@ -346,267 +613,7 @@ export default function ProgrammePlansRegisterView({
           </div>
         </div>
 
-        <div className="cf-table-scroll">
-          <Table aria-label={archiveMode ? "Archived Core Operations plans" : "Core Operations plans"}>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Plan</TableHead>
-                <TableHead>Farm area</TableHead>
-                <TableHead>Budget year</TableHead>
-                <TableHead className="text-right">Activities scheduled</TableHead>
-                <TableHead className="text-right">Budget</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-12" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {plansQuery.isLoading ? (
-                <TableSkeleton rows={5} columns={7} />
-              ) : paged.length === 0 ? (
-                <TableMessageRow
-                  colSpan={7}
-                  icon={ClipboardList}
-                  title={
-                    !hasActiveFilters
-                      ? archiveMode
-                        ? "No archived plans"
-                        : "No plans"
-                      : "No results"
-                  }
-                  description={
-                    !hasActiveFilters
-                      ? archiveMode
-                        ? "Archived plans will appear here."
-                        : "Create a Core Operations plan to start planning work for a farm area."
-                      : "Try changing your search or filters."
-                  }
-                  action={
-                    !hasActiveFilters && canCreate ? (
-                      <Button size="sm" onClick={openCreate}>
-                        <Plus className="h-3.5 w-3.5" />
-                        New Core Operations plan
-                      </Button>
-                    ) : hasActiveFilters ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setQuery("");
-                          setStatusFilter("all");
-                          setFarmFilter("all");
-                          setYearFilter("all");
-                          setPage(1);
-                        }}
-                      >
-                        Clear filters
-                      </Button>
-                    ) : null
-                  }
-                />
-              ) : (
-                paged.map((row) => {
-                  const included = row.includedCount ?? 0;
-                  const scheduled = row.scheduledCount ?? 0;
-                  return (
-                    <TableRow
-                      key={row.id}
-                      onClick={(event) => {
-                        const target = event.target as HTMLElement;
-                        // Let links and menu actions handle their own navigation.
-                        if (
-                          event.defaultPrevented ||
-                          !event.currentTarget.contains(target) ||
-                          target.closest("a, button, [role='menuitem']")
-                        ) return;
-                        router.push(planHref(row.id));
-                      }}
-                    >
-                      <TableCell className="h-auto min-w-[250px] py-4">
-                        <Link
-                          href={planHref(row.id)}
-                          aria-label={`Open ${row.name || "untitled Core Operations plan"}`}
-                          className="group/plan inline-flex items-center gap-1.5 rounded-sm font-semibold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <span className="truncate">{row.name || "Untitled plan"}</span>
-                          <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/plan:opacity-100 group-focus-visible/plan:opacity-100" aria-hidden>
-                            Open
-                          </span>
-                        </Link>
-                        {row.code || row.planningCycleLabel ? (
-                          <p className="mt-0.5 max-w-[26rem] truncate text-xs text-muted-foreground">
-                            {[row.code, row.planningCycleLabel].filter(Boolean).join(" · ")}
-                          </p>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="min-w-[120px] font-medium text-foreground/85">
-                        {row.farmName || "—"}
-                      </TableCell>
-                      <TableCell className="min-w-[140px] text-sm tabular-nums">
-                        <span className="whitespace-nowrap">
-                          {row.budgetYearLabel || `${row.budgetYearGc} GC`}
-                          {planPeriodOf(row) !== "annual" ? (
-                            <span className="ml-1.5 rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
-                              {planPeriodOf(row) === "first_half" ? "Tikimt–Megabit" : "Miyazya–Meskerem"}
-                            </span>
-                          ) : null}
-                        </span>
-                      </TableCell>
-                      <TableCell className="min-w-[150px]">
-                        <div className="ml-auto max-w-32">
-                          <p className="text-right text-xs tabular-nums">
-                            <span className="font-semibold text-foreground">{scheduled}</span>
-                            <span className="text-muted-foreground"> of {included} scheduled</span>
-                          </p>
-                          <div
-                            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
-                            role="progressbar"
-                            aria-label={`${scheduled} of ${included} activities scheduled`}
-                            aria-valuemin={0}
-                            aria-valuemax={Math.max(included, 1)}
-                            aria-valuenow={Math.min(scheduled, included)}
-                          >
-                            <div
-                              className="h-full rounded-full bg-primary transition-[width]"
-                              style={{
-                                width: `${included > 0 ? Math.min(100, (scheduled / included) * 100) : 0}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="min-w-[130px] text-right font-semibold tabular-nums text-foreground">
-                        {fmtEtb(row.plannedCostEtb || 0)}
-                      </TableCell>
-                      <TableCell className="min-w-[110px]">
-                        <StatusBadge
-                          status={
-                            row.statusRaw === "archived"
-                              ? "archived"
-                              : row.statusRaw === "approved" || row.statusRaw === "active"
-                              ? "approved"
-                              : row.statusRaw === "submitted"
-                                ? "submitted"
-                                : row.statusRaw === "returned"
-                                  ? "returned"
-                                  : "draft"
-                          }
-                          label={statusLabel(row.statusRaw)}
-                          className="whitespace-nowrap"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              size="icon-sm"
-                              variant="ghost"
-                              aria-label={`Actions for ${row.name || "Core Operations plan"}`}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link href={planHref(row.id)}>Open</Link>
-                            </DropdownMenuItem>
-                            {canDuplicate ? (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  void duplicateMut
-                                    .mutateAsync(row.id)
-                                    .then((p) => {
-                                      toast.success(
-                                        archiveMode
-                                          ? "Duplicated into a new draft"
-                                          : "Duplicated",
-                                      );
-                                      router.push(planHref(p.id));
-                                    })
-                                    .catch((e) =>
-                                      toast.error(
-                                        e instanceof Error ? e.message : "Duplicate failed",
-                                      ),
-                                    )
-                                }
-                              >
-                                Duplicate
-                              </DropdownMenuItem>
-                            ) : null}
-                            {!archiveMode && canEditRow(row) ? (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  void submitMut
-                                    .mutateAsync(row)
-                                    .then(() => toast.success("Submitted for Silva approval"))
-                                    .catch((e) =>
-                                      toast.error(
-                                        e instanceof Error ? e.message : "Submit failed",
-                                      ),
-                                    )
-                                }
-                              >
-                                Submit
-                              </DropdownMenuItem>
-                            ) : null}
-                            {canCreate && (row.statusRaw === "approved" || row.statusRaw === "active") ? (
-                              <DropdownMenuItem
-                                disabled={workOrdersMut.isPending}
-                                onClick={() =>
-                                  void workOrdersMut
-                                    .mutateAsync(row.id)
-                                    .then(({ created, skipped }) => {
-                                      if (!created.length) {
-                                        toast.info(
-                                          skipped.length
-                                            ? "Work orders already exist for every scheduled month"
-                                            : "No scheduled activities to turn into work orders",
-                                        );
-                                        return;
-                                      }
-                                      toast.success(
-                                        `Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}`,
-                                        {
-                                          action: {
-                                            label: "Open",
-                                            onClick: () => router.push(CROPFORT_ROUTES.monthlyWorkOrders),
-                                          },
-                                        },
-                                      );
-                                    })
-                                    .catch((e) =>
-                                      toast.error(e instanceof Error ? e.message : "Could not create work orders"),
-                                    )
-                                }
-                              >
-                                Create work orders
-                              </DropdownMenuItem>
-                            ) : null}
-                            {!archiveMode && row.statusRaw === "submitted" ? (
-                              <DropdownMenuItem asChild>
-                                <Link href={CROPFORT_ROUTES.approvals}>View approval</Link>
-                              </DropdownMenuItem>
-                            ) : null}
-                            {!archiveMode &&
-                            canCreate &&
-                            row.statusRaw !== "archived" &&
-                            row.statusRaw !== "submitted" ? (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive" onClick={() => setArchiveTarget(row)}>
-                                  Archive
-                                </DropdownMenuItem>
-                              </>
-                            ) : null}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        {renderTable(paged)}
         <TablePagination
           page={safePage}
           pageCount={pageCount}
@@ -620,100 +627,6 @@ export default function ProgrammePlansRegisterView({
           }}
         />
       </SectionCard>
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New Core Operations plan</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="plan-name">Plan name *</Label>
-              <Input
-                id="plan-name"
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. 2027 Annual Coffee Operations"
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="plan-farm">Farm area *</Label>
-                <Select value={farmEstateId} onValueChange={setFarmEstateId}>
-                  <SelectTrigger id="plan-farm">
-                    <SelectValue placeholder={farms.length ? "Select farm area" : "No farm areas yet"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {farms.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!farmsQuery.isLoading && farms.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    <Link href={CROPFORT_ROUTES.farmAreas} className="text-primary underline-offset-2 hover:underline">
-                      Add a farm area
-                    </Link>{" "}
-                    first.
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="plan-year">Budget year (GC) *</Label>
-                <Input
-                  id="plan-year"
-                  type="number"
-                  inputMode="numeric"
-                  value={planYear}
-                  onChange={(e) => setPlanYear(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Plan covers *</Label>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {PLAN_PERIODS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setPlanPeriod(p.id)}
-                    aria-pressed={planPeriod === p.id}
-                    className={cn(
-                      "rounded-md border px-3 py-2 text-left text-sm transition-colors",
-                      planPeriod === p.id
-                        ? "border-primary bg-primary/[0.06] font-medium text-primary"
-                        : "border-border hover:bg-muted/50",
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="plan-description">Description</Label>
-              <Textarea
-                id="plan-description"
-                rows={2}
-                placeholder="Optional — scope or goals for this plan"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => void onCreate()} disabled={createMut.isPending || !name.trim() || !farmEstateId}>
-              {createMut.isPending ? "Creating…" : "Create plan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ConfirmDialog
         open={Boolean(archiveTarget)}

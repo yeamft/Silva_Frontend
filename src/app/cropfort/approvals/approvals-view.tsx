@@ -67,7 +67,8 @@ import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { canApproveOperations } from "@/lib/cropfort/platform-access";
 import { canApproveAsAssetOwner } from "@/lib/cropfortAccess";
 import { fmtEtb } from "@/store/cropfortOpsStore";
-import { scheduleStatusOf } from "@/store/coreOpsPlanStore";
+import { scheduleLabel, scheduleStatusOf } from "@/store/coreOpsPlanStore";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useSpendBandStore } from "@/store/spendBandStore";
 import { listFarmAssessments } from "@/lib/api/farm-assessments";
 import type { AfpPromotion, CoreOpsActivity, CoreOpsPlan } from "@/types/core-ops";
@@ -355,12 +356,23 @@ function AfpDetail({
   plan,
   promotion,
   activities,
+  wanted,
+  onToggleWanted,
+  onSetAllWanted,
 }: {
   plan: CoreOpsPlan;
   promotion: AfpPromotion;
   activities: CoreOpsActivity[];
+  /** Activities the asset owner wants; undefined = the owner can't choose. */
+  wanted?: Set<string>;
+  onToggleWanted?: (id: string) => void;
+  onSetAllWanted?: (all: boolean) => void;
 }) {
   const included = activities.filter((a) => a.included);
+  const choosing = Boolean(wanted && onToggleWanted);
+  const wantedRows = choosing ? included.filter((a) => wanted!.has(a.id)) : included;
+  const wantedTotal = wantedRows.reduce((sum, a) => sum + (a.plannedCost || 0), 0);
+  const activeMonths = PLAN_MONTHS.filter((m) => included.some((a) => (a.intensities?.[m] ?? "none") !== "none"));
   const byCategory = useMemo(() => {
     const map = new Map<string, number>();
     for (const a of included) map.set(a.category, (map.get(a.category) ?? 0) + a.plannedCost);
@@ -399,13 +411,55 @@ function AfpDetail({
         </Button>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { label: "Plan total", value: fmtEtb(promotion.totalEtb) },
+          { label: "Activities", value: String(included.length) },
+          { label: "Months with work", value: `${activeMonths.length} of ${PLAN_MONTHS.length}` },
+          choosing
+            ? { label: "You want", value: `${wantedRows.length} · ${fmtEtb(wantedTotal)}`, strong: wantedRows.length !== included.length }
+            : { label: "Categories", value: String(byCategory.length) },
+        ].map((tile) => (
+          <div
+            key={tile.label}
+            className={cn(
+              "rounded-xl border px-3 py-2",
+              "strong" in tile && tile.strong ? "border-amber-500/40 bg-amber-500/[0.06]" : "border-border bg-muted/30",
+            )}
+          >
+            <p className="text-[11px] text-muted-foreground">{tile.label}</p>
+            <p className="text-sm font-semibold tabular-nums">{tile.value}</p>
+          </div>
+        ))}
+      </div>
+
       {byCategory.length > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {byCategory.map(([cat, cost]) => (
-            <span key={cat} className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs">
-              {cat} <span className="ml-1 font-semibold tabular-nums">{fmtEtb(cost)}</span>
-            </span>
-          ))}
+          {byCategory.map(([cat, cost]) => {
+            const count = included.filter((a) => a.category === cat).length;
+            return (
+              <span key={cat} className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs">
+                {cat} · {count} <span className="ml-1 font-semibold tabular-nums">{fmtEtb(cost)}</span>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {choosing ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-primary/[0.06] px-3 py-2 text-sm">
+          <span>
+            <span className="font-medium">Tick the activities you want.</span>{" "}
+            <span className="text-muted-foreground">Untick any you don&apos;t — the plan goes back to SPX with your choice.</span>
+          </span>
+          <span className="flex gap-3 text-xs font-medium">
+            <button type="button" className="text-primary hover:underline" onClick={() => onSetAllWanted?.(true)}>
+              Want all
+            </button>
+            <button type="button" className="text-primary hover:underline" onClick={() => onSetAllWanted?.(false)}>
+              Clear
+            </button>
+          </span>
         </div>
       ) : null}
 
@@ -414,6 +468,7 @@ function AfpDetail({
           <Table>
             <TableHeader>
               <TableRow>
+                {choosing ? <TableHead className="w-10" /> : null}
                 <TableHead className="min-w-[12rem]">Activity</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
                 <TableHead className="text-right">Rate</TableHead>
@@ -426,11 +481,30 @@ function AfpDetail({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {included.map((a) => (
-                <TableRow key={a.id}>
+              {included.map((a) => {
+                const isWanted = !choosing || wanted!.has(a.id);
+                return (
+                <TableRow key={a.id} className={cn(choosing && !isWanted && "opacity-50")}>
+                  {choosing ? (
+                    <TableCell>
+                      <Checkbox
+                        checked={isWanted}
+                        aria-label={`Want ${a.activityName}`}
+                        onCheckedChange={() => onToggleWanted?.(a.id)}
+                      />
+                    </TableCell>
+                  ) : null}
                   <TableCell>
-                    <p className="text-sm font-medium">{a.activityName}</p>
-                    <p className="font-mono text-[10px] text-muted-foreground">{a.activityCode}</p>
+                    <p className={cn("text-sm font-medium", choosing && !isWanted && "line-through")}>{a.activityName}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      <span className="font-mono">{a.activityCode}</span> · {a.category}
+                      {a.blockAllocations?.length
+                        ? ` · ${a.blockAllocations.map((b) => b.blockCode).join(", ")}`
+                        : a.scope === "off_block"
+                          ? " · Nursery"
+                          : ""}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">{scheduleLabel(a)}</p>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
                     {a.plannedQty ? a.plannedQty.toLocaleString() : "—"}{" "}
@@ -457,7 +531,8 @@ function AfpDetail({
                     );
                   })}
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -698,6 +773,8 @@ export default function ApprovalsView({
   const [tab, setTab] = useState<Tab>(initialKind ?? "afp");
   const [selectedId, setSelectedId] = useState<string | null>(initialId ?? null);
   const [decisionNote, setDecisionNote] = useState("");
+  /** Asset owner's choice of activities, per plan id (missing = wants everything). */
+  const [wantedByPlan, setWantedByPlan] = useState<Record<string, Set<string>>>({});
   const [listFilter, setListFilter] = useState<Tab | "assessments" | "all">("all");
   const [confirmApprove, setConfirmApprove] = useState(false);
 
@@ -803,6 +880,12 @@ export default function ApprovalsView({
   const selectedAfpPlan =
     selected?.kind === "afp" ? afpPlans.find((p) => p.id === selected.id) ?? null : null;
   const selectedPromo = selectedAfpPlan ? afpPromotionFromPlan(selectedAfpPlan) : null;
+  // What the asset owner wants from this plan: everything until they untick something
+  const planIncluded = selectedAfpPlan ? Object.values(selectedAfpPlan.activities).filter((x) => x.included) : [];
+  const planWanted = selectedAfpPlan
+    ? wantedByPlan[selectedAfpPlan.id] ?? new Set(planIncluded.map((x) => x.id))
+    : null;
+  const planUnwanted = planIncluded.filter((x) => !planWanted?.has(x.id));
   const selectedProject =
     selected?.kind === "projects"
       ? projects.find((p) => p.id === selected.id) ?? null
@@ -826,17 +909,18 @@ export default function ApprovalsView({
       ? pendingRateCards.find((card) => card.id === selected.id) ?? null
       : null;
 
-  const decideRow = async (decision: "approved" | "returned") => {
+  const decideRow = async (decision: "approved" | "returned", noteOverride?: string) => {
     if (!selected) return;
     if (!canDecide) {
       toast.error("Only Silva / asset owners can approve or return");
       return;
     }
-    if (decision === "returned" && !decisionNote.trim()) {
+    const noteText = (noteOverride ?? decisionNote).trim();
+    if (decision === "returned" && !noteText) {
       toast.error("Add a return reason so the submitter knows what to fix");
       return;
     }
-    const note = decisionNote.trim() || undefined;
+    const note = noteText || undefined;
     try {
       if (selected.kind === "afe") {
         await decideAfe.mutateAsync({
@@ -1145,6 +1229,24 @@ export default function ApprovalsView({
                     plan={selectedAfpPlan}
                     promotion={selectedPromo}
                     activities={Object.values(selectedAfpPlan.activities)}
+                    wanted={canDecide ? planWanted ?? undefined : undefined}
+                    onToggleWanted={
+                      canDecide
+                        ? (id) =>
+                            setWantedByPlan((prev) => {
+                              const next = new Set(planWanted ?? []);
+                              if (next.has(id)) next.delete(id);
+                              else next.add(id);
+                              return { ...prev, [selectedAfpPlan.id]: next };
+                            })
+                        : undefined
+                    }
+                    onSetAllWanted={(all) =>
+                      setWantedByPlan((prev) => ({
+                        ...prev,
+                        [selectedAfpPlan.id]: new Set(all ? planIncluded.map((a) => a.id) : []),
+                      }))
+                    }
                   />
                 ) : null}
                 {selectedProject ? <ProjectDetail project={selectedProject} /> : null}
@@ -1242,9 +1344,28 @@ export default function ApprovalsView({
 
                 {canDecide ? (
                   <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-border bg-card pt-3">
-                    <Button size="sm" onClick={() => setConfirmApprove(true)}>
-                      Approve
-                    </Button>
+                    {selectedAfpPlan && planUnwanted.length > 0 ? (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const keep = planIncluded.filter((a) => planWanted?.has(a.id));
+                          const note = [
+                            `Asset owner wants ${keep.length} of ${planIncluded.length} activities.`,
+                            `Please remove: ${planUnwanted.map((a) => `${a.activityCode} ${a.activityName}`).join("; ")}.`,
+                            decisionNote.trim(),
+                          ]
+                            .filter(Boolean)
+                            .join("\n");
+                          void decideRow("returned", note);
+                        }}
+                      >
+                        Send back with my selection ({planUnwanted.length} removed)
+                      </Button>
+                    ) : (
+                      <Button size="sm" onClick={() => setConfirmApprove(true)}>
+                        Approve
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"

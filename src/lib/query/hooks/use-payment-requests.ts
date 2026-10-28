@@ -12,7 +12,8 @@ import {
 } from "@/lib/api/payment-requests";
 import { queryKeys } from "@/lib/query/keys";
 
-const LIVE_POLL_MS = 5_000;
+// Server push (LiveUpdates) refreshes these instantly; polling is only a fallback
+const LIVE_POLL_MS = 60_000;
 
 export function usePaymentRequests(enabled = true, status?: string) {
   return useQuery({

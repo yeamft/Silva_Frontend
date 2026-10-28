@@ -59,7 +59,6 @@ export type CropfortWorkspace = {
 };
 
 const ALL_PLAN: CropfortRole[] = ["spx_validator", "farm_owner", "farm_owner_viewer", "spx_platform_admin"];
-const SPX: CropfortRole[] = ["spx_validator", "spx_platform_admin"];
 const ADMIN: CropfortRole[] = ["spx_platform_admin"];
 const FIELD: CropfortRole[] = [
   "field_supervisor",
@@ -120,6 +119,8 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         id: "programme-archive",
         label: "Archived plans",
         href: CROPFORT_ROUTES.programmePlansArchive,
+        // Not for the SPX Account Manager (spx_validator)
+        roles: ["farm_owner", "farm_owner_viewer", "spx_platform_admin"],
         description: "Archived and closed Core Operations plans",
       },
       {
@@ -164,7 +165,7 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
     id: "execution",
     label: "Execution",
     icon: Wrench,
-    href: CROPFORT_ROUTES.fieldTickets,
+    href: CROPFORT_ROUTES.monthlyWorkOrders,
     roles: EXEC_ROLES,
     modules: [
       {
@@ -186,13 +187,6 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         label: "Weekly Plans",
         href: CROPFORT_ROUTES.weeklySubmissions,
         roles: FIELD_NO_VENDOR,
-        description: "",
-      },
-      {
-        id: "field-execution",
-        label: "Field Execution",
-        href: CROPFORT_ROUTES.fieldTickets,
-        roles: FIELD,
         description: "",
       },
       {
@@ -346,13 +340,15 @@ export const CROPFORT_WORKSPACES: CropfortWorkspace[] = [
         id: "benchmarks",
         label: "Benchmark Surveys",
         href: CROPFORT_ROUTES.benchmarkSurveys,
-        roles: SPX,
+        // The SPX Account Manager (spx_validator) sets rates inside Core Operations instead
+        roles: ADMIN,
         description: "Neighbor evidence for rates",
       },
       {
         id: "rate-cards",
         label: "Rate Cards",
         href: CROPFORT_ROUTES.rateCardProposals,
+        roles: ["farm_owner", "farm_owner_viewer", "spx_platform_admin"],
         description: "Approved unit rates",
       },
     ],

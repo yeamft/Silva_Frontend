@@ -68,10 +68,9 @@ export function PageHeader({
   return (
     <header className="space-y-3">
       {breadcrumbs?.length ? <Breadcrumbs items={breadcrumbs} /> : null}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 space-y-1.5">
-          <p className="cf-eyebrow">State Program</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.65rem]">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             {title}
           </h1>
           {meta ? (
@@ -388,6 +387,7 @@ export function SectionCard({
   title,
   description,
   action,
+  icon: Icon,
   children,
   className,
   bodyClassName,
@@ -396,6 +396,8 @@ export function SectionCard({
   title?: string;
   description?: string;
   action?: ReactNode;
+  /** Optional icon badge shown beside the title. */
+  icon?: LucideIcon;
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
@@ -404,17 +406,34 @@ export function SectionCard({
 }) {
   const showHeader = Boolean(title || action);
   return (
-    <Card className={cn("flex flex-col shadow-sm", className)}>
+    <Card
+      className={cn(
+        "flex flex-col overflow-hidden rounded-2xl border-border shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_32px_-20px_rgba(15,23,20,0.25)]",
+        className,
+      )}
+    >
       {showHeader ? (
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-border px-5 py-4">
-          <div className="min-w-0 space-y-0.5">
-            {title ? <CardTitle className="text-sm font-semibold">{title}</CardTitle> : null}
-            {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-border/70 bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent px-4 py-3.5 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            {Icon ? (
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_6px_16px_-8px_hsl(var(--primary))]"
+                aria-hidden
+              >
+                <Icon className="h-4 w-4" />
+              </span>
+            ) : title ? (
+              <span className="h-6 w-1 shrink-0 rounded-full bg-primary/70" aria-hidden />
+            ) : null}
+            <div className="min-w-0 space-y-0.5">
+              {title ? <CardTitle className="text-[15px] font-semibold tracking-tight">{title}</CardTitle> : null}
+              {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
+            </div>
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}
         </CardHeader>
       ) : null}
-      <CardContent className={cn(flush ? "flex-1 p-0" : "flex-1 p-5", bodyClassName)}>{children}</CardContent>
+      <CardContent className={cn(flush ? "flex-1 p-0" : "flex-1 p-4 sm:p-5", bodyClassName)}>{children}</CardContent>
     </Card>
   );
 }

@@ -253,16 +253,6 @@ const LoginPage = () => {
           <div className="absolute -right-16 bottom-10 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
         </div>
 
-        <div className="relative z-10">
-          <Link
-            href="/"
-            className="cf-focus inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden />
-            Back to home
-          </Link>
-        </div>
-
         <div className="relative z-10 flex flex-1 items-center justify-center py-8">
           <motion.div
             initial={{ opacity: 0, y: 14 }}
@@ -496,7 +486,15 @@ const LoginPage = () => {
                         <ArrowLeft className="h-4 w-4" aria-hidden />
                         Back to sign in
                       </Button>
-                    ) : null}
+                    ) : (
+                      <Link
+                        href="/"
+                        className="cf-focus mx-auto flex h-9 w-fit items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <ArrowLeft className="h-4 w-4" aria-hidden />
+                        Back to home
+                      </Link>
+                    )}
                   </form>
                 </motion.div>
               </AnimatePresence>

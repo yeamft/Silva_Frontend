@@ -30,6 +30,7 @@ import {
   useSubmitMonthlyWorkOrder,
 } from "@/lib/query/hooks/use-monthly-work-orders";
 import { useCreateWorkOrdersFromPlan, useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
+import { mapWorkOrderDto, useTransitionWorkOrder, useWorkOrders } from "@/lib/query/hooks/use-work-orders";
 import type { MonthlyWorkOrder, MonthlyWoStatus } from "@/types/agronomic-cycle";
 
 type Order = MonthlyWorkOrder & { returnedComment?: string | null };
@@ -91,7 +92,9 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
         ),
     [ordersQuery.data],
   );
-  const approvedPlans = approvedPlansQuery.data || [];
+  // Only plans that don't have monthly work orders yet can be turned into them
+  const plansWithOrders = new Set(orders.map((o) => o.sourcePlanId).filter(Boolean));
+  const approvedPlans = (approvedPlansQuery.data || []).filter((p) => !plansWithOrders.has(p.id));
   const planHref = (key: string) => `${CROPFORT_ROUTES.monthlyWorkOrders}/plan/${encodeURIComponent(key)}`;
   const allPlansQuery = useProgrammePlans(enabled, {});
   const planNames = useMemo(
@@ -100,6 +103,7 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
   );
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [tabChoice, setTabChoice] = useState<"new" | "active" | null>(null);
   /** Order being returned — set from the detail view or a list row. */
   const [returnTarget, setReturnTarget] = useState<Order | null>(null);
   const [returnNote, setReturnNote] = useState("");
@@ -136,6 +140,27 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
     });
   }, [orders, planNames]);
 
+  // New = approved (not yet activated) monthly work orders; Active = activated ones
+  const newOrders = orders.filter((o) => o.status !== "active");
+  const activeOrders = orders.filter((o) => o.status === "active");
+  /** One row per plan: its months in this tab, with totals. */
+  const byPlan = (list: Order[]) => {
+    const groups = new Map<string, Order[]>();
+    for (const o of list) {
+      const key = o.sourcePlanId || "none";
+      groups.set(key, [...(groups.get(key) || []), o]);
+    }
+    return [...groups.entries()].map(([key, items]) => ({
+      key,
+      name: key === "none" ? "Not from a plan" : planNames.get(key) || "Core Operations plan",
+      farmName: items[0].farmName,
+      orders: items,
+      activities: items.reduce((sum, o) => sum + o.lines.length, 0),
+      total: items.reduce((sum, o) => sum + o.totalEtb, 0),
+      statuses: [...items.reduce((m, o) => m.set(o.status, (m.get(o.status) || 0) + 1), new Map<MonthlyWoStatus, number>())],
+    }));
+  };
+  const listTab = tabChoice ?? (newOrders.length || !activeOrders.length ? "new" : "active");
   const planGroup = planId ? planGroups.find((g) => g.key === planId) ?? null : null;
   const pendingApproval = planGroup?.orders.filter((o) => o.status === "submitted") ?? [];
 
@@ -164,6 +189,54 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
     const ok = items.length - failed;
     if (ok) toast.success(`Approved ${ok} work order${ok === 1 ? "" : "s"}`);
     if (failed) toast.error(`${failed} could not be approved`);
+  };
+
+  // Submit every draft / returned month of the plan for approval at once
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const submitAllMonths = async (items: Order[]) => {
+    const blocking = schedule7Blocking();
+    if (blocking.length) {
+      toast.error(`Dependency register incomplete: ${blocking.map((b) => b.label).join(", ")}`);
+      return;
+    }
+    setBulkSubmitting(true);
+    let ok = 0;
+    for (const o of items) {
+      try {
+        await submitMut.mutateAsync(o.id);
+        ok += 1;
+      } catch (e) {
+        toast.error(`${o.code}: ${e instanceof Error ? e.message : "could not submit"}`);
+      }
+    }
+    setBulkSubmitting(false);
+    if (ok) toast.success(`Submitted ${ok} month${ok === 1 ? "" : "s"} for approval`);
+  };
+
+  // Submit (mark done) every open work order issued from the selected month
+  const workOrdersQuery = useWorkOrders(enabled);
+  const transitionWo = useTransitionWorkOrder();
+  const monthWorkOrders = (workOrdersQuery.data || [])
+    .map(mapWorkOrderDto)
+    .filter((wo) => selected && wo.monthlyWoCode === selected.code);
+  const openMonthWorkOrders = monthWorkOrders.filter((wo) => wo.status === "issued" || wo.status === "in_progress");
+  const [submitWosOpen, setSubmitWosOpen] = useState(false);
+  const [submittingWos, setSubmittingWos] = useState(false);
+  const submitMonthWorkOrders = async () => {
+    setSubmittingWos(true);
+    let ok = 0;
+    for (const wo of openMonthWorkOrders) {
+      try {
+        if (wo.status === "issued") await transitionWo.mutateAsync({ id: wo.id, status: "in_progress" });
+        await transitionWo.mutateAsync({ id: wo.id, status: "complete" });
+        ok += 1;
+      } catch (e) {
+        toast.error(`${wo.code}: ${e instanceof Error ? e.message : "could not submit"}`);
+      }
+    }
+    setSubmittingWos(false);
+    setSubmitWosOpen(false);
+    if (ok) toast.success(`Submitted ${ok} work order${ok === 1 ? "" : "s"}`);
   };
 
   const canActivate = (o: Order) =>
@@ -198,6 +271,7 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
   };
 
   const readyToActivate = planGroup?.orders.filter(canActivate) ?? [];
+  const readyToSubmit = canEdit ? (planGroup?.orders.filter((o) => o.status === "draft" || o.status === "returned") ?? []) : [];
   const filterOptions: { id: RowFilter; label: string; count: number }[] = (
     [
       { id: "all", label: "All" },
@@ -259,6 +333,7 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
           return;
         }
         toast.success(`Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}`);
+        setTabChoice("new");
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Could not create work orders"));
 
@@ -295,7 +370,7 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
             title={planGroup?.name || (ordersQuery.isLoading ? "Loading…" : "No monthly work orders for this plan")}
             breadcrumbs={[
               { label: "Home", href: CROPFORT_ROUTES.dashboard },
-              { label: "Monthly Work Orders", href: CROPFORT_ROUTES.monthlyWorkOrders },
+              { label: "Monthly orders", href: CROPFORT_ROUTES.monthlyWorkOrders },
               { label: planGroup?.name || "Plan" },
             ]}
             actions={
@@ -329,6 +404,12 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
                 flush
                 action={
                   <span className="flex flex-wrap gap-2">
+                    {readyToSubmit.length > 1 ? (
+                      <Button size="sm" variant="outline" disabled={bulkSubmitting} onClick={() => void submitAllMonths(readyToSubmit)}>
+                        <Send className="mr-1 h-4 w-4" aria-hidden />
+                        {bulkSubmitting ? "Submitting…" : `Submit all (${readyToSubmit.length})`}
+                      </Button>
+                    ) : null}
                     {canApprove && pendingApproval.length > 1 ? (
                       <Button size="sm" variant="outline" disabled={bulkApproving} onClick={() => void approveAll(pendingApproval)}>
                         <Check className="mr-1 h-4 w-4" aria-hidden />
@@ -475,7 +556,7 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
         }
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Monthly Work Orders", href: CROPFORT_ROUTES.monthlyWorkOrders },
+          { label: "Monthly orders", href: CROPFORT_ROUTES.monthlyWorkOrders },
           ...(selected
             ? [
                 {
@@ -581,6 +662,12 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
                     Add extra work
                   </Button>
                 ) : null}
+                {selected.status === "active" && canEdit && openMonthWorkOrders.length > 0 ? (
+                  <Button disabled={submittingWos} onClick={() => setSubmitWosOpen(true)}>
+                    <Send className="mr-1.5 h-4 w-4" aria-hidden />
+                    Submit all work orders ({openMonthWorkOrders.length})
+                  </Button>
+                ) : null}
                 {selected.status === "active" ? (
                   <Button variant="outline" asChild>
                     <Link href={CROPFORT_ROUTES.workOrders}>Go to work orders</Link>
@@ -608,8 +695,8 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
       ) : (
         <>
       <PageHeader
-        title="Monthly Work Orders"
-        breadcrumbs={[{ label: "Home", href: CROPFORT_ROUTES.dashboard }, { label: "Monthly Work Orders" }]}
+        title="Monthly orders"
+        breadcrumbs={[{ label: "Home", href: CROPFORT_ROUTES.dashboard }, { label: "Monthly orders" }]}
         actions={
           canEdit ? (
             <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -620,17 +707,53 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
         }
       />
 
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Monthly work orders">
+        {(
+          [
+            { id: "new", label: "New", count: byPlan(newOrders).length },
+            { id: "active", label: "Active", count: byPlan(activeOrders).length },
+          ] as const
+        ).map((t) => {
+          const active = listTab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTabChoice(t.id)}
+              className={cn(
+                "cf-focus inline-flex h-9 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors",
+                active
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+              <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums", active ? "bg-primary-foreground/20" : "bg-muted")}>
+                {t.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {ordersQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : orders.length === 0 ? (
+      ) : (listTab === "new" ? newOrders : activeOrders).length === 0 ? (
         <SectionCard>
           <div className="py-10 text-center">
-            <p className="font-medium">No monthly work orders yet</p>
+            <p className="font-medium">{listTab === "new" ? "No new monthly work orders" : "No active monthly work orders"}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              They are created from an approved Core Operations plan — one per scheduled month.
+              {listTab === "new"
+                ? approvedPlans.length && canEdit
+                  ? "Create them from an approved Core Operations plan — one per scheduled month."
+                  : "Approved monthly work orders appear here, ready to activate."
+                : "Monthly work orders move here once they're activated and their work orders are issued."}
             </p>
-            {canEdit ? (
+            {listTab === "new" && canEdit && approvedPlans.length ? (
               <Button className="mt-4" onClick={() => setCreateOpen(true)}>
+                <Plus className="mr-1 h-4 w-4" aria-hidden />
                 Create from plan
               </Button>
             ) : null}
@@ -638,25 +761,29 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
         </SectionCard>
       ) : (
         <SectionCard flush>
-          <Table>
+          <Table containerClassName="cf-fit-table">
             <TableHeader>
               <TableRow>
                 <TableHead>Plan</TableHead>
-                <TableHead>Farm area</TableHead>
+                <TableHead className="hidden md:table-cell">Farm area</TableHead>
                 <TableHead>Months</TableHead>
                 <TableHead className="text-right">Activities</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {planGroups.map((group) => {
+              {byPlan(listTab === "new" ? newOrders : activeOrders).map((group) => {
                 const first = group.orders[0];
                 const last = group.orders[group.orders.length - 1];
+                const toActivate = group.orders.filter(canActivate);
                 return (
                   <TableRow key={group.key} onClick={() => router.push(planHref(group.key))}>
                     <TableCell className="font-medium">{group.name}</TableCell>
-                    <TableCell className="text-sm">{group.farmName || "—"}</TableCell>
+                    <TableCell className="hidden text-sm md:table-cell">{group.farmName || "—"}</TableCell>
                     <TableCell className="text-sm">
                       {PLAN_MONTH_LABELS[first.ethiopianMonth]} {first.yearGc}
                       {group.orders.length > 1 ? ` – ${PLAN_MONTH_LABELS[last.ethiopianMonth]} ${last.yearGc}` : ""}
@@ -672,6 +799,18 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
                           <StatusBadge key={status} status={status} label={`${count} ${status}`} />
                         ))}
                       </span>
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      {listTab === "new" && toActivate.length ? (
+                        <Button size="sm" className="h-8" disabled={activating} onClick={() => setActivateTargets(toActivate)}>
+                          <Send className="mr-1 h-3.5 w-3.5" aria-hidden />
+                          {toActivate.length === 1 ? "Activate" : `Activate all (${toActivate.length})`}
+                        </Button>
+                      ) : listTab === "active" ? (
+                        <Button size="sm" variant="outline" className="h-8" asChild>
+                          <Link href={CROPFORT_ROUTES.workOrders}>Work orders</Link>
+                        </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 );
@@ -691,7 +830,7 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
           </DialogHeader>
           {approvedPlans.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No approved plans yet.{" "}
+              {(approvedPlansQuery.data || []).length ? "Every approved plan already has its work orders." : "No approved plans yet."}{" "}
               <Link href={CROPFORT_ROUTES.programmePlans} className="font-medium text-primary hover:underline">
                 Open Core Operations plans
               </Link>
@@ -821,6 +960,36 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
             </Button>
             <Button disabled={addExtraMut.isPending} onClick={() => void addExtra()}>
               Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={submitWosOpen} onOpenChange={(o) => !o && !submittingWos && setSubmitWosOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submit all {openMonthWorkOrders.length} work orders for this month?</DialogTitle>
+          </DialogHeader>
+          <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-xl border border-border text-sm">
+            {openMonthWorkOrders.map((wo) => (
+              <li key={wo.id} className="flex items-center gap-3 px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{wo.title}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {wo.code} · {wo.block}
+                  </span>
+                </span>
+                <span className="tabular-nums">{fmtEtb(wo.etb)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-muted-foreground">Submitting marks the work as done.</p>
+          <DialogFooter>
+            <Button variant="outline" disabled={submittingWos} onClick={() => setSubmitWosOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={submittingWos} onClick={() => void submitMonthWorkOrders()}>
+              <Send className="mr-1.5 h-4 w-4" aria-hidden />
+              {submittingWos ? "Submitting…" : "Submit all"}
             </Button>
           </DialogFooter>
         </DialogContent>

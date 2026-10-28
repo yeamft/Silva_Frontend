@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Check, ChevronDown, HelpCircle, Search } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown } from "lucide-react";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { NotificationBell } from "@/components/navigation/notification-bell";
 import { Button } from "@/components/ui/button";
@@ -113,7 +113,7 @@ export function GlobalContextBar({
     "h-9 gap-1.5 rounded-lg border border-border/80 bg-card px-3 font-medium text-foreground shadow-sm transition-[border-color,background-color,box-shadow] duration-150 ease-out hover:border-primary/25 hover:bg-primary/[0.03] hover:shadow focus-visible:ring-2 focus-visible:ring-ring touch-manipulation motion-reduce:transition-none";
 
   const iconBtn =
-    "relative h-9 w-9 shrink-0 rounded-lg border border-transparent text-muted-foreground transition-[border-color,background-color,color] duration-150 ease-out hover:border-border/70 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring touch-manipulation motion-reduce:transition-none";
+    "relative h-10 w-10 shrink-0 rounded-xl border border-transparent text-muted-foreground transition-[border-color,background-color,color] duration-150 ease-out hover:border-border/70 hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring touch-manipulation motion-reduce:transition-none";
 
   return (
     <div
@@ -125,45 +125,29 @@ export function GlobalContextBar({
 
 
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={iconBtn}
-          onClick={onOpenSearch}
-          aria-label="Search"
-        >
-          <Search className="h-4 w-4" aria-hidden />
-        </Button>
         <NotificationBell />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={iconBtn}
-          onClick={onOpenAttention}
-          aria-label={
-            attentionCount > 0
-              ? `Needs attention, ${attentionCount} items`
-              : "Needs attention"
-          }
-        >
-          <AlertTriangle className="h-4 w-4" aria-hidden />
-          {attentionCount > 0 ? (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-destructive-foreground">
-              {attentionCount > 99 ? "99+" : attentionCount}
-            </span>
-          ) : null}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={cn(iconBtn, "hidden sm:inline-flex")}
-          aria-label="Help"
-        >
-          <HelpCircle className="h-4 w-4" aria-hidden />
-        </Button>
+        {/* Shown only when the shell offers the Needs attention drawer */}
+        {onOpenAttention ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={iconBtn}
+            onClick={onOpenAttention}
+            aria-label={
+              attentionCount > 0
+                ? `Needs attention, ${attentionCount} items`
+                : "Needs attention"
+            }
+          >
+            <AlertTriangle className="h-4 w-4" aria-hidden />
+            {attentionCount > 0 ? (
+              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-destructive-foreground">
+                {attentionCount > 99 ? "99+" : attentionCount}
+              </span>
+            ) : null}
+          </Button>
+        ) : null}
         <Separator orientation="vertical" className="mx-1 h-6" />
         <div className="shrink-0">
           <UserMenu />

@@ -53,7 +53,6 @@ const ACTIVITY_CATEGORIES = [
   "Harvesting & Related",
 ] as const;
 
-const TIER_LABELS: Record<number, string> = { 1: "Labor", 2: "Materials", 3: "Services" };
 
 const EMPTY_ROWS: PlatformActivity[] = [];
 
@@ -82,7 +81,6 @@ export default function ActivityTaxonomyView() {
   const canManage = canProposeRateCard(user.role);
 
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [tierFilter, setTierFilter] = useState("all");
   const [q, setQ] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<PlatformActivity | null>(null);
@@ -112,19 +110,14 @@ export default function ActivityTaxonomyView() {
     return rows.filter(
       (r) =>
         (categoryFilter === "all" || r.category === categoryFilter) &&
-        (tierFilter === "all" || String(r.tier) === tierFilter) &&
         (!term ||
           `${r.name} ${r.code} ${r.subgroup || ""} ${r.nameAm || ""}`.toLowerCase().includes(term)),
     );
-  }, [rows, q, categoryFilter, tierFilter]);
+  }, [rows, q, categoryFilter]);
 
   const activeCount = rows.filter((r) => r.active !== false).length;
   const inactiveCount = rows.length - activeCount;
   const categoryCount = useMemo(() => new Set(rows.map((r) => r.category)).size, [rows]);
-  const tierCounts = useMemo(
-    () => [1, 2, 3].map((t) => rows.filter((r) => r.tier === t && r.active !== false).length),
-    [rows],
-  );
 
   const openEditor = (activity?: PlatformActivity) => {
     setEditing(activity ?? null);
@@ -171,11 +164,6 @@ export default function ActivityTaxonomyView() {
         },
       }),
       col.accessor("category", { header: "Category" }),
-      col.accessor("tier", {
-        header: "Type",
-        size: 110,
-        cell: (c) => TIER_LABELS[c.getValue()] ?? "—",
-      }),
       col.accessor("unitOfMeasure", { header: "Unit", size: 90 }),
       col.accessor((r) => (r.active === false ? "inactive" : "active"), {
         id: "status",
@@ -200,7 +188,7 @@ export default function ActivityTaxonomyView() {
   // New filter → back to the first page
   useEffect(() => {
     table.setPageIndex(0);
-  }, [q, categoryFilter, tierFilter, table]);
+  }, [q, categoryFilter, table]);
 
   if (!canView) return <NotAuthorized title="Activity Taxonomy" />;
 
@@ -278,7 +266,7 @@ export default function ActivityTaxonomyView() {
     }
   };
 
-  const activeFilterCount = [categoryFilter !== "all", tierFilter !== "all"].filter(Boolean).length;
+  const activeFilterCount = categoryFilter !== "all" ? 1 : 0;
 
   return (
     <PageContainer>
@@ -315,9 +303,6 @@ export default function ActivityTaxonomyView() {
             label: "Active activities",
             value: query.isLoading ? "—" : String(activeCount),
             icon: ListChecks,
-            footnote: query.isLoading
-              ? undefined
-              : `${tierCounts[0]} labor · ${tierCounts[1]} materials · ${tierCounts[2]} services`,
           },
           {
             id: "categories",
@@ -338,7 +323,6 @@ export default function ActivityTaxonomyView() {
             activeFilterCount={activeFilterCount}
             onClearFilters={() => {
               setCategoryFilter("all");
-              setTierFilter("all");
             }}
             filters={
               <>
@@ -351,19 +335,6 @@ export default function ActivityTaxonomyView() {
                     {categories.map((cat) => (
                       <SelectItem key={cat} value={cat}>
                         {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={tierFilter} onValueChange={setTierFilter}>
-                  <SelectTrigger aria-label="Filter by type" className="h-8 w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All types</SelectItem>
-                    {Object.entries(TIER_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -416,21 +387,6 @@ export default function ActivityTaxonomyView() {
               {editing ? (
                 <p className="text-xs text-muted-foreground">Codes can&apos;t change once rates and plans use them.</p>
               ) : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ac-type">Type *</Label>
-              <select
-                id="ac-type"
-                value={draft.tier}
-                onChange={(e) => setDraft({ ...draft, tier: Number(e.target.value) as 1 | 2 | 3 })}
-                className={selectClass}
-              >
-                {Object.entries(TIER_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="ac-name">Activity name *</Label>

@@ -6,6 +6,8 @@ import {
   createWorkOrder,
   listWorkOrders,
   transitionFieldTicket,
+  reportWorkOrderOutcome,
+  reviewWorkOrder,
   transitionWorkOrder,
   updateWorkOrder,
   type FieldTicketDto,
@@ -91,11 +93,15 @@ export function mapWorkOrderDto(dto: WorkOrderDto): WorkOrder {
     due: dto.week,
     attention: (dto.attention === "insurance" ? "insurance" : "none") as Attention,
     monthlyWoId: null,
-    monthlyWoCode: null,
+    // Activation writes "From <monthly code>" into the instructions — the only link the API carries
+    monthlyWoCode: /\bFrom (MWO-[A-Za-z0-9-]+)/.exec(dto.instructions || "")?.[1] ?? null,
     monthlyLineId: null,
     weeklyPlanId: null,
     weeklyPlanLineId: null,
     manualsRef: dto.instructions || "",
+    vendorOutcome: dto.vendorOutcome ?? null,
+    vendorNote: dto.vendorNote || "",
+    spxApproved: dto.statusRaw === "closed",
   };
 }
 
@@ -121,7 +127,8 @@ export function mapTicketDto(dto: FieldTicketDto, wo?: WorkOrderDto | null): Fie
   };
 }
 
-const LIVE_POLL_MS = 5_000;
+// Server push (LiveUpdates) refreshes these instantly; polling is only a fallback
+const LIVE_POLL_MS = 60_000;
 
 export function useWorkOrders(
   enabled = true,
@@ -155,6 +162,28 @@ export function useCreateWorkOrder() {
   const invalidate = useInvalidateWorkOrders();
   return useMutation({
     mutationFn: createWorkOrder,
+    onSuccess: async () => {
+      await invalidate();
+    },
+  });
+}
+
+export function useReportWorkOrderOutcome() {
+  const invalidate = useInvalidateWorkOrders();
+  return useMutation({
+    mutationFn: ({ id, outcome, note }: { id: string; outcome: "done" | "not_done"; note?: string }) =>
+      reportWorkOrderOutcome(id, outcome, note),
+    onSuccess: async () => {
+      await invalidate();
+    },
+  });
+}
+
+export function useReviewWorkOrder() {
+  const invalidate = useInvalidateWorkOrders();
+  return useMutation({
+    mutationFn: ({ id, decision, comment }: { id: string; decision: "approve" | "return"; comment?: string }) =>
+      reviewWorkOrder(id, decision, comment),
     onSuccess: async () => {
       await invalidate();
     },

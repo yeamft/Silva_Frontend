@@ -4,6 +4,7 @@
  */
 
 export type WorkspaceFontId =
+  | "inter"
   | "plus-jakarta"
   | "dm-sans"
   | "source-sans"
@@ -26,9 +27,15 @@ export type WorkspaceFontDef = {
 
 export const WORKSPACE_FONTS: WorkspaceFontDef[] = [
   {
+    id: "inter",
+    label: "Inter",
+    description: "Default — easy to read on screen, even figures in tables",
+    cssVar: "--font-inter",
+  },
+  {
     id: "plus-jakarta",
     label: "Plus Jakarta Sans",
-    description: "Default — modern, clear operational UI",
+    description: "Modern, clear operational UI",
     cssVar: "--font-plus-jakarta",
   },
   {
@@ -81,7 +88,7 @@ export const WORKSPACE_FONTS: WorkspaceFontDef[] = [
   },
 ];
 
-export const DEFAULT_WORKSPACE_FONT: WorkspaceFontId = "plus-jakarta";
+export const DEFAULT_WORKSPACE_FONT: WorkspaceFontId = "inter";
 
 export function getWorkspaceFont(id: WorkspaceFontId | string | undefined | null): WorkspaceFontDef {
   return WORKSPACE_FONTS.find((f) => f.id === id) ?? WORKSPACE_FONTS[0];

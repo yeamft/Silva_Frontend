@@ -1,15 +1,38 @@
 "use client";
 
 import { SHOW_SPEND_BANDS } from "@/config/features";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CalendarRange,
+  Check,
+  CheckCircle2,
+  ClipboardCheck,
+  ChevronLeft,
+  ChevronRight,
+  Coffee,
+  FileText,
+  Leaf,
+  ListChecks,
+  MapPin,
+  Minus,
+  Plus,
+  Shovel,
+  Sprout,
+  TreeDeciduous,
+  Search,
+} from "lucide-react";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { FormField } from "@/components/cropfort/form-field";
+import { BudgetYearPicker } from "@/components/cropfort/year-picker";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
-import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
+import { PageContainer, PageHeader } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
-import { TablePagination, TableToolbar } from "@/components/cropfort/data-table";
+import { TablePagination } from "@/components/cropfort/data-table";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,6 +64,7 @@ import { CROPFORT_ROUTES } from "@/config/navigation";
 import { canViewRateCard } from "@/lib/cropfortAccess";
 import { canCreateProgrammePlan, canApproveOperations } from "@/lib/cropfort/platform-access";
 import {
+  PLAN_MONTHS,
   PLAN_MONTH_LABELS,
   budgetYearLabel,
   type PlanMonth,
@@ -51,21 +75,33 @@ import {
   scheduleStatusOf,
   useCoreOpsPlanStore,
 } from "@/store/coreOpsPlanStore";
-import { monthsForPeriod, planPeriodLabel, planPeriodOf } from "@/lib/cropfort/plan-period";
-import { createRateCardImport, submitRateCardProposal } from "@/lib/api/rate-card-proposals";
+import {
+  PLAN_PERIOD_MONTH_NAMES,
+  PLAN_PERIOD_KINDS,
+  SIX_MONTH_COUNT,
+  monthsForPeriod,
+  monthsLabel,
+  periodFromMonths,
+  planPeriodLabel,
+  planPeriodOf,
+  sixMonthsFrom,
+  type PlanPeriodKind,
+} from "@/lib/cropfort/plan-period";
+import { useCreateProgrammePlan } from "@/lib/query/hooks/use-programme-plans";
+import { ActivityRateCardPanel } from "@/components/rate-cards/activity-rate-card-panel";
 import { useSpendBandStore } from "@/store/spendBandStore";
 import type { CoreOpsActivity, CoreOpsStep, MonthIntensity } from "@/types/core-ops";
 
-const STEPS: { id: CoreOpsStep; label: string }[] = [
-  { id: "setup", label: "Details" },
-  { id: "activities", label: "Activities" },
-  { id: "calendar", label: "Schedule" },
-  { id: "review", label: "Review" },
+const STEPS: { id: CoreOpsStep; label: string; hint: string }[] = [
+  { id: "setup", label: "Details", hint: "Name the plan and choose the farm area." },
+  { id: "activities", label: "Activities", hint: "Tick the activities this farm needs and enter how much of each." },
+  { id: "calendar", label: "Schedule", hint: "Mark the months each activity runs." },
+  { id: "review", label: "Review", hint: "Check the plan, then submit it to the asset owner." },
 ];
 
 const PAGE_SIZES = [25, 50, 100];
 
-type ActivityFilter = "all" | "included" | "excluded" | "no_rate";
+const IN_PLAN = "__plan";
 type ScheduleFilter = "all" | "scheduled" | "unscheduled";
 
 /** Brushes double as the legend for the month grid. */
@@ -86,58 +122,99 @@ function fmtEtb(n: number | null | undefined) {
   return `ETB ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-function intensityLetter(i: MonthIntensity): string {
-  return BRUSHES.find((b) => b.value === i)?.letter ?? "·";
-}
-
 function intensityClass(i: MonthIntensity): string {
   if (i === "peak") return "bg-primary text-primary-foreground";
-  if (i === "active") return "bg-primary/45 text-foreground";
+  if (i === "active") return "bg-primary text-primary-foreground";
   if (i === "light") return "bg-primary/15 text-foreground";
-  return "bg-transparent text-muted-foreground hover:bg-muted";
+  return "bg-muted/50 text-muted-foreground hover:bg-primary/20";
+}
+
+/** The box behind each plan step: a soft header with an icon, title and one line of help. */
+function StepPanel({
+  icon: Icon,
+  title,
+  description,
+  flush,
+  children,
+}: {
+  icon: typeof ListChecks;
+  title: string;
+  description?: string;
+  flush?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.section
+      key={title}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_32px_-18px_rgba(15,23,20,0.25)]"
+    >
+      <header className="relative flex items-center gap-3 border-b border-border/70 bg-gradient-to-br from-primary/[0.10] via-primary/[0.04] to-transparent px-4 py-4 sm:px-6">
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_20px_-10px_hsl(var(--primary))]"
+          aria-hidden
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold leading-tight tracking-tight">{title}</h2>
+          {description ? <p className="mt-0.5 text-sm text-muted-foreground">{description}</p> : null}
+        </div>
+      </header>
+      <div className={flush ? undefined : "p-4 sm:p-6"}>{children}</div>
+    </motion.section>
+  );
+}
+
+/** A simple picture for each activity category. */
+function categoryIcon(category: string) {
+  const c = category.toLowerCase();
+  if (c.includes("nursery")) return Sprout;
+  if (c.includes("young")) return Leaf;
+  if (c.includes("matur")) return TreeDeciduous;
+  if (c.includes("infill") || c.includes("plant")) return Shovel;
+  if (c.includes("harvest")) return Coffee;
+  return ListChecks;
 }
 
 function stepIndex(step: CoreOpsStep) {
   return STEPS.findIndex((s) => s.id === step);
 }
 
-export default function CoreOperationsView({ planId }: { planId?: string } = {}) {
+export default function CoreOperationsView({ planId, isNew = false }: { planId?: string; isNew?: boolean } = {}) {
   const { user, activeProgram } = useCropfortAuth();
+  const router = useRouter();
   const canView = canViewRateCard(user.role);
 
   const farms = useCoreOpsPlanStore((s) => s.farms);
-  const blocks = useCoreOpsPlanStore((s) => s.blocks);
   const eligible = useCoreOpsPlanStore((s) => s.eligible);
   const loading = useCoreOpsPlanStore((s) => s.loading);
   const error = useCoreOpsPlanStore((s) => s.error);
-  const plan = useCoreOpsPlanStore((s) => s.plan);
-  const step = useCoreOpsPlanStore((s) => s.step);
+  // A new plan has no saved plan yet: the editor shows only the Details step until it's created
+  const storedPlan = useCoreOpsPlanStore((s) => s.plan);
+  const storedStep = useCoreOpsPlanStore((s) => s.step);
+  const plan = isNew ? null : storedPlan;
+  const step: CoreOpsStep = isNew ? "setup" : storedStep;
   const focusActivityId = useCoreOpsPlanStore((s) => s.focusActivityId);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
   const syncActivitiesFromEligible = useCoreOpsPlanStore((s) => s.syncActivitiesFromEligible);
   const setFrequency = useCoreOpsPlanStore((s) => s.setFrequency);
 
-  // Expert Input from a plan line: saved and published as the activity's rate card (no approval step)
-  const [expertTarget, setExpertTarget] = useState<CoreOpsActivity | null>(null);
-  const [expertForm, setExpertForm] = useState({
-    kind: "labor" as "labor" | "materials" | "services",
-    rate: "",
-    manDays: "",
-    justification: "",
-    evidence: "",
-  });
-  const [expertSaving, setExpertSaving] = useState(false);
-  const openExpertInput = (act: CoreOpsActivity) => {
+  // Rate card for a plan line, opened under its row: source farm rates, rate scenarios, plan rate
+  const [rateCardFor, setRateCardFor] = useState<string | null>(null);
+  const kindOf = (act: CoreOpsActivity): "labor" | "materials" | "services" => {
     // The cost type comes from the registered activity and isn't changed here
     const own = (
       eligible.find((e) => e.activityId === act.activityId && e.farmEstateId === plan?.farmEstateId)?.costKind ||
       act.agreedRate?.costKind ||
       "labor"
     ).split("+")[0];
-    const kind = own === "materials" || own === "services" ? own : "labor";
-    setExpertForm({ kind, rate: "", manDays: "", justification: "", evidence: "" });
-    setExpertTarget(act);
+    return own === "materials" || own === "services" ? own : "labor";
   };
+  const openExpertInput = (act: CoreOpsActivity) => setRateCardFor(act.id);
+  const rateCardTarget = rateCardFor && plan ? plan.activities[rateCardFor] ?? null : null;
   const loadPlanById = useCoreOpsPlanStore((s) => s.loadPlanById);
   const ensurePlan = useCoreOpsPlanStore((s) => s.ensurePlan);
   const setStep = useCoreOpsPlanStore((s) => s.setStep);
@@ -153,20 +230,65 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
   const reviewIssues = useCoreOpsPlanStore((s) => s.reviewIssues);
   const saveDraft = useCoreOpsPlanStore((s) => s.saveDraft);
   const submitToAfps = useCoreOpsPlanStore((s) => s.submitToAfps);
-  const categories = useCoreOpsPlanStore((s) => s.categories);
   const blocksForPlan = useCoreOpsPlanStore((s) => s.blocksForPlan);
 
   const canEdit = canCreateProgrammePlan(user.role) && plan?.status !== "submitted";
   const canApprovePlan = canApproveOperations(user.role) && plan?.status === "submitted";
 
-  const [moreDetails, setMoreDetails] = useState(false);
+
+  // ——— New plan (Details step before the plan exists) ———
+  const createMut = useCreateProgrammePlan();
+  const canCreatePlan = canCreateProgrammePlan(user.role);
+  const [draft, setDraft] = useState({
+    name: "",
+    farmEstateId: "",
+    year: String(new Date().getFullYear()),
+    periodKind: "annual" as PlanPeriodKind,
+    months: sixMonthsFrom("oct") as PlanMonth[],
+    description: "",
+  });
+  const draftPeriod = draft.periodKind === "annual" ? "annual" : periodFromMonths(draft.months);
+  const draftMonthsOk = draft.periodKind === "annual" || draft.months.length === SIX_MONTH_COUNT;
+  const toggleDraftMonth = (m: PlanMonth) =>
+    setDraft((d) => {
+      if (d.months.includes(m)) return { ...d, months: d.months.filter((x) => x !== m) };
+      if (d.months.length >= SIX_MONTH_COUNT) return d;
+      return { ...d, months: [...d.months, m] };
+    });
+  useEffect(() => {
+    if (isNew && !draft.farmEstateId && farms.length === 1) setDraft((d) => ({ ...d, farmEstateId: farms[0].id }));
+  }, [isNew, farms, draft.farmEstateId]);
+  const onCreatePlan = async () => {
+    if (!canCreatePlan) {
+      toast.error("Only SPX can create Core Operations plans");
+      return;
+    }
+    const year = Number(draft.year);
+    try {
+      const row = await createMut.mutateAsync({
+        name: draft.name.trim(),
+        farmEstateId: draft.farmEstateId,
+        planYear: year,
+        planPeriod: draftPeriod,
+        planningCycleLabel:
+          draftPeriod === "annual" ? `${year} Core Operations` : `${year} Core Operations · ${planPeriodLabel(draftPeriod)}`,
+        budgetYearLabel: budgetYearLabel(year).label,
+        description: draft.description.trim(),
+        notes: "",
+      });
+      toast.success(`Created ${row.name}`);
+      router.replace(`${CROPFORT_ROUTES.programmePlans}/${row.id}?step=activities`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create plan");
+    }
+  };
   const [splitId, setSplitId] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [activityQuery, setActivityQuery] = useState("");
-  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
-  const [activityCategory, setActivityCategory] = useState("all");
+  /** Activities step shows one category at a time ("" = none chosen yet, IN_PLAN = what's in the plan). */
+  const [activityCategory, setActivityCategory] = useState("");
   const [activityPage, setActivityPage] = useState(1);
   const [activityPageSize, setActivityPageSize] = useState(25);
 
@@ -186,16 +308,21 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
     if (!periodMonths.includes(rangeTo)) setRangeTo(periodMonths[Math.min(2, periodMonths.length - 1)]);
   }, [periodMonths, rangeFrom, rangeTo]);
   const [rangeIntensity, setRangeIntensity] = useState<MonthIntensity>("active");
-  const [brush, setBrush] = useState<MonthIntensity>("active");
   const paintingRef = useRef(false);
+  const paintValueRef = useRef<MonthIntensity>("active");
 
   useEffect(() => {
     if (!canView) return;
     void (async () => {
       await loadContext();
-      if (planId) await loadPlanById(planId);
+      if (planId) {
+        await loadPlanById(planId);
+        // Arriving from "Create plan" carries ?step= so the editor continues where creation left off
+        const nextStep = new URLSearchParams(window.location.search).get("step");
+        if (nextStep && STEPS.some((s) => s.id === nextStep)) setStep(nextStep as CoreOpsStep);
+      }
     })();
-  }, [canView, activeProgram?.id, planId, loadContext, loadPlanById]);
+  }, [canView, activeProgram?.id, planId, loadContext, loadPlanById, setStep]);
 
   // Spend band: assigned automatically from the active program's band set
   const bandForEtb = useSpendBandStore((s) => s.bandForEtb);
@@ -217,25 +344,33 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
   const completion = planCompletion();
   const issues = reviewIssues();
   const blockingIssues = issues.filter((i) => i.severity === "block");
-  const cats = categories();
+  // What's still to do on each step, in plain words (null = step done)
+  const needQty = issues.filter((i) => i.id.startsWith("qty-")).length;
+  const needRate = issues.filter((i) => i.id.startsWith("rate-")).length;
+  const unscheduled = issues.filter((i) => i.id.startsWith("sched-")).length;
+  const stepTodo: Record<CoreOpsStep, string | null> = {
+    setup: !plan ? "Create the plan" : !plan.name?.trim() ? "Give the plan a name" : null,
+    activities:
+      completion.includedCount === 0
+        ? "Choose at least one activity"
+        : [needQty ? `${needQty} need a quantity` : "", needRate ? `${needRate} need a rate` : ""]
+            .filter(Boolean)
+            .join(" · ") || null,
+    calendar:
+      completion.includedCount === 0
+        ? "Choose activities first"
+        : unscheduled
+          ? `${unscheduled} without months`
+          : null,
+    review: null,
+  };
   const planBlocks = blocksForPlan();
   const band = bandForEtb(completion.budgetEtb);
-
-  const yearOptions = useMemo(() => {
-    const y = plan?.budgetYearGc ?? new Date().getFullYear();
-    return [y - 1, y, y + 1, y + 2];
-  }, [plan?.budgetYearGc]);
 
   const farmEligibleCount = useMemo(
     () => (plan ? eligible.filter((e) => e.farmEstateId === plan.farmEstateId).length : 0),
     [eligible, plan],
   );
-
-  const farmBlocks = useMemo(() => {
-    if (!plan) return blocks;
-    const forFarm = blocks.filter((b) => !b.farmAreaId || b.farmAreaId === plan.farmEstateId);
-    return forFarm.length > 0 ? forFarm : blocks;
-  }, [blocks, plan]);
 
   const allActivities = useMemo(() => {
     if (!plan) return [] as CoreOpsActivity[];
@@ -247,14 +382,25 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
   // ——— Activities step ———
   const filteredActivities = useMemo(() => {
     const q = activityQuery.trim().toLowerCase();
+    // Nothing is listed until a category is chosen, or the user searches
+    if (!activityCategory && !q) return [];
     return allActivities.filter((act) => {
-      if (activityCategory !== "all" && act.category !== activityCategory) return false;
-      if (activityFilter === "included" && !act.included) return false;
-      if (activityFilter === "excluded" && act.included) return false;
-      if (activityFilter === "no_rate" && act.agreedRate) return false;
+      if (activityCategory === IN_PLAN && !act.included) return false;
+      if (activityCategory && activityCategory !== IN_PLAN && act.category !== activityCategory) return false;
       return activityMatchesQuery(act, q);
     });
-  }, [allActivities, activityCategory, activityFilter, activityQuery]);
+  }, [allActivities, activityCategory, activityQuery]);
+
+  const activityCategories = useMemo(() => {
+    const rows = new Map<string, { category: string; total: number; inPlan: number }>();
+    for (const act of allActivities) {
+      const row = rows.get(act.category) ?? { category: act.category, total: 0, inPlan: 0 };
+      row.total += 1;
+      if (act.included) row.inPlan += 1;
+      rows.set(act.category, row);
+    }
+    return [...rows.values()];
+  }, [allActivities]);
 
   const activityPageCount = Math.max(1, Math.ceil(filteredActivities.length / activityPageSize));
   const pagedActivities = filteredActivities.slice(
@@ -264,9 +410,9 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
 
   useEffect(() => {
     setActivityPage(1);
-  }, [activityQuery, activityFilter, activityCategory, activityPageSize, plan?.id]);
+  }, [activityQuery, activityCategory, activityPageSize, plan?.id]);
 
-  const includableFiltered = filteredActivities.filter((a) => a.agreedRate);
+  const includableFiltered = filteredActivities;
   const includedFilteredCount = includableFiltered.filter((a) => a.included).length;
   const allFilteredIncluded = includableFiltered.length > 0 && includedFilteredCount === includableFiltered.length;
 
@@ -317,7 +463,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
     });
 
   const paint = (activityId: string, month: PlanMonth) => {
-    if (canEdit) setMonthIntensity(activityId, month, brush);
+    if (canEdit) setMonthIntensity(activityId, month, paintValueRef.current);
   };
 
   if (!canView) return <NotAuthorized title="Core Operations" />;
@@ -355,115 +501,234 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
   return (
     <PageContainer>
       <PageHeader
-        title={plan?.name || "Core Operations plan"}
-        description={
-          plan
-            ? [
-                plan.farmName,
-                budgetYearLabel(plan.budgetYearGc).label,
-                planPeriod !== "annual" ? planPeriodLabel(planPeriod) : null,
-              ]
+        title={isNew ? "New plan" : plan?.name || "Plan"}
+        meta={
+          plan && !isNew ? (
+            <span>
+              {[plan.farmName, budgetYearLabel(plan.budgetYearGc).ec, planPeriod !== "annual" ? planPeriodLabel(planPeriod) : null]
                 .filter(Boolean)
-                .join(" · ")
-            : undefined
+                .join(" · ")}
+            </span>
+          ) : undefined
         }
-        breadcrumbs={[
-          { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Core Operations plans", href: CROPFORT_ROUTES.programmePlans },
-          { label: plan?.name || "Plan" },
-        ]}
-        actions={plan ? <StatusBadge status={plan.status} /> : null}
+        actions={plan && !isNew ? <StatusBadge status={plan.status} /> : null}
       />
 
-      {/* Steps + running totals */}
-      <div className="rounded-xl border border-border bg-card">
-        <ol className="flex overflow-x-auto border-b border-border" aria-label="Plan steps">
-          {STEPS.map((s, index) => {
-            const active = step === s.id;
-            const done = index < currentIndex;
-            const locked = !plan && s.id !== "setup";
-            return (
-              <li key={s.id} className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  disabled={locked}
-                  aria-current={active ? "step" : undefined}
-                  onClick={() => setStep(s.id)}
-                  className={cn(
-                    "cf-focus flex w-full items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                    active
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
-                      active
-                        ? "bg-primary text-primary-foreground"
-                        : done
-                          ? "bg-primary/15 text-primary"
-                          : "bg-muted text-muted-foreground",
-                    )}
-                    aria-hidden
-                  >
-                    {done ? <Check className="h-3 w-3" /> : index + 1}
-                  </span>
-                  <span className="truncate">{s.label}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-        {plan ? (
-          <dl className="grid grid-cols-2 gap-3 px-4 py-3 text-sm sm:grid-cols-4">
-            <div>
-              <dt className="text-xs text-muted-foreground">Activities included</dt>
-              <dd className="font-medium tabular-nums">
-                {completion.includedCount} of {completion.eligibleCount}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Scheduled</dt>
-              <dd className="font-medium tabular-nums">
-                {completion.scheduledCount} of {completion.includedCount}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Budget</dt>
-              <dd className="font-medium tabular-nums">{fmtEtb(completion.budgetEtb)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Approval</dt>
-              <dd className="font-medium">
-                {SHOW_SPEND_BANDS ? `${band} · ` : ""}Asset owner
-              </dd>
-            </div>
-          </dl>
-        ) : null}
-      </div>
-
       {/* ——— DETAILS ——— */}
-      {step === "setup" ? (
-        <SectionCard title="Plan details">
+      {isNew ? (
+        <StepPanel icon={FileText} title="Plan details" description="Start with the basics — activities and months come next.">
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               label="Plan name"
               required
               render={(props) => (
-                <Input
-                  {...props}
-                  value={plan?.name || ""}
-                  onChange={(e) => updatePlanMeta({ name: e.target.value })}
-                  disabled={!canEdit || !plan}
-                  placeholder={plan ? "e.g. Annual Coffee Operations" : "Select a farm area first"}
-                />
+                <div className="relative">
+                  <FileText className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                  <Input
+                    {...props}
+                    autoFocus
+                    value={draft.name}
+                    onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                    placeholder="e.g. 2027 Annual Coffee Operations"
+                    className="h-11 rounded-xl border-border/80 bg-background pl-10 text-[15px] shadow-sm transition-colors focus-visible:border-primary sm:h-11 md:text-[15px]"
+                  />
+                </div>
               )}
             />
             <FormField
               label="Farm area"
               required
               render={({ id }) => (
+                <div className="relative">
+                  <MapPin className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                  <Select value={draft.farmEstateId} onValueChange={(v) => setDraft((d) => ({ ...d, farmEstateId: v }))}>
+                    <SelectTrigger id={id} className="h-11 rounded-xl border-border/80 bg-background pl-10 text-[15px] shadow-sm sm:h-11">
+                      <SelectValue placeholder={farms.length ? "Select farm area" : loading ? "Loading…" : "No farm areas yet"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {farms.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            />
+            <FormField
+              label="Budget year"
+              required
+              render={({ id }) => (
+                <BudgetYearPicker
+                  id={id}
+                  value={Number(draft.year)}
+                  onChange={(y) => setDraft((d) => ({ ...d, year: String(y) }))}
+                />
+              )}
+            />
+            <div className="space-y-1.5 sm:col-span-2">
+              <p className="text-sm font-medium">
+                Plan covers <span className="text-destructive">*</span>
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {PLAN_PERIOD_KINDS.map((p) => {
+                  const on = draft.periodKind === p.id;
+                  const KindIcon = p.id === "annual" ? CalendarDays : CalendarRange;
+                  return (
+                    <motion.button
+                      key={p.id}
+                      type="button"
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setDraft((d) => ({ ...d, periodKind: p.id }))}
+                      aria-pressed={on}
+                      className={cn(
+                        "cf-focus relative flex items-center gap-3 rounded-xl border p-3.5 text-left transition-colors",
+                        on
+                          ? "border-primary bg-primary/[0.06] shadow-[0_0_0_1px_hsl(var(--primary))]"
+                          : "border-border/80 bg-background shadow-sm hover:border-primary/40",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                          on ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary",
+                        )}
+                        aria-hidden
+                      >
+                        <KindIcon className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className={cn("block text-sm font-semibold", on && "text-primary")}>{p.label}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {p.id === "annual" ? "All 12 months of the budget year" : "Pick any 6 months"}
+                        </span>
+                      </span>
+                      {on ? (
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <Check className="h-3 w-3" aria-hidden />
+                        </span>
+                      ) : null}
+                    </motion.button>
+                  );
+                })}
+              </div>
+              {draft.periodKind === "six_months" ? (
+                <div className="mt-2 space-y-2 rounded-xl border border-border/80 bg-muted/20 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Pick any {SIX_MONTH_COUNT} months of the year ·{" "}
+                      <span className={cn("font-medium", draftMonthsOk ? "text-foreground" : "text-destructive")}>
+                        {draft.months.length} of {SIX_MONTH_COUNT} chosen
+                      </span>
+                    </p>
+                    <Select onValueChange={(v) => setDraft((d) => ({ ...d, months: sixMonthsFrom(v as PlanMonth) }))}>
+                      <SelectTrigger className="h-8 w-[12rem] text-xs" aria-label="Six months starting from">
+                        <SelectValue placeholder="Or start from…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PLAN_MONTHS.slice(0, PLAN_MONTHS.length - SIX_MONTH_COUNT + 1).map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {monthsLabel(sixMonthsFrom(m))}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+                    {PLAN_MONTHS.map((m) => {
+                      const on = draft.months.includes(m);
+                      const full = !on && draft.months.length >= SIX_MONTH_COUNT;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          aria-pressed={on}
+                          disabled={full}
+                          onClick={() => toggleDraftMonth(m)}
+                          className={cn(
+                            "cf-focus h-10 rounded-lg border text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                            on ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border/80 bg-background hover:border-primary/40",
+                          )}
+                        >
+                          {PLAN_PERIOD_MONTH_NAMES[m]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {draftMonthsOk ? (
+                    <p className="text-xs text-muted-foreground">Covers {monthsLabel(monthsForPeriod(draftPeriod))}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <div className="sm:col-span-2">
+              <FormField
+                label="Description"
+                optional
+                render={(props) => (
+                  <Textarea
+                    {...props}
+                    rows={2}
+                    placeholder="Scope or goals for this plan"
+                    className="rounded-xl border-border/80 bg-background text-[15px] shadow-sm"
+                    value={draft.description}
+                    onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                  />
+                )}
+              />
+            </div>
+          </div>
+          {!loading && farms.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              <Link href={CROPFORT_ROUTES.farmAreas} className="text-primary underline-offset-2 hover:underline">
+                Add a farm area
+              </Link>{" "}
+              first.
+            </p>
+          ) : null}
+          {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
+            <Button variant="ghost" asChild>
+              <Link href={CROPFORT_ROUTES.programmePlans}>Cancel</Link>
+            </Button>
+            <Button
+              size="lg"
+              className="min-w-[12rem]"
+              disabled={!canCreatePlan || createMut.isPending || !draft.name.trim() || !draft.farmEstateId || !draftMonthsOk}
+              onClick={() => void onCreatePlan()}
+            >
+              {createMut.isPending ? "Creating…" : "Create plan & continue"}
+              <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+            </Button>
+          </div>
+        </StepPanel>
+      ) : step === "setup" ? (
+        <StepPanel icon={FileText} title="Plan details" description="Name the plan and choose the farm area.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              label="Plan name"
+              required
+              render={(props) => (
+                <div className="relative">
+                  <FileText className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                  <Input
+                    {...props}
+                    value={plan?.name || ""}
+                    onChange={(e) => updatePlanMeta({ name: e.target.value })}
+                    disabled={!canEdit || !plan}
+                    placeholder={plan ? "e.g. Annual Coffee Operations" : "Select a farm area first"}
+                    className="h-11 rounded-xl border-border/80 bg-background pl-10 text-[15px] shadow-sm transition-colors focus-visible:border-primary sm:h-11 md:text-[15px]"
+                  />
+                </div>
+              )}
+            />
+            <FormField
+              label="Farm area"
+              required
+              render={({ id }) => (
+                <div className="relative">
+                <MapPin className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
                 <Select
                   value={plan?.farmEstateId || ""}
                   onValueChange={(farmId) => {
@@ -476,7 +741,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                   }}
                   disabled={!canEdit}
                 >
-                  <SelectTrigger id={id}>
+                  <SelectTrigger id={id} className="h-11 rounded-xl border-border/80 bg-background pl-10 text-[15px] shadow-sm sm:h-11">
                     <SelectValue placeholder="Select farm area" />
                   </SelectTrigger>
                   <SelectContent>
@@ -487,16 +752,17 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                     ))}
                   </SelectContent>
                 </Select>
+                </div>
               )}
             />
             <FormField
               label="Budget year"
               required
               render={({ id }) => (
-                <Select
-                  value={String(plan?.budgetYearGc || new Date().getFullYear())}
-                  onValueChange={(v) => {
-                    const y = Number(v);
+                <BudgetYearPicker
+                  id={id}
+                  value={plan?.budgetYearGc || new Date().getFullYear()}
+                  onChange={(y) => {
                     if (plan) {
                       updatePlanMeta({
                         budgetYearGc: y,
@@ -506,329 +772,318 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                     }
                   }}
                   disabled={!canEdit || !plan}
-                >
-                  <SelectTrigger id={id}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {yearOptions.map((y) => (
-                      <SelectItem key={y} value={String(y)}>
-                        {budgetYearLabel(y).label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               )}
             />
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">Workspace</p>
-              <p className="flex h-10 items-center text-sm text-muted-foreground">{activeProgram?.name || "—"}</p>
-            </div>
           </div>
 
-          {plan ? (
-            <p className="mt-4 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-              {loading
-                ? "Loading rates…"
-                : `${farmEligibleCount} activities with approved rates · ${farmBlocks.length} blocks on this farm`}
-            </p>
-          ) : null}
           {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
 
-          {plan ? (
-            <>
-              <button
-                type="button"
-                className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                onClick={() => setMoreDetails((v) => !v)}
-              >
-                {moreDetails ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                More details (optional)
-              </button>
-
-              {moreDetails ? (
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    label="Vendor / operator"
-                    render={(props) => (
-                      <Input
-                        {...props}
-                        value={plan.vendorLabel}
-                        disabled={!canEdit}
-                        placeholder="e.g. B-AGRO"
-                        onChange={(e) => updatePlanMeta({ vendorLabel: e.target.value })}
-                      />
-                    )}
-                  />
-                  <FormField
-                    label="Total farm area (ha)"
-                    render={(props) => (
-                      <Input
-                        {...props}
-                        type="number"
-                        inputMode="decimal"
-                        value={plan.totalHa || ""}
-                        disabled={!canEdit}
-                        onChange={(e) => updatePlanMeta({ totalHa: Number(e.target.value) || 0 })}
-                      />
-                    )}
-                  />
-                  <div className="sm:col-span-2">
-                    <p className="mb-2 text-sm font-medium">Blocks in this plan</p>
-                    {farmBlocks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No blocks on file — quantities stay at farm level.
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {farmBlocks.map((b) => {
-                          const selected = plan.applicableBlockIds.includes(b.id);
-                          return (
-                            <button
-                              key={b.id}
-                              type="button"
-                              disabled={!canEdit}
-                              aria-pressed={selected}
-                              onClick={() =>
-                                updatePlanMeta({
-                                  applicableBlockIds: selected
-                                    ? plan.applicableBlockIds.filter((id) => id !== b.id)
-                                    : [...plan.applicableBlockIds, b.id],
-                                })
-                              }
-                              className={cn(
-                                "cf-focus inline-flex h-8 items-center gap-1 rounded-full border px-3 font-mono text-xs transition-colors",
-                                selected
-                                  ? "border-primary bg-primary text-primary-foreground"
-                                  : "border-border bg-background hover:border-primary/40",
-                              )}
-                            >
-                              {selected ? <Check className="h-3 w-3" aria-hidden /> : null}
-                              {b.code}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <div className="sm:col-span-2">
-                    <FormField
-                      label="Notes"
-                      render={(props) => (
-                        <Textarea
-                          {...props}
-                          value={plan.notes}
-                          disabled={!canEdit}
-                          rows={2}
-                          onChange={(e) => updatePlanMeta({ notes: e.target.value })}
-                        />
-                      )}
-                    />
-                  </div>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-        </SectionCard>
+          {/* Continue sits inside this card on the Details step */}
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+            <p className="text-sm text-muted-foreground">
+              {stepTodo.setup ? stepTodo.setup : "Next: choose the activities for this plan."}
+            </p>
+            <Button disabled={!plan} onClick={() => goTo(1)} className="min-w-[12rem]">
+              Continue to Activities
+              <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+            </Button>
+          </div>
+        </StepPanel>
       ) : null}
 
       {/* ——— ACTIVITIES ——— */}
       {step === "activities" && plan ? (
-        <SectionCard
-          title="Activities"
-          description="Tick the activities in this plan and enter how much of each is needed."
-          flush
-        >
+        <StepPanel icon={ListChecks} title="Activities" description="Pick a category, then tap the activities this farm needs." flush>
           <div className="space-y-3 border-b border-border px-4 py-3 sm:px-5">
-            <TableToolbar
-              search={activityQuery}
-              onSearchChange={setActivityQuery}
-              searchPlaceholder="Search code, name or category"
-              activeFilterCount={(activityFilter !== "all" ? 1 : 0) + (activityCategory !== "all" ? 1 : 0)}
-              onClearFilters={() => {
-                setActivityFilter("all");
-                setActivityCategory("all");
-              }}
-              filters={
-                <>
-                  <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as ActivityFilter)}>
-                    <SelectTrigger className="h-8 w-[9.5rem]" aria-label="Show">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All activities</SelectItem>
-                      <SelectItem value="included">Included</SelectItem>
-                      <SelectItem value="excluded">Not included</SelectItem>
-                      <SelectItem value="no_rate">Missing rate</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {cats.length > 1 ? (
-                    <Select value={activityCategory} onValueChange={setActivityCategory}>
-                      <SelectTrigger className="h-8 w-[11rem]" aria-label="Category">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All categories</SelectItem>
-                        {cats.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-                </>
-              }
-            />
+            <div>
+              <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-3" role="tablist" aria-label="Activity categories">
+                {[
+                  ...activityCategories.map((c) => ({ id: c.category, label: c.category, total: c.total, inPlan: c.inPlan })),
+                  { id: IN_PLAN, label: "In this plan", total: completion.includedCount, inPlan: completion.includedCount },
+                ].map((chip, i) => {
+                  const active = activityCategory === chip.id;
+                  const isPlan = chip.id === IN_PLAN;
+                  const Icon = isPlan ? ListChecks : categoryIcon(chip.label);
+                  const count = isPlan ? chip.total : chip.inPlan;
+                  return (
+                    <motion.button
+                      key={chip.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setActivityCategory(active ? "" : chip.id)}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      className={cn(
+                        "cf-focus relative flex items-center gap-3 rounded-xl border p-3 text-left transition-colors",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground shadow-md"
+                          : "border-border bg-card hover:border-primary/40 hover:shadow-sm",
+                        isPlan && !active && "border-dashed",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                          active ? "bg-primary-foreground/20" : "bg-primary/10 text-primary",
+                        )}
+                        aria-hidden
+                      >
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold leading-tight">{chip.label}</span>
+                        <span className={cn("mt-0.5 block text-xs tabular-nums", active ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                          {isPlan
+                            ? `${chip.total} chosen`
+                            : `${chip.total} ${chip.total === 1 ? "activity" : "activities"}`}
+                        </span>
+                      </span>
+                      {count > 0 && !isPlan ? (
+                        <span
+                          className={cn(
+                            "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
+                            active ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground",
+                          )}
+                          title={`${count} chosen`}
+                        >
+                          {count}
+                        </span>
+                      ) : null}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input
+                  value={activityQuery}
+                  onChange={(e) => setActivityQuery(e.target.value)}
+                  placeholder={
+                    activityCategory && activityCategory !== IN_PLAN
+                      ? `Search ${activityCategory}`
+                      : `Or search all ${allActivities.length} activities`
+                  }
+                  className="h-10 pl-9"
+                  aria-label="Search activities"
+                />
+              </div>
+            </div>
           </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10 px-3">
-                  <Checkbox
-                    checked={allFilteredIncluded ? true : includedFilteredCount > 0 ? "indeterminate" : false}
-                    disabled={!canEdit || includableFiltered.length === 0}
-                    aria-label="Include all listed activities"
-                    title={allFilteredIncluded ? "Remove all listed activities" : "Include all listed activities"}
-                    onCheckedChange={() => {
+          <motion.div
+            key={activityCategory || "none"}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          >
+          {pagedActivities.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
+                <ListChecks className="h-5 w-5" />
+              </span>
+              <p className="text-sm font-medium">
+                {allActivities.length === 0
+                  ? "No activities in the activity list yet"
+                  : !activityCategory && !activityQuery.trim()
+                    ? "Choose a category above"
+                    : activityCategory === IN_PLAN && !activityQuery.trim()
+                      ? "Nothing in this plan yet"
+                      : "No activities match"}
+              </p>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                {allActivities.length === 0
+                  ? "Add them under Activities first."
+                  : !activityCategory && !activityQuery.trim()
+                    ? "Its activities appear here — tap one to add it to the plan."
+                    : activityCategory === IN_PLAN && !activityQuery.trim()
+                      ? "Pick a category and tap the activities this farm needs."
+                      : "Try another word or category."}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-2 px-4 pt-3 text-xs text-muted-foreground sm:px-5">
+                <span>
+                  {includedFilteredCount} of {includableFiltered.length} chosen
+                </span>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="font-medium text-primary hover:underline"
+                    onClick={() => {
                       const n = setActivitiesIncluded(
                         includableFiltered.map((a) => a.id),
                         !allFilteredIncluded,
                       );
-                      if (n) toast.success(`${allFilteredIncluded ? "Removed" : "Included"} ${n} activities`);
+                      if (n) toast.success(`${allFilteredIncluded ? "Removed" : "Added"} ${n} activities`);
                     }}
-                  />
-                </TableHead>
-                <TableHead className="min-w-[14rem]">Activity</TableHead>
-                <TableHead className="w-28">Quantity</TableHead>
-                <TableHead className="hidden w-32 text-right sm:table-cell">Rate</TableHead>
-                <TableHead className="w-32 text-right">Cost</TableHead>
-                <TableHead className="w-20">
-                  <span className="sr-only">Split</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pagedActivities.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
-                    {allActivities.length === 0
-                      ? "No activities with approved rates on this farm yet."
-                      : "No activities match these filters."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                pagedActivities.map((act) => {
+                  >
+                    {allFilteredIncluded ? "Remove all" : "Add all"}
+                  </button>
+                ) : null}
+              </div>
+              <ul className="cf-fit-list space-y-2 px-3 py-3 sm:px-4">
+                {pagedActivities.map((act, i) => {
                   const hasRate = Boolean(act.agreedRate);
                   const splitting = splitId === act.id;
+                  const qty = act.plannedQty || 0;
+                  const step = qty >= 100 ? 10 : 1;
+                  const setQty = (next: number) => {
+                    const value = Math.max(0, Math.round(next * 100) / 100);
+                    // Entering a quantity puts the activity in the plan
+                    if (value > 0 && !act.included) setActivityIncluded(act.id, true);
+                    setPlannedQty(act.id, value);
+                  };
                   return (
-                    <Fragment key={act.id}>
-                      <TableRow
-                        id={`act-${act.id}`}
-                        data-state={act.included ? "selected" : undefined}
-                        className={cn(focusActivityId === act.id && "bg-muted/40")}
-                      >
-                        <TableCell className="px-3">
-                          <Checkbox
-                            checked={act.included}
-                            disabled={!canEdit || !hasRate}
-                            aria-label={`Include ${act.activityName}`}
-                            onCheckedChange={(v) => setActivityIncluded(act.id, Boolean(v))}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <p className={cn("truncate text-sm font-medium", !act.included && "text-muted-foreground")}>
-                            {act.activityName}
-                          </p>
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            <span className="font-mono">{act.activityCode}</span> · {act.category}
-                            {act.scope === "off_block" ? " · Nursery" : ""}
-                          </p>
-                          {!hasRate ? (
-                            <p className="mt-0.5 text-[11px] text-destructive">
-                              No rate yet —{" "}
-                              {canEdit ? (
-                                <button type="button" className="font-medium underline" onClick={() => openExpertInput(act)}>
-                                  enter expert input
-                                </button>
-                              ) : (
-                                <Link className="underline" href={CROPFORT_ROUTES.rateCardProposals}>
-                                  see Rate cards
-                                </Link>
-                              )}
-                            </p>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            <Input
+                    <motion.li
+                      key={act.id}
+                      id={`act-${act.id}`}
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.22, delay: Math.min(i, 10) * 0.025, ease: [0.16, 1, 0.3, 1] }}
+                      className={cn(
+                        "rounded-xl border bg-card transition-colors",
+                        act.included ? "border-primary/50 bg-primary/[0.04] shadow-sm" : "border-border hover:border-primary/30",
+                        focusActivityId === act.id && "ring-2 ring-primary/40",
+                      )}
+                    >
+                      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+                        <button
+                          type="button"
+                          disabled={!canEdit}
+                          aria-pressed={act.included}
+                          aria-label={`${act.included ? "Remove" : "Add"} ${act.activityName}`}
+                          onClick={() => setActivityIncluded(act.id, !act.included)}
+                          className="cf-focus flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left disabled:cursor-default"
+                        >
+                          <motion.span
+                            whileTap={{ scale: 0.85 }}
+                            className={cn(
+                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                              act.included
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-background text-transparent",
+                            )}
+                            aria-hidden
+                          >
+                            <Check className="h-4 w-4" />
+                          </motion.span>
+                          <span className="min-w-0">
+                            <span className={cn("block truncate text-sm font-semibold", !act.included && "text-foreground/80")}>
+                              {act.activityName}
+                            </span>
+                            <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{act.activityCode}</span>
+                              {act.scope === "off_block" ? <span>Nursery</span> : null}
+                            </span>
+                          </span>
+                        </button>
+
+                        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                          {hasRate ? (
+                            <button
+                              type="button"
+                              disabled={!canEdit}
+                              onClick={() => openExpertInput(act)}
+                              title={canEdit ? "Open the rate card" : undefined}
+                              className="cf-focus rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium tabular-nums text-primary transition-colors hover:bg-primary/15 disabled:cursor-default"
+                            >
+                              {fmtEtb(act.agreedRate!.unitRateEtb)}/{act.uom}
+                            </button>
+                          ) : canEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => openExpertInput(act)}
+                              className="cf-focus rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-500/25 dark:text-amber-400"
+                            >
+                              Set rate
+                            </button>
+                          ) : (
+                            <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                              No rate
+                            </span>
+                          )}
+
+                          <div className="flex items-center rounded-lg border border-border bg-background">
+                            <button
+                              type="button"
+                              disabled={!canEdit || qty <= 0}
+                              onClick={() => setQty(qty - step)}
+                              className="cf-focus flex h-9 w-8 items-center justify-center rounded-l-lg text-muted-foreground hover:bg-muted disabled:opacity-40"
+                              aria-label={`Less ${act.activityName}`}
+                            >
+                              <Minus className="h-3.5 w-3.5" />
+                            </button>
+                            <input
                               type="number"
                               inputMode="decimal"
                               min={0}
-                              className="h-8 w-20"
                               value={act.plannedQty || ""}
-                              disabled={!canEdit || !hasRate}
+                              placeholder="0"
+                              disabled={!canEdit}
                               aria-label={`Quantity for ${act.activityName}`}
-                              onChange={(e) => {
-                                const qty = Number(e.target.value) || 0;
-                                // Entering a quantity puts the activity in the plan
-                                if (qty > 0 && !act.included) setActivityIncluded(act.id, true);
-                                setPlannedQty(act.id, qty);
-                              }}
+                              onChange={(e) => setQty(Number(e.target.value) || 0)}
+                              className="h-9 w-16 border-x border-border bg-transparent text-center text-sm tabular-nums outline-none [appearance:textfield] focus:bg-primary/5 [&::-webkit-inner-spin-button]:appearance-none"
                             />
-                            <span className="text-xs text-muted-foreground">{act.uom}</span>
-                            <span className="text-xs text-muted-foreground">×</span>
-                            <Input
+                            <button
+                              type="button"
+                              disabled={!canEdit}
+                              onClick={() => setQty(qty + step)}
+                              className="cf-focus flex h-9 w-8 items-center justify-center rounded-r-lg text-muted-foreground hover:bg-muted disabled:opacity-40"
+                              aria-label={`More ${act.activityName}`}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <span className="text-xs text-muted-foreground">{act.uom}</span>
+
+                          <label className="flex items-center gap-1 text-xs text-muted-foreground" title="Times per year">
+                            ×
+                            <input
                               type="number"
                               inputMode="decimal"
                               min={1}
                               step="any"
-                              className="h-8 w-14"
                               value={act.frequency ?? 1}
-                              disabled={!canEdit || !hasRate}
-                              title="Times per year"
+                              disabled={!canEdit}
                               aria-label={`Times per year for ${act.activityName}`}
                               onChange={(e) => setFrequency(act.id, Number(e.target.value) || 1)}
+                              className="h-9 w-12 rounded-lg border border-border bg-background text-center text-sm tabular-nums outline-none [appearance:textfield] focus:border-primary [&::-webkit-inner-spin-button]:appearance-none"
                             />
-                            <span className="text-xs text-muted-foreground">/yr</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
-                          {hasRate ? fmtEtb(act.agreedRate!.unitRateEtb) : "—"}
-                          {hasRate && canEdit ? (
-                            <button
-                              type="button"
-                              className="block w-full text-right text-[11px] text-primary underline-offset-2 hover:underline"
-                              onClick={() => openExpertInput(act)}
-                            >
-                              Expert input
-                            </button>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="text-right text-sm font-medium tabular-nums">
-                          {act.included ? fmtEtb(act.plannedCost) : "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {act.included && canEdit && act.scope === "block" && planBlocks.length > 1 ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2 text-xs"
-                              title="Split the quantity across blocks"
-                              onClick={() => setSplitId(splitting ? null : act.id)}
-                            >
-                              {splitting ? "Done" : "By block"}
-                            </Button>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                      {splitting ? (
-                        <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={6} className="bg-muted/20 px-4 py-3">
-                            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                            /yr
+                          </label>
+
+                          <span
+                            className={cn(
+                              "ml-auto min-w-[6.5rem] text-right text-sm font-semibold tabular-nums sm:ml-2",
+                              act.included ? "text-foreground" : "text-muted-foreground/60",
+                            )}
+                          >
+                            {act.included ? fmtEtb(act.plannedCost) : "—"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {act.included && canEdit && act.scope === "block" && planBlocks.length > 1 ? (
+                        <div className="border-t border-border/70 px-3 py-2">
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-primary hover:underline"
+                            onClick={() => setSplitId(splitting ? null : act.id)}
+                          >
+                            {splitting ? "Done splitting" : "Split by block"}
+                          </button>
+                          {splitting ? (
+                            <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
                               {planBlocks.map((b) => {
-                                const alloc = act.blockAllocations.find((a) => a.blockId === b.id);
+                                const alloc = act.blockAllocations.find((x) => x.blockId === b.id);
                                 return (
                                   <FormField
                                     key={b.id}
@@ -840,12 +1095,9 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                                         className="h-8"
                                         value={alloc?.qty ?? ""}
                                         onChange={(e) => {
-                                          const qty = Number(e.target.value) || 0;
-                                          const others = act.blockAllocations.filter((a) => a.blockId !== b.id);
-                                          setBlockAllocations(act.id, [
-                                            ...others,
-                                            { blockId: b.id, blockCode: b.code, qty },
-                                          ]);
+                                          const value = Number(e.target.value) || 0;
+                                          const others = act.blockAllocations.filter((x) => x.blockId !== b.id);
+                                          setBlockAllocations(act.id, [...others, { blockId: b.id, blockCode: b.code, qty: value }]);
                                         }}
                                       />
                                     )}
@@ -853,100 +1105,45 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                                 );
                               })}
                             </div>
-                          </TableCell>
-                        </TableRow>
+                          ) : null}
+                        </div>
                       ) : null}
-                    </Fragment>
+                    </motion.li>
                   );
-                })
-              )}
-            </TableBody>
-          </Table>
+                })}
+              </ul>
+            </>
+          )}
 
           <div className="px-3 sm:px-4">
-            <TablePagination
-              page={activityPage}
-              pageCount={activityPageCount}
-              total={filteredActivities.length}
-              pageSize={activityPageSize}
-              onPageChange={setActivityPage}
-              pageSizeOptions={PAGE_SIZES}
-              onPageSizeChange={setActivityPageSize}
-            />
+            {filteredActivities.length > activityPageSize ? (
+              <TablePagination
+                page={activityPage}
+                pageCount={activityPageCount}
+                total={filteredActivities.length}
+                pageSize={activityPageSize}
+                onPageChange={setActivityPage}
+                pageSizeOptions={PAGE_SIZES}
+                onPageSizeChange={setActivityPageSize}
+              />
+            ) : null}
           </div>
-        </SectionCard>
+          </motion.div>
+        </StepPanel>
       ) : null}
 
       {/* ——— SCHEDULE ——— */}
       {step === "calendar" && plan ? (
-        <SectionCard
-          title="Schedule"
-          description="Mark the months each activity runs. Pick a brush, then click or drag across months."
-          flush
-        >
-          <div className="space-y-3 border-b border-border px-4 py-3 sm:px-5">
-            {canEdit ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Brush">
-                  {BRUSHES.map((b) => (
-                    <button
-                      key={b.value}
-                      type="button"
-                      aria-pressed={brush === b.value}
-                      onClick={() => setBrush(b.value)}
-                      className={cn(
-                        "cf-focus inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
-                        brush === b.value ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary/40",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "inline-flex h-5 w-5 items-center justify-center rounded text-[10px]",
-                          b.value === "none" ? "border border-dashed border-border" : intensityClass(b.value),
-                        )}
-                        aria-hidden
-                      >
-                        {b.letter}
-                      </span>
-                      {b.label}
-                    </button>
-                  ))}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 sm:ml-auto"
-                  disabled={scheduleSelectedIds.size === 0}
-                  title={scheduleSelectedIds.size === 0 ? "Tick rows first" : undefined}
-                  onClick={() => setRangeOpen(true)}
-                >
-                  Set months{scheduleSelectedIds.size ? ` for ${scheduleSelectedIds.size}` : ""}…
-                </Button>
-              </div>
-            ) : null}
+        <StepPanel icon={CalendarDays} title="Schedule" description="Tap the months each activity runs." flush>
+          {canEdit && scheduleSelectedIds.size > 0 ? (
+            <div className="flex items-center justify-end border-b border-border px-4 py-2 sm:px-5">
+              <Button size="sm" variant="outline" className="h-8" onClick={() => setRangeOpen(true)}>
+                Set months for {scheduleSelectedIds.size}…
+              </Button>
+            </div>
+          ) : null}
 
-            <TableToolbar
-              search={scheduleQuery}
-              onSearchChange={setScheduleQuery}
-              searchPlaceholder="Search included activities"
-              activeFilterCount={scheduleFilter !== "all" ? 1 : 0}
-              onClearFilters={() => setScheduleFilter("all")}
-              filters={
-                <Select value={scheduleFilter} onValueChange={(v) => setScheduleFilter(v as ScheduleFilter)}>
-                  <SelectTrigger className="h-8 w-[9.5rem]" aria-label="Show">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All included</SelectItem>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                    <SelectItem value="unscheduled">Not scheduled</SelectItem>
-                  </SelectContent>
-                </Select>
-              }
-            />
-          </div>
-
-          <Table>
+          <Table containerClassName="cf-fit-table">
             <TableHeader>
               <TableRow>
                 <TableHead className="sticky left-0 z-[1] w-10 bg-card px-3">
@@ -985,8 +1182,8 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={periodMonths.length + 2} className="py-12 text-center text-sm text-muted-foreground">
                     {includedActivities.length === 0
-                      ? "No activities included yet — tick some on the Activities step."
-                      : "No activities match these filters."}
+                      ? "Nothing to schedule yet — choose activities first."
+                      : "No activities match."}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -1017,7 +1214,7 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                           <button
                             type="button"
                             disabled={!canEdit}
-                            title={`${PLAN_MONTH_LABELS[m]} · ${act.intensities[m]}`}
+                            title={PLAN_MONTH_LABELS[m]}
                             aria-label={`${act.activityName} ${PLAN_MONTH_LABELS[m]} ${act.intensities[m]}`}
                             className={cn(
                               "inline-flex h-8 w-8 select-none items-center justify-center rounded text-[10px] font-medium touch-manipulation",
@@ -1027,6 +1224,8 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                             onMouseDown={(e) => {
                               if (!canEdit || e.button !== 0) return;
                               e.preventDefault();
+                              // Tap turns a month on or off; dragging carries the same choice across months
+                              paintValueRef.current = act.intensities[m] === "none" ? "active" : "none";
                               paintingRef.current = true;
                               paint(act.id, m);
                             }}
@@ -1036,11 +1235,12 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                             onTouchStart={(e) => {
                               if (!canEdit) return;
                               e.preventDefault();
+                              paintValueRef.current = act.intensities[m] === "none" ? "active" : "none";
                               paintingRef.current = true;
                               paint(act.id, m);
                             }}
                           >
-                            {intensityLetter(act.intensities[m])}
+                            {act.intensities[m] !== "none" ? <Check className="h-3.5 w-3.5" aria-hidden /> : null}
                           </button>
                         </TableCell>
                       ))}
@@ -1062,12 +1262,12 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
               onPageSizeChange={setSchedulePageSize}
             />
           </div>
-        </SectionCard>
+        </StepPanel>
       ) : null}
 
       {/* ——— REVIEW ——— */}
       {step === "review" && plan ? (
-        <SectionCard title="Review">
+        <StepPanel icon={ClipboardCheck} title="Review" description="Check the total and fix anything flagged, then submit.">
           {canApprovePlan ? (
             <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
               Waiting for your decision —{" "}
@@ -1076,6 +1276,13 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
               </Link>
             </div>
           ) : null}
+
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-muted/40 px-4 py-3">
+            <span className="text-sm text-muted-foreground">
+              {completion.includedCount} {completion.includedCount === 1 ? "activity" : "activities"}
+            </span>
+            <span className="text-xl font-semibold tabular-nums">{fmtEtb(completion.budgetEtb)}</span>
+          </div>
 
           {issues.length === 0 ? (
             <div className="flex items-center gap-2 text-sm">
@@ -1101,6 +1308,11 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
                     size="sm"
                     variant="outline"
                     onClick={() => {
+                      // Open the step filtered to the rows with this problem
+                      if (issue.id.startsWith("qty-") || issue.id.startsWith("rate-")) {
+                        setActivityQuery("");
+                        setActivityCategory(IN_PLAN);
+                      }
                       if (issue.activityId) setFocusActivityId(issue.activityId);
                       setStep(issue.step);
                     }}
@@ -1118,36 +1330,53 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
               {SHOW_SPEND_BANDS && plan.promotions[0].note ? ` · ${plan.promotions[0].note}` : ""}
             </p>
           ) : null}
-        </SectionCard>
+        </StepPanel>
       ) : null}
 
       {/* Action bar */}
-      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-border bg-background/95 px-1 py-3 backdrop-blur">
-        {canEdit ? (
-          <Button size="sm" variant="outline" disabled={!plan} onClick={() => void onSave()}>
-            Save draft
-          </Button>
-        ) : null}
-        {currentIndex > 0 ? (
-          <Button size="sm" variant="ghost" onClick={() => goTo(currentIndex - 1)}>
-            Back
-          </Button>
-        ) : null}
-        <div className="sm:ml-auto" />
-        {step !== "review" ? (
-          <Button size="sm" disabled={!plan} onClick={() => goTo(currentIndex + 1)}>
-            Continue
-          </Button>
-        ) : canEdit ? (
-          <Button
-            size="sm"
-            disabled={!plan || blockingIssues.length > 0 || completion.budgetEtb <= 0}
-            title={blockingIssues.length ? "Fix the issues above first" : undefined}
-            onClick={() => setSubmitOpen(true)}
-          >
-            Submit for approval
-          </Button>
-        ) : null}
+      <div className={cn("sticky bottom-3 z-10", (isNew || step === "setup") && "hidden")}>
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card/95 px-3 py-2.5 shadow-[0_8px_30px_-12px_rgba(15,23,20,0.35)] backdrop-blur sm:px-4">
+          {currentIndex > 0 ? (
+            <Button variant="ghost" onClick={() => goTo(currentIndex - 1)}>
+              <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
+              Back
+            </Button>
+          ) : null}
+          {canEdit && step !== "setup" ? (
+            <Button variant="outline" disabled={!plan} onClick={() => void onSave()}>
+              Save draft
+            </Button>
+          ) : null}
+          {plan ? (
+            <div className="hidden min-w-0 flex-col px-2 leading-tight md:flex">
+              <span className="text-[11px] text-muted-foreground">Plan total</span>
+              <span className="text-sm font-semibold tabular-nums">{fmtEtb(completion.budgetEtb)}</span>
+            </div>
+          ) : null}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {step !== "review" ? (
+              <>
+                {plan && stepTodo[step] && step !== "setup" ? (
+                  <span className="hidden text-xs text-amber-700 sm:inline dark:text-amber-400">{stepTodo[step]}</span>
+                ) : null}
+                <Button disabled={!plan} onClick={() => goTo(currentIndex + 1)} className="min-w-[10rem]">
+                  Continue to {STEPS[currentIndex + 1]?.label}
+                  <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+                </Button>
+              </>
+            ) : canEdit ? (
+              <Button
+                disabled={!plan || blockingIssues.length > 0 || completion.budgetEtb <= 0}
+                title={blockingIssues.length ? "Fix the issues above first" : undefined}
+                onClick={() => setSubmitOpen(true)}
+                className="min-w-[10rem]"
+              >
+                <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden />
+                Submit for approval
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
@@ -1228,127 +1457,27 @@ export default function CoreOperationsView({ planId }: { planId?: string } = {})
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(expertTarget)} onOpenChange={(open) => !open && setExpertTarget(null)}>
-        <DialogContent className="sm:max-w-lg">
+
+      <Dialog open={Boolean(rateCardTarget && plan)} onOpenChange={(open) => !open && setRateCardFor(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Expert input</DialogTitle>
+            <DialogTitle>Rate card</DialogTitle>
           </DialogHeader>
-          {expertTarget ? (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                <span className="font-mono">{expertTarget.activityCode}</span> · {expertTarget.activityName} · per{" "}
-                {expertTarget.uom}
-                {expertTarget.agreedRate ? ` · current rate ${fmtEtb(expertTarget.agreedRate.unitRateEtb)}` : " · no benchmark rate"}
-              </p>
-              <p className="text-sm">
-                Cost type:{" "}
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">
-                  {expertForm.kind === "labor" ? "Labour" : expertForm.kind === "materials" ? "Materials" : "Services"}
-                </span>
-                <span className="ml-1.5 text-xs text-muted-foreground">from the registered activity</span>
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <FormField
-                  label={`Cost per ${expertTarget.uom} (ETB)`}
-                  required
-                  render={(p) => (
-                    <Input
-                      {...p}
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={expertForm.rate}
-                      onChange={(e) => setExpertForm((f) => ({ ...f, rate: e.target.value }))}
-                    />
-                  )}
-                />
-                <FormField
-                  label={`Man-days per ${expertTarget.uom}`}
-                  optional={expertForm.kind !== "labor"}
-                  render={(p) => (
-                    <Input
-                      {...p}
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={expertForm.manDays}
-                      onChange={(e) => setExpertForm((f) => ({ ...f, manDays: e.target.value }))}
-                    />
-                  )}
-                />
-              </div>
-              <FormField
-                label="Justification"
-                required
-                render={(p) => (
-                  <Textarea
-                    {...p}
-                    rows={2}
-                    value={expertForm.justification}
-                    placeholder={expertTarget.agreedRate ? "Why this farm needs a different rate" : "No industry benchmark available"}
-                    onChange={(e) => setExpertForm((f) => ({ ...f, justification: e.target.value }))}
-                  />
-                )}
-              />
-              <FormField
-                label="Source / evidence"
-                optional
-                render={(p) => (
-                  <Input
-                    {...p}
-                    value={expertForm.evidence}
-                    onChange={(e) => setExpertForm((f) => ({ ...f, evidence: e.target.value }))}
-                  />
-                )}
-              />
-              <p className="text-xs text-muted-foreground">
-                Saved as this activity&apos;s {expertForm.kind === "labor" ? "labour" : expertForm.kind} rate card and
-                published straight away.
-              </p>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExpertTarget(null)} disabled={expertSaving}>
-              Cancel
-            </Button>
-            <Button
-              disabled={
-                expertSaving ||
-                !plan ||
-                expertForm.rate.trim() === "" ||
-                Number(expertForm.rate) < 0 ||
-                !expertForm.justification.trim() ||
-                (expertForm.kind === "labor" && expertForm.manDays.trim() === "")
-              }
-              onClick={async () => {
-                if (!expertTarget || !plan) return;
-                setExpertSaving(true);
-                try {
-                  const card = await createRateCardImport(plan.farmEstateId, {
-                    activityId: expertTarget.activityId,
-                    kind: expertForm.kind,
-                    proposedRate: Number(expertForm.rate),
-                    norm: expertForm.manDays.trim() === "" ? null : Number(expertForm.manDays),
-                    budgetYear: plan.budgetYearGc,
-                    sourceBasis: "Expert input · Core Operations plan",
-                    sourceEvidence: expertForm.evidence.trim(),
-                    justificationNote: expertForm.justification.trim(),
-                  });
-                  await submitRateCardProposal(card.id);
-                  await loadContext();
-                  syncActivitiesFromEligible();
-                  toast.success(`Expert input saved · ${expertTarget.activityName} now uses it`);
-                  setExpertTarget(null);
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Could not save expert input");
-                } finally {
-                  setExpertSaving(false);
-                }
+          {rateCardTarget && plan ? (
+            <ActivityRateCardPanel
+              key={rateCardTarget.id}
+              farmEstateId={plan.farmEstateId}
+              budgetYear={plan.budgetYearGc}
+              activity={rateCardTarget}
+              kind={kindOf(rateCardTarget)}
+              currentRate={rateCardTarget.agreedRate?.unitRateEtb ?? null}
+              onSaved={async () => {
+                await loadContext();
+                syncActivitiesFromEligible();
               }}
-            >
-              {expertSaving ? "Saving…" : "Save expert input"}
-            </Button>
-          </DialogFooter>
+              onClose={() => setRateCardFor(null)}
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
 

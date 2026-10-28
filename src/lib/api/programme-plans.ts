@@ -110,7 +110,8 @@ export function createProgrammePlan(input: {
   name: string;
   farmEstateId: string;
   planYear: number;
-  planPeriod?: "annual" | "first_half" | "second_half";
+  /** "annual" or "months:<m>,…" — see lib/cropfort/plan-period. */
+  planPeriod?: string;
   planningCycleLabel?: string;
   budgetYearLabel?: string;
   description?: string;

@@ -171,7 +171,7 @@ export default function WeeklyPlansView() {
         title="Weekly plans"
         breadcrumbs={[
           { label: "Home", href: CROPFORT_ROUTES.dashboard },
-          { label: "Execution", href: CROPFORT_ROUTES.fieldTickets },
+          { label: "Execution", href: CROPFORT_ROUTES.monthlyWorkOrders },
           { label: "Weekly plans" },
         ]}
         meta={

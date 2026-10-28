@@ -9,7 +9,7 @@ const Table = React.forwardRef<
   <div className={cn("cf-table-scroll relative w-full overflow-auto", containerClassName)}>
     <table
       ref={ref}
-      className={cn("cf-table w-full min-w-[640px] caption-bottom text-[13px]", className)}
+      className={cn("cf-table w-full min-w-[640px] caption-bottom text-sm", className)}
       {...props}
     />
   </div>
@@ -57,7 +57,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
     <th
       ref={ref}
       className={cn(
-        "h-10 whitespace-nowrap px-3 text-left align-middle text-xs font-medium text-muted-foreground sm:px-4 [&:has([role=checkbox])]:pr-0",
+        "h-11 whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground sm:px-5 [&:has([role=checkbox])]:pr-0",
         className,
       )}
       {...props}
@@ -71,7 +71,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
     <td
       ref={ref}
       className={cn(
-        "px-3 align-middle text-foreground sm:px-4 [&:has([role=checkbox])]:pr-0",
+        "px-4 align-middle text-foreground sm:px-5 [&:has([role=checkbox])]:pr-0",
         "h-[var(--cf-row-h)] py-0",
         className,
       )}

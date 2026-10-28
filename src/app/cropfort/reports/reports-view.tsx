@@ -44,7 +44,7 @@ import {
 } from "@/lib/query/hooks/use-ops-reports";
 import { PLAN_MONTH_NAMES } from "@/lib/annual-plan-budget";
 import { PLAN_MONTHS } from "@/lib/cropfort/ethiopian-year";
-import { planPeriodOf } from "@/lib/cropfort/plan-period";
+import { monthsForPeriod, monthsLabel, planPeriodOf } from "@/lib/cropfort/plan-period";
 import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
 import type { OpsReport, ReportCadence } from "@/store/reportsStore";
@@ -101,14 +101,18 @@ const REPORT_SECTIONS = [
 function periodsForPlan(plan: ProgrammePlanDto, cadence: ReportCadence): string[] {
   const ecYear = (index: number) => plan.budgetYearGc - (index === 11 ? 7 : 8);
   const period = planPeriodOf(plan);
-  // A six-month plan has no full-year report, and only its own half
+  // A six-month plan has no full-year report, and one six-month report covering its own months
   if (cadence === "annual") return period === "annual" ? [plan.budgetYearLabel || `${plan.budgetYearGc} plan year`] : [];
   if (cadence === "six_month") {
-    const halves = [
-      { id: "first_half", label: `${PLAN_MONTH_NAMES[0]}–${PLAN_MONTH_NAMES[5]} ${ecYear(0)}` },
-      { id: "second_half", label: `${PLAN_MONTH_NAMES[6]}–${PLAN_MONTH_NAMES[11]} ${ecYear(6)}` },
+    if (period !== "annual") {
+      const months = monthsForPeriod(period);
+      const last = PLAN_MONTHS.indexOf(months[months.length - 1]);
+      return [`${monthsLabel(months)} ${ecYear(last)}`];
+    }
+    return [
+      `${PLAN_MONTH_NAMES[0]}–${PLAN_MONTH_NAMES[5]} ${ecYear(0)}`,
+      `${PLAN_MONTH_NAMES[6]}–${PLAN_MONTH_NAMES[11]} ${ecYear(6)}`,
     ];
-    return halves.filter((h) => period === "annual" || h.id === period).map((h) => h.label);
   }
   const included = plan.activityIds.map((id) => plan.activities[id]).filter((a) => a?.included);
   const scheduled = PLAN_MONTHS.map((m, i) => ({ m, i })).filter(({ m }) =>
@@ -635,7 +639,7 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
       />
 
       <SectionCard flush>
-        <Table>
+        <Table containerClassName="cf-fit-table">
           <TableHeader>
             <TableRow>
               <TableHead>Report</TableHead>

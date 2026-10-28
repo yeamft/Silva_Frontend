@@ -1,255 +1,200 @@
 "use client";
 
 import { SHOW_SPEND_BANDS } from "@/config/features";
-import { ArrowRight, ClipboardCheck, Leaf, WalletCards } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
+import { motion } from "framer-motion";
+import { ArrowRight, CalendarRange, CheckCircle2, ClipboardCheck, FileText, Leaf, WalletCards } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { PageContainer } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
-import { listProgramRateCardProposals } from "@/lib/api/rate-card-proposals";
-import { useQuery } from "@tanstack/react-query";
-import { useAfes } from "@/lib/query/hooks/use-afes";
-import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
-import { useOpsReports } from "@/lib/query/hooks/use-ops-reports";
-import { listFarmAssessments } from "@/lib/api/farm-assessments";
+import { PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
 import { fmtEtb } from "@/lib/cropfort/planning-helpers";
+import { useOwnerCounts } from "@/lib/cropfort/use-owner-counts";
+import { cn } from "@/lib/utils";
 
-type Decision = {
-  id: string;
-  type: string;
-  title: string;
-  meta: string;
-  detail?: string;
-  href: string;
-};
+type Tone = "primary" | "warn" | "info";
 
 const reviewHref = (kind: string, id: string) =>
   `${CROPFORT_ROUTES.approvals}/review/${kind}/${encodeURIComponent(id)}`;
 
-function OwnerMetric({
-  href,
-  label,
-  value,
-  icon: Icon,
-  emphasis = false,
-}: {
-  href: string;
-  label: string;
-  value: string;
-  icon: typeof ClipboardCheck;
-  emphasis?: boolean;
-}) {
-  return (
-    <Card className="group transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-      <Link
-        href={href}
-        className="flex min-h-[5.5rem] items-center gap-3 rounded-lg p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-          <Icon className="size-4" aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-foreground">{label}</span>
-          <span className={`cf-numeric mt-1 block truncate text-xl font-semibold tracking-tight tabular-nums ${emphasis ? "text-primary" : "text-foreground"}`}>
-            {value}
-          </span>
-        </span>
-        <ArrowRight className="size-4 shrink-0 text-primary opacity-70 transition-[opacity,transform] group-hover:translate-x-0.5 group-hover:opacity-100" aria-hidden />
-      </Link>
-    </Card>
-  );
+function greeting(date: Date) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
 
-/** Asset owner home — farm assessments, approvals, settlements. */
+const TONE: Record<Tone, { tile: string; number: string; icon: string }> = {
+  primary: { tile: "border-primary/30 bg-primary/[0.05]", number: "text-foreground", icon: "bg-primary/10 text-primary" },
+  warn: { tile: "border-amber-500/40 bg-amber-500/[0.07]", number: "text-amber-700 dark:text-amber-400", icon: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  info: { tile: "border-sky-500/30 bg-sky-500/[0.05]", number: "text-sky-700 dark:text-sky-300", icon: "bg-sky-500/10 text-sky-700 dark:text-sky-300" },
+};
+
+/**
+ * Asset owner home: one screen. Five tiles say what's waiting for a decision;
+ * "Review next" lists the submissions themselves, each with the button that opens it.
+ */
 export function SilvaDeskHome() {
   const { activeProgram, user } = useCropfortAuth();
-  const enabled = Boolean(activeProgram?.id);
+  const c = useOwnerCounts();
 
-  const rateCardsQuery = useQuery({
-    queryKey: ["approval-rate-cards", activeProgram?.id],
-    queryFn: () => listProgramRateCardProposals({ status: "submitted", programWide: true }),
-    // Rate cards no longer go through the asset owner
-    enabled: false,
-    refetchInterval: 10_000,
-  });
-  const afesQuery = useAfes(enabled, "submitted");
-  const afpQuery = useProgrammePlans(enabled, { status: "submitted" });
-  const reportsQuery = useOpsReports(enabled, "submitted");
-  const assessmentsQuery = useQuery({
-    queryKey: ["farm-assessments-owner", activeProgram?.id],
-    queryFn: () => listFarmAssessments({ status: "submitted" }),
-    enabled,
-    refetchInterval: 15_000,
-  });
+  const tiles: { label: string; value: number; href: string; icon: LucideIcon; tone: Tone }[] = [
+    { label: "Plans to approve", value: c.plans.length, href: CROPFORT_ROUTES.approvals, icon: ClipboardCheck, tone: "primary" },
+    { label: "Monthly orders", value: c.monthly.length, href: CROPFORT_ROUTES.approvals, icon: CalendarRange, tone: "primary" },
+    { label: "Spending requests", value: c.afes.length, href: CROPFORT_ROUTES.approvals, icon: WalletCards, tone: "warn" },
+    { label: "Farm assessments", value: c.assessments.length, href: CROPFORT_ROUTES.farmAssessments, icon: Leaf, tone: "info" },
+    { label: "Reports", value: c.reports.length, href: CROPFORT_ROUTES.approvals, icon: FileText, tone: "info" },
+  ];
 
-  const decisions = useMemo(() => {
-    const rows: Decision[] = [];
+  const decisions: { id: string; type: string; title: string; meta: string; detail?: string; href: string; icon: LucideIcon }[] = [
+    ...c.plans.map((p) => ({
+      id: `afp-${p.id}`,
+      type: "Plan",
+      title: p.name || (p.farmName ? `${p.farmName} plan` : "Core Operations plan"),
+      meta: [p.farmName, p.budgetYearLabel].filter(Boolean).join(" · "),
+      detail: p.plannedCostEtb ? fmtEtb(p.plannedCostEtb) : undefined,
+      href: reviewHref("afp", p.id),
+      icon: ClipboardCheck,
+    })),
+    ...c.monthly.map((m) => ({
+      id: `mwo-${m.id}`,
+      type: "Monthly order",
+      title: `${PLAN_MONTH_LABELS[m.ethiopianMonth as keyof typeof PLAN_MONTH_LABELS] || m.ethiopianMonth} ${m.yearGc}`,
+      meta: [m.code, m.farmName].filter(Boolean).join(" · "),
+      detail: m.totalEtb ? fmtEtb(m.totalEtb) : undefined,
+      href: reviewHref("monthly", m.id),
+      icon: CalendarRange,
+    })),
+    ...c.afes.map((a) => ({
+      id: `afe-${a.id}`,
+      type: "Spending request",
+      title: a.title,
+      meta: SHOW_SPEND_BANDS ? `Band ${a.band}` : a.sourceType || "Spending request",
+      detail: fmtEtb(a.amountEtb),
+      href: reviewHref("afe", a.id),
+      icon: WalletCards,
+    })),
+    ...c.assessments.map((a) => ({
+      id: `fa-${a.id}`,
+      type: "Farm assessment",
+      title: a.title || "Farm assessment",
+      meta: [a.farmName, a.cycleLabel].filter(Boolean).join(" · "),
+      href: `${CROPFORT_ROUTES.farmAssessments}/${a.id}`,
+      icon: Leaf,
+    })),
+    ...c.reports.map((r) => ({
+      id: `report-${r.id}`,
+      type: "Report",
+      title: r.title || r.code,
+      meta: [r.code, r.periodLabel].filter(Boolean).join(" · "),
+      href: reviewHref("reports", r.id),
+      icon: FileText,
+    })),
+  ];
+  const shown = decisions.slice(0, 6);
 
-    for (const a of assessmentsQuery.data || []) {
-      rows.push({
-        id: `fa-${a.id}`,
-        type: "Farm assessment",
-        title: a.title || "Farm Assessment",
-        meta: [a.farmName, a.cycleLabel].filter(Boolean).join(" · "),
-        href: `${CROPFORT_ROUTES.farmAssessments}/${a.id}`,
-      });
-    }
-    for (const p of afpQuery.data || []) {
-      rows.push({
-        id: `afp-${p.id}`,
-        type: "Core Operations plan",
-        title: p.name || (p.farmName ? `${p.farmName} Core Operations plan` : "Core Operations plan"),
-        meta: [p.farmName, p.budgetYearLabel].filter(Boolean).join(" · "),
-        detail: p.plannedCostEtb ? fmtEtb(p.plannedCostEtb) : undefined,
-        href: reviewHref("afp", p.id),
-      });
-    }
-    for (const a of afesQuery.data || []) {
-      rows.push({
-        id: `afe-${a.id}`,
-        type: "Spending request",
-        title: a.title,
-        meta: SHOW_SPEND_BANDS ? `Band ${a.band}` : a.sourceType || "Spending request",
-        detail: fmtEtb(a.amountEtb),
-        href: reviewHref("afe", a.id),
-      });
-    }
-    for (const card of rateCardsQuery.data || []) {
-      rows.push({
-        id: `rate-card-${card.id}`,
-        type: "Rate card",
-        title: card.activityName || card.activityCode || "Rate card",
-        meta: [card.kind, card.farmEstateName].filter(Boolean).join(" · "),
-        detail: fmtEtb(card.proposedRate),
-        href: `${CROPFORT_ROUTES.rateCardProposals}/${card.id}`,
-      });
-    }
-    for (const r of reportsQuery.data || []) {
-      rows.push({
-        id: `report-${r.id}`,
-        type: "Report",
-        title: r.title || r.code,
-        meta: [r.code, r.periodLabel].filter(Boolean).join(" · "),
-        href: reviewHref("reports", r.id),
-      });
-    }
-    return rows;
-  }, [assessmentsQuery.data, afpQuery.data, afesQuery.data, rateCardsQuery.data, reportsQuery.data]);
-
-  const isLoading =
-    afesQuery.isLoading ||
-    rateCardsQuery.isLoading ||
-    afpQuery.isLoading ||
-    assessmentsQuery.isLoading ||
-    reportsQuery.isLoading;
-  const hasError =
-    afesQuery.isError || rateCardsQuery.isError || afpQuery.isError || assessmentsQuery.isError;
-  const approvalsReady = enabled && !isLoading && !hasError;
+  const firstName = user.name.trim().split(/\s+/)[0] || "there";
 
   return (
-    <div className="cf-page space-y-6">
-      <Card className="relative isolate flex min-h-32 items-center justify-between overflow-hidden border-primary/20 bg-gradient-to-br from-emerald-700 via-emerald-600 to-green-500 text-primary-foreground shadow-sm">
-        <span className="pointer-events-none absolute -right-8 -top-14 -z-10 size-48 rounded-full border-[22px] border-white/10" aria-hidden />
-        <span className="pointer-events-none absolute -bottom-24 right-24 size-40 rounded-full bg-white/[0.07]" aria-hidden />
-        <CardContent className="flex w-full items-center justify-between gap-4 px-5 py-6 sm:px-7">
-          <div className="space-y-1">
-            <CardDescription className="text-xs font-medium text-primary-foreground/80">
-              Asset owner
-            </CardDescription>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              Welcome back, {user.name.trim().split(/\s+/)[0] || "there"}
-            </h1>
-          </div>
-          <span className="mr-2 hidden size-14 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white sm:flex">
-            <Leaf className="size-7" aria-hidden />
-          </span>
-        </CardContent>
-      </Card>
+    <PageContainer className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {greeting(new Date())}, {firstName}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{activeProgram?.name || "Asset owner"}</p>
+        </div>
+        <Button asChild>
+          <Link href={CROPFORT_ROUTES.approvals}>
+            <ClipboardCheck className="mr-1.5 h-4 w-4" aria-hidden />
+            Approvals
+          </Link>
+        </Button>
+      </header>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <OwnerMetric
-          href={CROPFORT_ROUTES.farmAssessments}
-          label="Farm assessments to review"
-          value={approvalsReady ? String(assessmentsQuery.data?.length ?? 0) : "—"}
-          icon={Leaf}
-          emphasis={approvalsReady && (assessmentsQuery.data?.length ?? 0) > 0}
-        />
-        <OwnerMetric
-          href={CROPFORT_ROUTES.approvals}
-          label="Plans & spending to approve"
-          value={approvalsReady ? String((afpQuery.data?.length ?? 0) + (afesQuery.data?.length ?? 0)) : "—"}
-          icon={ClipboardCheck}
-          emphasis={approvalsReady && (afpQuery.data?.length ?? 0) + (afesQuery.data?.length ?? 0) > 0}
-        />
-        <OwnerMetric
-          href={CROPFORT_ROUTES.approvals}
-          label="Reports to review"
-          value={approvalsReady ? String(reportsQuery.data?.length ?? 0) : "—"}
-          icon={WalletCards}
-          emphasis={approvalsReady && (reportsQuery.data?.length ?? 0) > 0}
-        />
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+        {tiles.map((t, i) => {
+          const busy = t.value > 0;
+          const tone = TONE[t.tone];
+          return (
+            <motion.li
+              key={t.label}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: i * 0.04 }}
+            >
+              <Link
+                href={t.href}
+                className={cn(
+                  "group flex h-full flex-col gap-3 rounded-2xl border p-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  busy ? tone.tile : "border-border bg-card",
+                )}
+              >
+                <span className="flex items-center justify-between">
+                  <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", busy ? tone.icon : "bg-muted text-muted-foreground")}>
+                    <t.icon className="h-4 w-4" aria-hidden />
+                  </span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
+                </span>
+                <span>
+                  <span className={cn("block text-3xl font-semibold tabular-nums", busy ? tone.number : "text-muted-foreground/50")}>
+                    {c.loading ? "—" : t.value}
+                  </span>
+                  <span className="text-sm text-muted-foreground">{t.label}</span>
+                </span>
+              </Link>
+            </motion.li>
+          );
+        })}
+      </ul>
+
+      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-border/70 bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent px-5 py-3.5">
+          <h2 className="text-[15px] font-semibold">Review next</h2>
+          {decisions.length > shown.length ? (
+            <Link href={CROPFORT_ROUTES.approvals} className="text-xs font-medium text-primary hover:underline">
+              All {decisions.length}
+            </Link>
+          ) : null}
+        </div>
+        {c.loading ? (
+          <p className="px-5 py-8 text-center text-sm text-muted-foreground">Loading…</p>
+        ) : shown.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 px-5 py-10 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
+              <CheckCircle2 className="h-5 w-5" />
+            </span>
+            <p className="text-sm font-semibold">{c.error ? "Couldn't load your reviews" : "You're all caught up"}</p>
+            <p className="text-xs text-muted-foreground">
+              {c.error ? "Please try again shortly." : "New submissions will appear here."}
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {shown.map((row) => (
+              <li key={row.id} className="flex items-center gap-3 px-5 py-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary" aria-hidden>
+                  <row.icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{row.title}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {[row.type, row.meta].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
+                {row.detail ? (
+                  <span className="cf-numeric hidden shrink-0 text-sm font-semibold tabular-nums sm:block">{row.detail}</span>
+                ) : null}
+                <Button size="sm" asChild>
+                  <Link href={row.href}>Review</Link>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
-
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-          <div className="space-y-1">
-            <CardTitle>Waiting for your review</CardTitle>
-            <CardDescription>
-              {decisions.length > 5 ? `Showing 5 of ${decisions.length} — see the rest in Approvals.` : "Submissions waiting for your decision."}
-            </CardDescription>
-          </div>
-          <Button asChild variant="outline" size="sm" className="shrink-0">
-            <Link href={CROPFORT_ROUTES.approvals}>View all</Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {decisions.length > 0 ? (
-            <ul className="space-y-3">
-              {decisions.slice(0, 5).map((row) => (
-                <li key={row.id}>
-                  <Link
-                    href={row.href}
-                    className="group flex items-center justify-between gap-4 rounded-lg border border-border p-4 transition-colors hover:border-primary/30 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="min-w-0 space-y-1">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">{row.type}</span>
-                      <span className="block truncate text-sm font-semibold text-foreground">{row.title}</span>
-                      {row.meta ? <span className="block truncate text-xs text-muted-foreground">{row.meta}</span> : null}
-                    </span>
-                    <span className="flex shrink-0 items-center gap-3">
-                      {row.detail ? <span className="cf-numeric hidden text-sm font-semibold tabular-nums sm:block">{row.detail}</span> : null}
-                      <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
-                        Review <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Alert className="justify-center border-dashed py-8 text-center">
-              <AlertDescription>
-                {!enabled
-                  ? "Select an estate to see items waiting for your review."
-                  : isLoading
-                    ? "Checking for items that need your review…"
-                    : hasError
-                      ? "Review items could not be loaded. Please try again shortly."
-                      : "You're all caught up. New submissions will appear here."}
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    </PageContainer>
   );
 }

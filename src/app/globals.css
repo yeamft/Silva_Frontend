@@ -1,8 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 @theme inline {
-  --font-sans: "Plus Jakarta Sans", sans-serif;
-  --font-display: "Plus Jakarta Sans", sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 @tailwind base;
@@ -84,11 +83,11 @@
     --surface-overlay: 90 8% 95%;
 
     --cf-density: 1;
-    --cf-row-h: 48px;
+    --cf-row-h: 56px;
 
     /* Active UI font — ThemeToggle can switch this to another next/font var */
-    --font-sans: var(--font-plus-jakarta);
-    --font-display: var(--font-plus-jakarta);
+    --font-sans: var(--font-inter);
+    --font-display: var(--font-inter);
   }
 
   .dark {
@@ -148,12 +147,12 @@
     --surface-overlay: 150 10% 10%;
 
     --cf-density: 1;
-    --cf-row-h: 48px;
+    --cf-row-h: 56px;
   }
 
   .cf-density-compact {
-    --cf-density: 0.85;
-    --cf-row-h: 44px;
+    --cf-density: 0.9;
+    --cf-row-h: 48px;
   }
 
   /*
@@ -203,9 +202,11 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-sans, var(--font-plus-jakarta)), ui-sans-serif, system-ui, sans-serif;
-    font-size: 14px;
-    line-height: 1.45;
+    font-family: var(--font-sans, var(--font-inter)), ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    line-height: 1.55;
     color-scheme: light;
     overflow-x: hidden;
   }
@@ -221,7 +222,7 @@
 
   /* Display reserved for marketing / auth; operational UI uses sans hierarchy */
   .font-display {
-    font-family: var(--font-display, var(--font-plus-jakarta)), ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-display, var(--font-inter)), ui-sans-serif, system-ui, sans-serif;
     font-weight: 600;
   }
 }
@@ -339,11 +340,25 @@
   /* ---- CropFort operational surfaces ---- */
 
   .cf-page {
-    @apply mx-auto w-full max-w-[1440px] space-y-6 px-4 py-5 sm:px-6 sm:py-6 lg:px-8;
+    @apply mx-auto w-full max-w-[1600px] space-y-8 px-4 pb-16 pt-6 sm:px-8 sm:pb-20 sm:pt-8 lg:px-10;
   }
 
   .cf-table-scroll {
     @apply overflow-x-auto overscroll-x-contain;
+  }
+
+  /* Main lists fit the screen: the table scrolls inside its box, the header row stays put */
+  .cf-fit-table {
+    @apply overflow-auto overscroll-contain;
+    max-height: calc(100dvh - 22rem);
+    min-height: 12rem;
+  }
+
+  /* Same for card lists (e.g. the plan's activities) */
+  .cf-fit-list {
+    @apply overflow-y-auto overscroll-contain;
+    max-height: calc(100dvh - 30rem);
+    min-height: 14rem;
   }
 
   .cf-tab-scroll {
@@ -365,7 +380,7 @@
   }
 
   .cf-eyebrow {
-    @apply text-[13px] font-medium text-muted-foreground;
+    @apply text-sm font-medium text-muted-foreground;
   }
 
   .cf-focus {
@@ -410,20 +425,16 @@
   }
 
   .cf-table {
-    @apply w-full text-[13px];
+    @apply w-full text-sm;
   }
 
   .cf-table th {
-    @apply sticky top-0 z-[1] border-b border-border bg-muted/50 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground;
+    @apply sticky top-0 z-[1] border-b border-border bg-muted/30 px-4 py-3 text-left text-xs font-medium text-muted-foreground;
   }
 
   .cf-table td {
-    @apply border-b border-border/80 px-3 text-foreground;
+    @apply border-b border-border/60 px-4 text-foreground;
     height: var(--cf-row-h);
-  }
-
-  .cf-table tbody tr:nth-child(even) {
-    @apply bg-muted/20;
   }
 
   .cf-table tbody tr:hover td {
@@ -436,7 +447,7 @@
 
   /* Odoo-inspired ops desk */
   .cf-ops-desk {
-    @apply space-y-5;
+    @apply space-y-8;
   }
 
   .cf-ops-toolbar {

@@ -2,9 +2,9 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { MainNav } from "@/components/navigation/main-nav";
-import { CropfortMobileNav } from "@/components/navigation/mobile-nav";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { ActivePlanSync } from "@/components/navigation/active-plan-sync";
+import { LiveUpdates } from "@/components/navigation/live-updates";
 import { ActiveSpendBandSync } from "@/components/navigation/active-spend-band-sync";
 import { ActiveAgreementConfigSync } from "@/components/navigation/active-agreement-config-sync";
 import { GlobalContextBar } from "@/components/navigation/global-context-bar";
@@ -16,23 +16,24 @@ import {
 } from "@/components/navigation/needs-attention";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
+
 const SIDEBAR_COLLAPSE_KEY = "cropfort.sidebar.collapsed";
 
 /** Current dense OpsDesk chrome — SPX / platform admin only. */
 export function SpxPlatformShell({ children }: { children: ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const attentionCount = useAttentionCount();
-  const { sessionWarning, minutesRemaining, extendSession } = useCropfortAuth();
+  const { sessionWarning, minutesRemaining, extendSession, user } = useCropfortAuth();
+  // The SPX Account Manager (spx_validator) gets a narrower sidebar and no Needs attention button
+  const isAccountManager = user.role === "spx_validator";
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     try {
@@ -58,7 +59,8 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
       }}
       style={
         {
-          "--sidebar-width": "14.5rem",
+          // Platform admin and other SPX roles keep the standard width
+          "--sidebar-width": isAccountManager ? "11.5rem" : "14.5rem",
           "--sidebar-width-icon": "4.25rem",
         } as CSSProperties
       }
@@ -76,26 +78,25 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
       <SidebarInset
         id="cropfort-main"
         tabIndex={-1}
-        className="min-w-0 overflow-x-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0"
+        className="min-w-0 overflow-x-hidden pb-[env(safe-area-inset-bottom)]"
       >
         <header className="sticky top-0 z-30 bg-background supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
-          <Card className="rounded-none border-x-0 border-t-0 bg-card shadow-sm">
-            <CardContent className="flex h-14 items-center gap-3 px-3 py-0 sm:px-5">
-              <SidebarTrigger
-                className="shrink-0 border border-sidebar-border bg-sidebar-accent/70 text-sidebar-foreground hover:bg-sidebar-accent"
-                aria-label="Toggle navigation"
+          <div className="flex h-16 items-center gap-3 border-b border-border/70 bg-background/85 px-4 backdrop-blur-md sm:px-8 lg:px-10">
+            <SidebarTrigger
+              // Phones only: it's how the menu opens there
+              className="h-9 w-9 shrink-0 rounded-xl border border-border/80 bg-card text-muted-foreground shadow-sm hover:bg-primary/10 hover:text-primary md:hidden"
+              aria-label="Toggle navigation"
+            />
+            <div className="ml-auto min-w-0 shrink-0">
+              <GlobalContextBar
+                onOpenSearch={() => setSearchOpen(true)}
+                // No Needs attention button for the SPX Account Manager
+                onOpenAttention={isAccountManager ? undefined : () => setAttentionOpen(true)}
+                attentionCount={attentionCount}
+                className="w-auto px-0 shadow-none sm:px-0 md:px-0"
               />
-              <Separator orientation="vertical" className="h-6 shrink-0" />
-              <div className="ml-auto min-w-0 shrink-0">
-                <GlobalContextBar
-                  onOpenSearch={() => setSearchOpen(true)}
-                  onOpenAttention={() => setAttentionOpen(true)}
-                  attentionCount={attentionCount}
-                  className="w-auto px-0 shadow-none sm:px-0 md:px-0"
-                />
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {sessionWarning ? (
             <div
@@ -124,10 +125,10 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
         {children}
       </SidebarInset>
 
+      <LiveUpdates />
       <ActivePlanSync />
       <ActiveSpendBandSync />
       <ActiveAgreementConfigSync />
-      <CropfortMobileNav />
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <NeedsAttentionDrawer open={attentionOpen} onOpenChange={setAttentionOpen} />
       <div id="cropfort-route-announcer" className="sr-only" aria-live="polite" aria-atomic="true" />

@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import {
   AlertCircle,
   ArrowUpRight,
+  Plus,
   Briefcase,
   CalendarRange,
   ClipboardCheck,
@@ -28,10 +29,13 @@ import {
   canViewRateCard,
 } from "@/lib/cropfortAccess";
 import { canCreateProgrammePlan } from "@/lib/cropfort/platform-access";
+import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
+import { cn } from "@/lib/utils";
 import { usePerformanceLiveData } from "@/lib/query/hooks/use-performance-live";
 import { ticketWaitingOn } from "@/store/cropfortOpsStore";
 import type { CropfortRole } from "@/types/cropfort";
 import { SetupGuide } from "./setup-guide";
+import { AccountManagerHome } from "./account-manager-home";
 
 type QuickLink = {
   href: string;
@@ -79,22 +83,17 @@ function AttentionCard({ item, loading }: { item: QuickLink; loading: boolean })
   );
 }
 
-function LiveIndicator() {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium" title="Work orders and tickets refresh automatically">
-      <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70 motion-reduce:hidden" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
-      </span>
-      Live
-    </span>
-  );
-}
-
 export default function DashboardPage() {
   const desk = useDeskMode();
   if (desk === "vendor") return <VendorDeskHome />;
   if (desk === "silva") return <SilvaDeskHome />;
+  return <SpxHome />;
+}
+
+function SpxHome() {
+  const { user } = useCropfortAuth();
+  // The SPX Account Manager gets the one-screen cockpit
+  if (user.role === "spx_validator") return <AccountManagerHome />;
   return <SpxDashboardView />;
 }
 
@@ -186,67 +185,130 @@ function SpxDashboardView() {
         icon: Leaf,
       },
       {
-        href: CROPFORT_ROUTES.rateCardProposals,
-        title: "Rate Cards",
-        icon: WalletCards,
-      },
-      {
-        href: CROPFORT_ROUTES.benchmarkSurveys,
-        title: "Surveys",
-        icon: ClipboardCheck,
-      },
-      {
         href: CROPFORT_ROUTES.coreOperations,
         title: "Core Operations",
         icon: Briefcase,
       },
+      {
+        href: CROPFORT_ROUTES.monthlyWorkOrders,
+        title: "Monthly work orders",
+        icon: CalendarRange,
+      },
+      {
+        href: CROPFORT_ROUTES.workOrders,
+        title: "Work orders",
+        icon: Wrench,
+        count: queues.openWo,
+      },
     ];
   }, [canRates, isOwner, queues, user.role]);
 
+  // What's waiting on the planner, in plain words — each opens the right list
+  const plansQuery = useProgrammePlans(Boolean(activeProgram?.id) && canCreateProgrammePlan(user.role), {});
+  const plans = useMemo(() => plansQuery.data ?? [], [plansQuery.data]);
+  const needsYou = [
+    {
+      label: "Plans to finish",
+      value: plans.filter((p) => !p.statusRaw || p.statusRaw === "draft" || p.statusRaw === "ready_for_review").length,
+      href: CROPFORT_ROUTES.programmePlans,
+      tone: "primary" as const,
+    },
+    {
+      label: "Returned to fix",
+      value: plans.filter((p) => p.statusRaw === "returned").length,
+      href: CROPFORT_ROUTES.programmePlans,
+      tone: "warn" as const,
+    },
+    {
+      label: "Waiting approval",
+      value: plans.filter((p) => p.statusRaw === "submitted").length,
+      href: CROPFORT_ROUTES.programmePlans,
+      tone: "info" as const,
+    },
+    { label: "Open work orders", value: queues.openWo, href: CROPFORT_ROUTES.workOrders, tone: "primary" as const },
+  ];
+
   return (
     <PageContainer className="gap-5">
-      <motion.section
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        className="relative isolate overflow-hidden rounded-xl bg-primary px-5 py-5 text-primary-foreground shadow-sm sm:px-6 sm:py-6"
-      >
-        <div className="absolute -right-10 -top-16 -z-10 h-56 w-56 rounded-full bg-white/10" aria-hidden />
-        <div className="absolute -bottom-24 right-28 -z-10 h-44 w-44 rounded-full border-[24px] border-white/10" aria-hidden />
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-primary-foreground/80">
-              <span>
-                {today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
-              </span>
-              <LiveIndicator />
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-              {greeting(today)}, {user.name.trim().split(/\s+/)[0] || "there"}
-            </h1>
-            <p className="mt-1.5 text-sm text-primary-foreground/80 sm:text-base">
-              {workspaceName}
-              {!isLoading && tickets.length > 0
-                ? ` · ${queues.vendor + queues.site + queues.asset} open tickets across ${queues.openWo} work orders`
-                : " · Your work, all in one place."}
-            </p>
-          </div>
-          {attention[0] ? (
-            <Button variant="secondary" className="w-full justify-between gap-4 rounded-lg sm:w-auto" asChild>
-              <Link href={attention[0].href}>
-                Go to {attention[0].title}
-                <ArrowUpRight className="h-4 w-4" aria-hidden />
-              </Link>
-            </Button>
-          ) : null}
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {greeting(today)}, {user.name.trim().split(/\s+/)[0] || "there"}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{workspaceName}</p>
         </div>
-      </motion.section>
+        {canCreateProgrammePlan(user.role) ? (
+          <Button asChild>
+            <Link href={`${CROPFORT_ROUTES.programmePlans}/new`}>
+              <Plus className="mr-1.5 h-4 w-4" aria-hidden />
+              New plan
+            </Link>
+          </Button>
+        ) : attention[0] ? (
+          <Button asChild>
+            <Link href={attention[0].href}>
+              Go to {attention[0].title}
+              <ArrowUpRight className="ml-1.5 h-4 w-4" aria-hidden />
+            </Link>
+          </Button>
+        ) : null}
+      </header>
 
       {isError ? (
         <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
           Some live data couldn&apos;t be loaded. Figures may be incomplete — it will retry automatically.
         </div>
+      ) : null}
+
+
+      {canCreateProgrammePlan(user.role) ? (
+        <DashboardSection title="Needs you">
+          <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {needsYou.map((tile, i) => {
+              const busy = tile.value > 0;
+              return (
+                <motion.li
+                  key={tile.label}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: 0.05 + i * 0.05 }}
+                >
+                  <Link
+                    href={tile.href}
+                    className={cn(
+                      "group flex h-full flex-col justify-between rounded-2xl border p-4 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none",
+                      busy
+                        ? tile.tone === "warn"
+                          ? "border-amber-500/40 bg-amber-500/[0.06]"
+                          : tile.tone === "info"
+                            ? "border-sky-500/30 bg-sky-500/[0.05]"
+                            : "border-primary/30 bg-primary/[0.04]"
+                        : "border-border bg-card",
+                    )}
+                  >
+                    <span className="text-xs font-medium text-muted-foreground">{tile.label}</span>
+                    <span className="mt-2 flex items-end justify-between">
+                      <span
+                        className={cn(
+                          "text-3xl font-semibold tabular-nums tracking-tight",
+                          !busy && "text-muted-foreground/60",
+                          busy && tile.tone === "warn" && "text-amber-700 dark:text-amber-400",
+                        )}
+                      >
+                        {plansQuery.isLoading || isLoading ? "—" : tile.value}
+                      </span>
+                      <ArrowUpRight
+                        className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
+                        aria-hidden
+                      />
+                    </span>
+                  </Link>
+                </motion.li>
+              );
+            })}
+          </ul>
+        </DashboardSection>
       ) : null}
 
       {/* Planners get the setup checklist, then one "next step" prompt once set up */}
@@ -258,7 +320,7 @@ function SpxDashboardView() {
         />
       ) : null}
 
-      <DashboardSection title="Your shortcuts">
+      <DashboardSection title="Go to">
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {attention.map((item) => (
             <li key={item.href + item.title}>

@@ -147,6 +147,8 @@ export function SetupGuide({
   }, [user.role, farmsQuery.data, activitiesQuery.data, rateCards, plans, workOrderCount]);
 
   const nextStep: NextStep | null = useMemo(() => {
+    // The SPX Account Manager (spx_validator) doesn't get the "Next step" prompt
+    if (user.role === "spx_validator") return null;
     const returnedPlan = plans.find((p) => p.statusRaw === "returned");
     if (returnedPlan) {
       return {
@@ -154,17 +156,6 @@ export function SetupGuide({
         hint: "Open it to see the asset owner's comments, update it and submit again.",
         href: `${CROPFORT_ROUTES.programmePlans}/${returnedPlan.id}`,
         action: "Open plan",
-      };
-    }
-    const draftCards = rateCards.filter(
-      (c) => c.status === "draft" || c.status === "returned" || c.status === "submitted",
-    ).length;
-    if (draftCards) {
-      return {
-        title: `${draftCards} rate card${draftCards === 1 ? "" : "s"} not yet published`,
-        hint: "Publish them so plans can use the rates.",
-        href: CROPFORT_ROUTES.rateCardProposals,
-        action: "Open rate cards",
       };
     }
     const draftPlan = plans.find((p) => p.statusRaw === "draft" || p.statusRaw === "ready_for_review");
@@ -185,7 +176,7 @@ export function SetupGuide({
       };
     }
     return null;
-  }, [plans, rateCards, ticketsAwaitingSiteReview]);
+  }, [plans, ticketsAwaitingSiteReview, user.role]);
 
   if (!enabled || loading) return null;
 

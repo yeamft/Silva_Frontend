@@ -27,7 +27,7 @@ export function OpsDeskPage({
   className?: string;
 }) {
   return (
-    <PageContainer className={cn("cf-ops-desk space-y-5", className)}>{children}</PageContainer>
+    <PageContainer className={cn("cf-ops-desk", className)}>{children}</PageContainer>
   );
 }
 
