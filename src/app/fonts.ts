@@ -22,7 +22,7 @@ export const dmSans = DM_Sans({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-dm-sans",
-  weight: ["400", "500", "600", "700"],
+  axes: ["wght"],
 });
 
 export const plusJakartaSans = Plus_Jakarta_Sans({
@@ -50,7 +50,7 @@ export const nunitoSans = Nunito_Sans({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-nunito-sans",
-  weight: ["400", "500", "600", "700"],
+  axes: ["wght"],
 });
 
 export const libreFranklin = Libre_Franklin({
@@ -64,21 +64,21 @@ export const manrope = Manrope({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-manrope",
-  weight: ["400", "500", "600", "700"],
+  axes: ["wght"],
 });
 
 export const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-space-grotesk",
-  weight: ["400", "500", "600", "700"],
+  axes: ["wght"],
 });
 
 export const fraunces = Fraunces({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-fraunces",
-  weight: ["400", "500", "600", "700"],
+  axes: ["wght"],
 });
 
 export const fontVariables = [
