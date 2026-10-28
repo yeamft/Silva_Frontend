@@ -9,8 +9,10 @@ import {
   listMonthlyWorkOrders,
   setMonthlyWorkOrderLoop,
   submitMonthlyWorkOrder,
+  type MonthlyWorkOrderDto,
 } from "@/lib/api/monthly-work-orders";
 import { queryKeys } from "@/lib/query/keys";
+import { moveRowStatus, restoreSnapshot } from "@/lib/query/optimistic-status";
 import type { ProcessLoop } from "@/types/agronomic-cycle";
 
 export function useMonthlyWorkOrders(enabled = true, status?: string) {
@@ -38,14 +40,19 @@ export function useCreateMonthlyWorkOrder() {
 
 export function useSubmitMonthlyWorkOrder() {
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => submitMonthlyWorkOrder(id),
-    onSuccess: () => invalidate(),
+    onMutate: (id) =>
+      moveRowStatus<MonthlyWorkOrderDto>(qc, queryKeys.monthlyWorkOrders.all, id, "draft", { status: "submitted" }),
+    onError: (_err, _id, snapshot) => restoreSnapshot(qc, snapshot),
+    onSettled: () => invalidate(),
   });
 }
 
 export function useDecideMonthlyWorkOrder() {
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
       id,
@@ -56,7 +63,13 @@ export function useDecideMonthlyWorkOrder() {
       decision: "approve" | "return";
       comment?: string;
     }) => decideMonthlyWorkOrder(id, decision, comment),
-    onSuccess: () => invalidate(),
+    // Leaves the approvals queue the moment the button is pressed
+    onMutate: ({ id, decision }) =>
+      moveRowStatus<MonthlyWorkOrderDto>(qc, queryKeys.monthlyWorkOrders.all, id, "submitted", {
+        status: decision === "approve" ? "approved" : "returned",
+      }),
+    onError: (_err, _vars, snapshot) => restoreSnapshot(qc, snapshot),
+    onSettled: () => invalidate(),
   });
 }
 

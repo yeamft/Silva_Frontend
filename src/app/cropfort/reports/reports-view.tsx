@@ -66,16 +66,9 @@ function MetricGrid({ report }: { report: OpsReport }) {
     { label: "Spend", value: `${m.spendPct}%` },
     { label: "WO progress", value: `${m.woProgressAvg}%` },
     { label: "WOs open / done", value: `${m.woOpen} / ${m.woComplete}` },
-    { label: "Tickets open / closed", value: `${m.ticketsOpen} / ${m.ticketsClosed}` },
-    { label: "Ticket close", value: `${m.ticketClosePct}%` },
-    { label: "DFR pending / ok", value: `${m.dfrPending} / ${m.dfrValidated}` },
-    { label: "DFR qty var", value: `${m.dfrAvgVariancePct}%` },
-    { label: "Weekly active", value: String(m.weeklyActive) },
-    { label: "Weekly submitted", value: String(m.weeklySubmitted) },
-    { label: "Attention", value: String(m.attentionCount) },
   ];
   return (
-    <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {cells.map((c) => (
         <div key={c.label} className="rounded-lg border px-3 py-2">
           <p className="text-xs text-muted-foreground">{c.label}</p>
@@ -468,35 +461,6 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
                       >
                         {row.variancePct > 0 ? "+" : ""}
                         {row.variancePct}%
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </SectionCard>
-          ) : null}
-
-          {(selected.blockLines?.length ?? 0) > 0 ? (
-            <SectionCard title="Blocks" flush>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Block</TableHead>
-                    <TableHead className="text-right">Progress</TableHead>
-                    <TableHead className="text-right">Tickets closed</TableHead>
-                    <TableHead className="text-right">Spend / planned</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selected.blockLines.map((row) => (
-                    <TableRow key={row.block}>
-                      <TableCell>{row.block}</TableCell>
-                      <TableCell className="text-right tabular-nums">{row.progress}%</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {row.ticketsClosed}/{row.tickets}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtEtb(row.spend)} / {fmtEtb(row.planned)}
                       </TableCell>
                     </TableRow>
                   ))}

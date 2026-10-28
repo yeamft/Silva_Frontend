@@ -200,15 +200,13 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
       return;
     }
     setBulkSubmitting(true);
+    // Each month is independent, so they're sent together
+    const results = await Promise.allSettled(items.map((o) => submitMut.mutateAsync(o.id)));
     let ok = 0;
-    for (const o of items) {
-      try {
-        await submitMut.mutateAsync(o.id);
-        ok += 1;
-      } catch (e) {
-        toast.error(`${o.code}: ${e instanceof Error ? e.message : "could not submit"}`);
-      }
-    }
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") ok += 1;
+      else toast.error(`${items[i].code}: ${r.reason instanceof Error ? r.reason.message : "could not submit"}`);
+    });
     setBulkSubmitting(false);
     if (ok) toast.success(`Submitted ${ok} month${ok === 1 ? "" : "s"} for approval`);
   };
@@ -224,16 +222,18 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
   const [submittingWos, setSubmittingWos] = useState(false);
   const submitMonthWorkOrders = async () => {
     setSubmittingWos(true);
-    let ok = 0;
-    for (const wo of openMonthWorkOrders) {
-      try {
+    const items = openMonthWorkOrders;
+    const results = await Promise.allSettled(
+      items.map(async (wo) => {
         if (wo.status === "issued") await transitionWo.mutateAsync({ id: wo.id, status: "in_progress" });
         await transitionWo.mutateAsync({ id: wo.id, status: "complete" });
-        ok += 1;
-      } catch (e) {
-        toast.error(`${wo.code}: ${e instanceof Error ? e.message : "could not submit"}`);
-      }
-    }
+      }),
+    );
+    let ok = 0;
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") ok += 1;
+      else toast.error(`${items[i].code}: ${r.reason instanceof Error ? r.reason.message : "could not submit"}`);
+    });
     setSubmittingWos(false);
     setSubmitWosOpen(false);
     if (ok) toast.success(`Submitted ${ok} work order${ok === 1 ? "" : "s"}`);
@@ -242,7 +242,10 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
   const canActivate = (o: Order) =>
     canEdit && (o.status === "approved" || (o.status === "submitted" && !o.lines.some((l) => !l.inPlan)));
 
-  /** Activates one by one so the vendor work orders are issued in month order. */
+  /**
+   * Activates one month at a time: work order codes come from a running count, so parallel
+   * activations could hand out the same code. Each activation is a handful of batched writes.
+   */
   const activateAll = async (items: Order[]) => {
     setActivating(true);
     let issued = 0;

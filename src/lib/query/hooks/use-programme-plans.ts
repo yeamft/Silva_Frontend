@@ -13,6 +13,7 @@ import {
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { queryKeys } from "@/lib/query/keys";
+import { moveRowStatus, restoreSnapshot } from "@/lib/query/optimistic-status";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useProgrammePlans(
@@ -81,6 +82,7 @@ export function useArchiveProgrammePlan() {
 
 export function useSubmitProgrammePlanMutation() {
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (row: Pick<ProgrammePlanDto, "id" | "updatedAt">) => {
       // Edits made in the plan editor that haven't reached the server yet go with the submit.
@@ -89,7 +91,12 @@ export function useSubmitProgrammePlanMutation() {
         local?.id === row.id && Date.parse(local.updatedAt) > Date.parse(row.updatedAt);
       return submitProgrammePlan(row.id, hasNewerLocal ? local : undefined);
     },
-    onSuccess: () => invalidate(),
+    onMutate: (row) =>
+      moveRowStatus<ProgrammePlanDto>(qc, queryKeys.programmePlans.all, row.id, "draft", {
+        statusRaw: "submitted",
+      }),
+    onError: (_err, _row, snapshot) => restoreSnapshot(qc, snapshot),
+    onSettled: () => invalidate(),
   });
 }
 
@@ -105,6 +112,7 @@ export function useCreateWorkOrdersFromPlan() {
 
 export function useDecideProgrammePlan() {
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
       id,
@@ -115,6 +123,12 @@ export function useDecideProgrammePlan() {
       decision: "approve" | "return";
       comment?: string;
     }) => decideProgrammePlan(id, decision, comment),
-    onSuccess: () => invalidate(),
+    // Leaves the approvals queue the moment the button is pressed
+    onMutate: ({ id, decision }) =>
+      moveRowStatus<ProgrammePlanDto>(qc, queryKeys.programmePlans.all, id, "submitted", {
+        statusRaw: decision === "approve" ? "approved" : "returned",
+      }),
+    onError: (_err, _vars, snapshot) => restoreSnapshot(qc, snapshot),
+    onSettled: () => invalidate(),
   });
 }

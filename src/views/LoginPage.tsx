@@ -17,7 +17,6 @@ import {
   Mail,
   ShieldCheck,
   Sprout,
-  UserCog,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,12 +31,6 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const DEMO_ACCOUNTS = [
-  {
-    email: "admin@spx.example",
-    label: "System Admin",
-    org: "SPX",
-    icon: UserCog,
-  },
   {
     email: "principal@spx.example",
     label: "SPX Principal",

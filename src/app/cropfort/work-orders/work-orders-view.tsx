@@ -37,6 +37,15 @@ const PATH_TO_SUBMITTED: Record<WoStatus, WoStatus[]> = {
   complete: [],
 };
 
+/** Runs one action per work order in parallel; failures are collected rather than stopping the rest. */
+async function runAll(items: WorkOrder[], action: (wo: WorkOrder) => Promise<unknown>, fallback: string) {
+  const results = await Promise.allSettled(items.map(action));
+  const failed = results.flatMap((r, i) =>
+    r.status === "rejected" ? [`${items[i].code}: ${r.reason instanceof Error ? r.reason.message : fallback}`] : [],
+  );
+  return { done: items.length - failed.length, failed };
+}
+
 const canSubmit = (wo: WorkOrder) => wo.status === "issued" || wo.status === "in_progress";
 
 /**
@@ -175,16 +184,11 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
   /** Issues draft work orders to their vendor. */
   const issue = async (items: WorkOrder[]) => {
     setBusy(true);
-    let done = 0;
-    const failed: string[] = [];
-    for (const wo of items) {
-      try {
-        await transitionWo.mutateAsync({ id: wo.id, status: "issued" });
-        done += 1;
-      } catch (err) {
-        failed.push(`${wo.code}: ${err instanceof Error ? err.message : "could not issue"}`);
-      }
-    }
+    const { done, failed } = await runAll(
+      items,
+      (wo) => transitionWo.mutateAsync({ id: wo.id, status: "issued" }),
+      "could not issue",
+    );
     setBusy(false);
     if (done) toast.success(`Issued ${done} work order${done === 1 ? "" : "s"} to the vendor`);
     if (failed.length) toast.error(failed.join("\n"), { duration: 10000 });
@@ -203,22 +207,20 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
 
   /** Moves each work order through the remaining steps to submitted, one after another. */
   const submit = async (items: WorkOrder[]) => {
+    // The list updates straight away, so the dialog can close before the server answers
+    setConfirm(null);
+    setSelected(new Set());
     setBusy(true);
-    let done = 0;
-    const failed: string[] = [];
-    for (const wo of items) {
-      try {
+    const { done, failed } = await runAll(
+      items,
+      async (wo) => {
         for (const status of PATH_TO_SUBMITTED[wo.status]) {
           await transitionWo.mutateAsync({ id: wo.id, status });
         }
-        done += 1;
-      } catch (err) {
-        failed.push(`${wo.code}: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    }
+      },
+      "failed",
+    );
     setBusy(false);
-    setConfirm(null);
-    setSelected(new Set());
     if (done) toast.success(`Submitted ${done} work order${done === 1 ? "" : "s"}`);
     if (failed.length) toast.error(failed.join("\n"));
   };
@@ -226,69 +228,58 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
   const totalOf = (items: WorkOrder[]) => items.reduce((sum, o) => sum + (o.etb || 0), 0);
 
   const markDone = async (items: WorkOrder[]) => {
-    setBusy(true);
-    let done = 0;
-    const failed: string[] = [];
-    for (const wo of items) {
-      try {
-        await reportOutcome.mutateAsync({ id: wo.id, outcome: "done" });
-        done += 1;
-      } catch (err) {
-        failed.push(`${wo.code}: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    }
-    setBusy(false);
     setConfirm(null);
+    setBusy(true);
+    const { done, failed } = await runAll(
+      items,
+      (wo) => reportOutcome.mutateAsync({ id: wo.id, outcome: "done" }),
+      "failed",
+    );
+    setBusy(false);
     if (done) toast.success(`Marked ${done} work order${done === 1 ? "" : "s"} as done`);
     if (failed.length) toast.error(failed.join("\n"));
   };
 
   const approveWorkOrders = async (items: WorkOrder[]) => {
-    setBusy(true);
-    let done = 0;
-    const failed: string[] = [];
-    for (const wo of items) {
-      try {
-        await reviewWo.mutateAsync({ id: wo.id, decision: "approve" });
-        done += 1;
-      } catch (err) {
-        failed.push(`${wo.code}: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    }
-    setBusy(false);
     setConfirm(null);
+    setBusy(true);
+    const { done, failed } = await runAll(
+      items,
+      (wo) => reviewWo.mutateAsync({ id: wo.id, decision: "approve" }),
+      "failed",
+    );
+    setBusy(false);
     if (done) toast.success(`Approved ${done} work order${done === 1 ? "" : "s"}`);
     if (failed.length) toast.error(failed.join("\n"));
   };
 
   const returnWorkOrders = async () => {
     if (!returnFor?.length || !returnNote.trim()) return;
-    setBusy(true);
-    let done = 0;
-    const failed: string[] = [];
-    for (const wo of returnFor) {
-      try {
-        await reviewWo.mutateAsync({ id: wo.id, decision: "return", comment: returnNote.trim() });
-        done += 1;
-      } catch (err) {
-        failed.push(`${wo.code}: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    }
-    setBusy(false);
+    const items = returnFor;
+    const comment = returnNote.trim();
     setReturnFor(null);
     setReturnNote("");
+    setBusy(true);
+    const { done, failed } = await runAll(
+      items,
+      (wo) => reviewWo.mutateAsync({ id: wo.id, decision: "return", comment }),
+      "failed",
+    );
+    setBusy(false);
     if (done) toast.success(`Returned ${done} work order${done === 1 ? "" : "s"} to the vendor`);
     if (failed.length) toast.error(failed.join("\n"));
   };
 
   const markNotDone = async () => {
     if (!notDoneFor || !notDoneNote.trim()) return;
+    const wo = notDoneFor;
+    const note = notDoneNote.trim();
+    setNotDoneFor(null);
+    setNotDoneNote("");
     setBusy(true);
     try {
-      await reportOutcome.mutateAsync({ id: notDoneFor.id, outcome: "not_done", note: notDoneNote.trim() });
-      toast.success(`${notDoneFor.code} marked as not done`);
-      setNotDoneFor(null);
-      setNotDoneNote("");
+      await reportOutcome.mutateAsync({ id: wo.id, outcome: "not_done", note });
+      toast.success(`${wo.code} marked as not done`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save");
     } finally {
