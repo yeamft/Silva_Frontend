@@ -130,19 +130,42 @@ function HeroBackground({
       {HERO_IMAGES.map((image, index) => {
         const visible = ready[index] && index === activeIndex;
         return (
-          <div
+          <motion.div
             key={image.src}
-            className={cn(
-              "absolute inset-0 bg-cover bg-center bg-no-repeat transition-[opacity,transform] duration-[1400ms] ease-out motion-reduce:transition-none",
-              visible ? "scale-100 opacity-100" : "scale-105 opacity-0",
-            )}
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
             style={{
               backgroundImage: ready[index] ? `url("${image.src}")` : undefined,
+            }}
+            initial={false}
+            // Fade in, then drift in slowly for as long as the photo is shown
+            animate={visible ? { opacity: 1, scale: 1.08 } : { opacity: 0, scale: 1 }}
+            transition={{
+              opacity: { duration: 1.4, ease: "easeOut" },
+              scale: visible ? { duration: HERO_ROTATE_MS / 1000 + 1.4, ease: "linear" } : { duration: 1.4 },
             }}
           />
         );
       })}
     </div>
+  );
+}
+
+/** Words fade and rise in one after another. */
+function RevealWords({ text, delay = 0 }: { text: string; delay?: number }) {
+  return (
+    <>
+      {text.split(" ").map((word, i) => (
+        <motion.span
+          key={`${word}-${i}`}
+          className="inline-block whitespace-pre"
+          initial={{ opacity: 0, y: "0.45em", filter: "blur(6px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ delay: delay + i * 0.06, duration: 0.5, ease }}
+        >
+          {i < text.split(" ").length - 1 ? `${word} ` : word}
+        </motion.span>
+      ))}
+    </>
   );
 }
 
@@ -167,6 +190,7 @@ function SiteHeader({
   onOpen: (id: PanelId | null) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hovered, setHovered] = useState<PanelId | null>(null);
 
   return (
     <header
@@ -187,7 +211,7 @@ function SiteHeader({
           </span>
         </Link>
 
-        <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
+        <nav aria-label="Primary" className="hidden items-center gap-1 md:flex" onMouseLeave={() => setHovered(null)}>
           {NAV_LINKS.map((link) => {
             const isActive = active === link.id;
             return (
@@ -195,12 +219,21 @@ function SiteHeader({
                 type="button"
                 key={link.id}
                 onClick={() => onOpen(link.id)}
+                onMouseEnter={() => setHovered(link.id)}
+                onFocus={() => setHovered(link.id)}
                 aria-haspopup="dialog"
                 className={cn(
-                  "relative inline-flex h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B7D4B9]",
+                  "relative isolate inline-flex h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B7D4B9]",
                   isActive ? "text-white" : "text-white/70 hover:text-white",
                 )}
               >
+                {hovered === link.id ? (
+                  <motion.span
+                    layoutId="nav-hover"
+                    className="absolute inset-0 -z-10 rounded-lg bg-white/10"
+                    transition={{ duration: 0.25, ease }}
+                  />
+                ) : null}
                 {link.label}
                 {isActive ? (
                   <motion.span
@@ -217,11 +250,11 @@ function SiteHeader({
         <div className="flex items-center gap-2">
           <Button
             asChild
-            className="h-10 rounded-xl bg-primary px-4 font-semibold text-primary-foreground shadow-[0_10px_24px_-12px_hsl(120_35%_28%/0.35)] hover:bg-[hsl(var(--primary-hover))] sm:px-5"
+            className="group h-10 rounded-xl bg-primary px-4 font-semibold text-primary-foreground shadow-[0_10px_24px_-12px_hsl(120_35%_28%/0.35)] hover:bg-[hsl(var(--primary-hover))] sm:px-5"
           >
             <Link href="/login">
               Sign in
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
             </Link>
           </Button>
 
@@ -316,25 +349,51 @@ function Hero({
                 className="w-full"
               >
                 <h1 className="font-display text-[32px] font-semibold leading-[1.06] tracking-[-0.03em] text-white sm:text-5xl lg:text-[56px] [@media(max-height:700px)]:lg:text-5xl">
-                  Plan the season. Approve the work.{" "}
-                  <span className="text-[#B7D4B9]">Verify every job.</span>
+                  <RevealWords text="Plan the season. Approve the work." />{" "}
+                  <span className="relative inline-block text-[#B7D4B9]">
+                    <RevealWords text="Verify every job." delay={0.42} />
+                    <motion.span
+                      aria-hidden
+                      className="absolute -bottom-1 left-0 h-[3px] w-full origin-left rounded-full bg-[#B7D4B9]/70"
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: 1 }}
+                      transition={{ delay: 0.85, duration: 0.7, ease }}
+                    />
+                  </span>
                 </h1>
 
-                <p className="mt-5 max-w-2xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
+                <motion.p
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6, duration: 0.5, ease }}
+                  className="mt-5 max-w-2xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8"
+                >
                   Cropfort takes estate work from the annual plan to work
                   orders and verified delivery with each team seeing only
                   what&apos;s waiting on them.
-                </p>
+                </motion.p>
 
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.75, duration: 0.5, ease }}
+                  className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center"
+                >
                   <Button
                     asChild
                     size="lg"
-                    className="h-12 rounded-xl bg-primary px-6 text-base font-semibold text-primary-foreground shadow-[0_14px_30px_-14px_hsl(120_35%_28%/0.6)] hover:bg-[hsl(var(--primary-hover))]"
+                    className="group relative h-12 overflow-hidden rounded-xl bg-primary px-6 text-base font-semibold text-primary-foreground shadow-[0_14px_30px_-14px_hsl(120_35%_28%/0.6)] hover:bg-[hsl(var(--primary-hover))]"
                   >
                     <Link href="/login">
+                      <motion.span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/35 to-transparent"
+                        initial={{ x: "0%" }}
+                        animate={{ x: "450%" }}
+                        transition={{ duration: 1.1, ease: "easeInOut", repeat: Infinity, repeatDelay: 3.5, delay: 1.4 }}
+                      />
                       Sign in to Cropfort
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                     </Link>
                   </Button>
                   <Button
@@ -350,7 +409,7 @@ function Hero({
                       See how it works
                     </button>
                   </Button>
-                </div>
+                </motion.div>
 
                 <dl className="mt-10 hidden gap-5 border-t border-white/10 pt-6 sm:grid sm:grid-cols-3 sm:gap-8 [@media(max-height:720px)]:hidden">
                   {[
@@ -369,11 +428,30 @@ function Hero({
                       detail: "Every decision traceable",
                       icon: History,
                     },
-                  ].map((item) => (
-                    <div key={item.term} className="flex gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[#B7D4B9]">
+                  ].map((item, i) => (
+                    <motion.div
+                      key={item.term}
+                      className="flex gap-3"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.95 + i * 0.12, duration: 0.45, ease }}
+                    >
+                      <motion.span
+                        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[#B7D4B9]"
+                        initial={{ scale: 0.6 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.95 + i * 0.12, type: "spring", stiffness: 380, damping: 18 }}
+                      >
+                        {item.icon === Radio ? (
+                          <motion.span
+                            aria-hidden
+                            className="absolute inset-0 rounded-lg border border-[#B7D4B9]/60"
+                            animate={{ scale: [1, 1.55], opacity: [0.7, 0] }}
+                            transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
+                          />
+                        ) : null}
                         <item.icon className="h-4 w-4" aria-hidden />
-                      </span>
+                      </motion.span>
                       <div>
                         <dt className="text-sm font-semibold text-white">
                           {item.term}
@@ -382,7 +460,7 @@ function Hero({
                           {item.detail}
                         </dd>
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </dl>
               </motion.div>
