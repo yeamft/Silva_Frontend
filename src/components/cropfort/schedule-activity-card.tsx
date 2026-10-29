@@ -231,7 +231,7 @@ export function ScheduleActivityRow({
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
             {picked.length
               ? picked.map((m) => `${PLAN_MONTH_LABELS[m]} ${act.monthShares?.[m] ?? 0}%`).join(" · ")
-              : "No months yet — tap to plan"}
+              : "No months yet tap to plan"}
           </span>
         </span>
         <span
