@@ -1,19 +1,11 @@
 "use client";
 
-import { FarmAreaSelector } from "@/components/cropfort/farm-area-label";
 import Link from "next/link";
+import { FarmAreaSelector } from "@/components/cropfort/farm-area-label";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import {
-  Home,
-  Menu,
-  MessageSquare,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Wrench,
-} from "lucide-react";
+import { Home, PanelLeftClose, PanelLeftOpen, Wrench } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/navigation/notification-bell";
 import { UserMenu } from "@/components/navigation/user-menu";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -21,6 +13,21 @@ import { ActivePlanSync } from "@/components/navigation/active-plan-sync";
 import { LiveUpdates } from "@/components/navigation/live-updates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 import { useVendorCounts } from "@/lib/cropfort/use-vendor-counts";
 import { cn } from "@/lib/utils";
@@ -48,13 +55,9 @@ const VENDOR_NAV: NavItem[] = [
     match: (p) => p.startsWith(CROPFORT_ROUTES.workOrders),
     counted: true,
   },
-  {
-    href: CROPFORT_ROUTES.communications,
-    label: "Messages",
-    icon: MessageSquare,
-    match: (p) => p.startsWith(CROPFORT_ROUTES.communications),
-  },
 ];
+
+const SIDEBAR_COLLAPSE_KEY = "cropfort.vendor-sidebar.collapsed";
 
 function SessionBanner() {
   const { sessionWarning, minutesRemaining, extendSession } = useCropfortAuth();
@@ -76,50 +79,123 @@ function SessionBanner() {
   );
 }
 
-function isNavActive(item: NavItem, pathname: string) {
-  return item.match ? item.match(pathname) : pathname.startsWith(item.href);
-}
+function VendorNav() {
+  const pathname = usePathname();
+  const { activeProgram } = useCropfortAuth();
+  const { toggleSidebar, state, isMobile, setOpenMobile } = useSidebar();
+  const { badge } = useVendorCounts();
+  const collapsed = state === "collapsed" && !isMobile;
 
-const COLLAPSED_KEY = "cropfort.vendor-sidebar.collapsed";
-
-function CountBadge({ value, dot }: { value: number; dot?: boolean }) {
-  if (value <= 0) return null;
-  if (dot) return <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-amber-500" aria-label={`${value} open`} />;
   return (
-    <span className="ml-auto rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-amber-700 dark:text-amber-400">
-      {value}
-    </span>
+    <Sidebar collapsible="icon" className="border-sidebar-border bg-gradient-to-b from-emerald-50 to-sidebar">
+      <SidebarHeader className="flex h-16 justify-center border-b border-sidebar-border/70 px-3 py-0">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label="Open menu"
+              title="Open menu"
+              className="cf-focus flex h-9 w-9 items-center justify-center rounded-xl text-sidebar-foreground/70 transition-colors hover:bg-primary/10 hover:text-primary"
+            >
+              <PanelLeftOpen className="h-5 w-5" aria-hidden />
+            </button>
+          ) : (
+            <>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground" aria-hidden>
+                <Wrench className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold tracking-tight text-sidebar-foreground">Cropfort</span>
+                <span className="block truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/55">
+                  Vendor
+                </span>
+              </span>
+              {isMobile ? null : (
+                <button
+                  type="button"
+                  onClick={toggleSidebar}
+                  aria-label="Close menu"
+                  title="Close menu"
+                  className="cf-focus flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/60 transition-colors hover:bg-primary/10 hover:text-primary"
+                >
+                  <PanelLeftClose className="h-4 w-4" aria-hidden />
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </SidebarHeader>
+      <SidebarContent className="pt-2">
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu aria-label="Vendor desk" className="gap-0.5">
+              {VENDOR_NAV.map((item) => {
+                const Icon = item.icon;
+                const active = item.match ? item.match(pathname) : pathname.startsWith(item.href);
+                const count = item.counted ? badge : 0;
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={count ? `${item.label} · ${count} open` : item.label}
+                      className="h-10 rounded-lg text-[13px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-primary/[0.08] hover:text-sidebar-foreground data-[active=true]:bg-primary/[0.12] data-[active=true]:font-semibold data-[active=true]:text-primary group-data-[collapsible=icon]:justify-center"
+                    >
+                      <Link href={item.href} onClick={() => isMobile && setOpenMobile(false)} aria-current={active ? "page" : undefined}>
+                        <span className="relative">
+                          <Icon className={cn("h-4 w-4", active ? "text-primary" : "text-sidebar-foreground/55")} aria-hidden />
+                          {count ? (
+                            <span className="absolute -right-1.5 -top-1.5 hidden h-2 w-2 rounded-full bg-amber-500 group-data-[collapsible=icon]:block" aria-hidden />
+                          ) : null}
+                        </span>
+                        <span className="flex-1 truncate">{item.label}</span>
+                        {count ? (
+                          <span className="ml-auto rounded-full bg-amber-500/15 px-1.5 text-[11px] font-semibold tabular-nums text-amber-700 group-data-[collapsible=icon]:hidden dark:text-amber-400">
+                            {count}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter className="group-data-[collapsible=icon]:hidden">
+        <p className="truncate px-2 py-1 text-xs text-sidebar-foreground/60">{activeProgram?.name || "Cropfort"}</p>
+      </SidebarFooter>
+    </Sidebar>
   );
 }
 
-/** Field desk for bagro_office / field_supervisor — slim rail on desktop that can be closed, menu sheet on phone. */
+/** Field desk for bagro_office / field_supervisor — same frame as the other desks. */
 export function VendorFieldShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const { badge } = useVendorCounts();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     try {
-      setCollapsed(window.localStorage.getItem(COLLAPSED_KEY) === "1");
+      setSidebarOpen(localStorage.getItem(SIDEBAR_COLLAPSE_KEY) !== "1");
     } catch {
-      /* storage unavailable */
+      /* ignore */
     }
   }, []);
-  const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      try {
-        window.localStorage.setItem(COLLAPSED_KEY, prev ? "0" : "1");
-      } catch {
-        /* storage unavailable */
-      }
-      return !prev;
-    });
-  };
 
   return (
-    <div
-      className="flex min-h-[100dvh] overflow-x-hidden bg-background text-foreground"
+    <SidebarProvider
+      open={sidebarOpen}
+      onOpenChange={(open) => {
+        setSidebarOpen(open);
+        try {
+          localStorage.setItem(SIDEBAR_COLLAPSE_KEY, open ? "0" : "1");
+        } catch {
+          /* keep the current session usable when storage is unavailable */
+        }
+      }}
+      style={{ "--sidebar-width": "11.5rem" } as React.CSSProperties}
+      className="min-h-[100dvh] items-stretch overflow-x-hidden bg-background text-foreground"
       data-desk="vendor"
     >
       <a
@@ -129,127 +205,33 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
         Skip to main content
       </a>
 
-      <aside
-        className={cn(
-          "sticky top-0 z-20 hidden h-[100dvh] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[4px_0_16px_-6px_rgba(15,23,20,0.16)] transition-[width] duration-200 ease-out md:flex",
-          collapsed ? "w-14" : "w-[11.5rem]",
-        )}
-      >
-        <div className={cn("flex items-center gap-1 border-b border-sidebar-border py-3", collapsed ? "justify-center px-2" : "px-3")}>
-          {collapsed ? null : (
-            <p className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold tracking-tight text-sidebar-foreground">
-              <Wrench className="h-4 w-4 shrink-0 text-sidebar-primary" aria-hidden />
-              <span className="truncate">Field desk</span>
-            </p>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground"
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
-            title={collapsed ? "Open sidebar" : "Close sidebar"}
-          >
-            {collapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden /> : <PanelLeftClose className="h-4 w-4" aria-hidden />}
-          </Button>
-        </div>
-        <nav aria-label="Field desk" className="flex flex-1 flex-col gap-0.5 p-2">
-          {VENDOR_NAV.map((item) => {
-            const Icon = item.icon;
-            const active = isNavActive(item, pathname);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={collapsed ? item.label : undefined}
-                aria-label={collapsed ? item.label : undefined}
-                className={cn(
-                  "relative flex min-h-10 items-center gap-2.5 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-[color,background-color,transform] duration-150 ease-out hover:translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:transform-none motion-reduce:transition-none",
-                  active
-                    ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
-                  collapsed && "justify-center px-0 hover:translate-x-0",
-                )}
-                aria-current={active ? "page" : undefined}
-              >
-                {active ? (
-                  <span
-                    className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-sm bg-sidebar-primary"
-                    aria-hidden
-                  />
-                ) : null}
-                <Icon
-                  className={cn(
-                    "h-4 w-4 shrink-0",
-                    active ? "text-sidebar-primary" : "text-sidebar-foreground/50",
-                  )}
-                  aria-hidden
-                />
-                {collapsed ? null : item.label}
-                {item.counted ? <CountBadge value={badge} dot={collapsed} /> : null}
-              </Link>
-            );
-          })}
-        </nav>
-      </aside>
+      <VendorNav />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-border bg-card shadow-[0_1px_2px_rgba(15,23,20,0.06),0_4px_16px_-6px_rgba(15,23,20,0.12)] supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
-          <div className="flex h-14 items-center gap-2 px-3 sm:px-5">
-            <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 rounded-xl md:hidden" aria-label="Open menu">
-                  <Menu className="h-4 w-4" aria-hidden />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-64 p-3">
-                <SheetTitle className="px-2 pb-3 pt-1 text-sm">Field desk</SheetTitle>
-                <nav aria-label="Field desk" className="flex flex-col gap-0.5">
-                  {VENDOR_NAV.map((item) => {
-                    const Icon = item.icon;
-                    const active = isNavActive(item, pathname);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMenuOpen(false)}
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
-                          active ? "bg-primary/10 text-primary" : "text-foreground/80 hover:bg-muted",
-                        )}
-                      >
-                        <Icon className="h-4 w-4" aria-hidden />
-                        {item.label}
-                        {item.counted ? <CountBadge value={badge} /> : null}
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </SheetContent>
-            </Sheet>
-            <div className="flex min-w-0 flex-1 items-center">
-              <FarmAreaSelector />
-            </div>
+      <SidebarInset
+        id="cropfort-main"
+        tabIndex={-1}
+        className="min-w-0 overflow-x-hidden pb-[env(safe-area-inset-bottom)]"
+      >
+        <header className="sticky top-0 z-30 bg-card supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
+          <div className="cf-shell-topbar flex h-14 items-center gap-3 border-b border-border px-3 sm:px-5">
+            <SidebarTrigger
+              className="shrink-0 md:hidden border border-sidebar-border bg-sidebar-accent/70 text-sidebar-foreground hover:bg-sidebar-accent"
+              aria-label="Toggle navigation"
+            />
+            <FarmAreaSelector className="min-w-0" />
+            <div className="flex-1" />
             <NotificationBell />
             <UserMenu />
           </div>
           <SessionBanner />
         </header>
 
-        <main
-          id="cropfort-main"
-          className="w-full min-w-0 flex-1 pb-[env(safe-area-inset-bottom)]"
-          tabIndex={-1}
-        >
-          {children}
-        </main>
-
-      </div>
+        {children}
+      </SidebarInset>
 
       <LiveUpdates />
       <ActivePlanSync />
       <div id="cropfort-route-announcer" className="sr-only" aria-live="polite" aria-atomic="true" />
-    </div>
+    </SidebarProvider>
   );
 }

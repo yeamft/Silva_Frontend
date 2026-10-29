@@ -340,14 +340,8 @@ export function MainNav() {
             </button>
           ) : (
             <>
-              <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-[11px] font-bold tracking-wide text-primary-foreground shadow-[0_6px_16px_-8px_hsl(var(--primary))]"
-                aria-hidden
-              >
-                CF
-              </span>
-              <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                <p className="truncate text-sm font-bold tracking-tight text-sidebar-foreground">
+              <div className="min-w-0 flex-1 px-1 group-data-[collapsible=icon]:hidden">
+                <p className="truncate text-base font-bold tracking-tight text-sidebar-foreground">
                   Cropfort
                 </p>
               </div>
