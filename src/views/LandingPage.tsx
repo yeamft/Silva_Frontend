@@ -4,12 +4,10 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import {
-  ArrowLeft,
   ArrowRight,
   CalendarRange,
   CheckCircle2,
   ChevronRight,
-  ClipboardCheck,
   FileCheck2,
   History,
   Loader2,
@@ -286,95 +284,6 @@ function SiteHeader({
   );
 }
 
-/** A small, static picture of the desk home: tiles and the "Do next" list. */
-function DeskPreview() {
-  const tiles = [
-    { label: "Plans to finish", value: 2, tone: "bg-white/[0.08] text-white" },
-    {
-      label: "Months to activate",
-      value: 1,
-      tone: "bg-white/[0.08] text-white",
-    },
-    {
-      label: "Work to review",
-      value: 4,
-      tone: "bg-amber-400/15 text-amber-200",
-    },
-  ];
-  const todo = [
-    {
-      title: "4 work orders sent for review",
-      meta: "The vendor marked the work done",
-      action: "Review",
-    },
-    {
-      title: "Meskerem 2026 ready to activate",
-      meta: "Approved by the asset owner",
-      action: "Activate",
-    },
-    {
-      title: "Coffee estate plan",
-      meta: "Returned — fix and resubmit",
-      action: "Fix",
-    },
-  ];
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 28, rotate: 0 }}
-      animate={{ opacity: 1, y: 0, rotate: -1.5 }}
-      transition={{ duration: 0.8, ease, delay: 0.2 }}
-      className="w-full max-w-md rounded-3xl border border-white/15 bg-[#0B1F0C]/70 p-5 shadow-[0_40px_80px_-30px_rgba(0,0,0,0.7)] backdrop-blur-md"
-      aria-hidden
-    >
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-white">Your home</p>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-medium text-emerald-200">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300 motion-reduce:animate-none" />
-          Live
-        </span>
-      </div>
-      <ul className="mt-4 grid grid-cols-3 gap-2">
-        {tiles.map((t) => (
-          <li
-            key={t.label}
-            className={cn("rounded-2xl border border-white/10 p-3", t.tone)}
-          >
-            <p className="text-2xl font-semibold tabular-nums">{t.value}</p>
-            <p className="mt-0.5 text-[11px] leading-4 text-white/60">
-              {t.label}
-            </p>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-        <p className="border-b border-white/10 px-4 py-2.5 text-xs font-semibold text-white/80">
-          Do next
-        </p>
-        <ul className="divide-y divide-white/10">
-          {todo.map((item) => (
-            <li
-              key={item.title}
-              className="flex items-center gap-3 px-4 py-2.5"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium text-white">
-                  {item.title}
-                </span>
-                <span className="block truncate text-[11px] text-white/50">
-                  {item.meta}
-                </span>
-              </span>
-              <span className="rounded-lg bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground">
-                {item.action}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </motion.div>
-  );
-}
-
 function Hero({
   panel,
   onOpen,
@@ -392,15 +301,11 @@ function Hero({
         <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#061408]/70 via-transparent to-[#061408]/30" />
       </div>
 
-      <div className="relative z-20 mx-auto grid w-full max-w-7xl flex-1 min-h-0 items-center gap-12 px-5 pb-6 pt-[calc(80px+env(safe-area-inset-top))] sm:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:px-10">
+      <div className="relative z-20 mx-auto grid w-full max-w-7xl flex-1 min-h-0 items-center gap-12 px-5 pb-6 pt-[calc(80px+env(safe-area-inset-top))] sm:px-8 lg:px-10">
         <div className="relative w-full max-w-3xl">
           <AnimatePresence mode="wait" initial={false}>
             {panel ? (
-              <HeroPanel
-                key={panel}
-                panel={panel}
-                onBack={() => onOpen(null)}
-              />
+              <HeroPanel key={panel} panel={panel} />
             ) : (
               <motion.div
                 key="intro"
@@ -416,9 +321,9 @@ function Hero({
                 </h1>
 
                 <p className="mt-5 max-w-2xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
-                  Cropfort takes estate work from the annual plan to monthly
-                  orders, vendor work orders and SPX-verified delivery — with
-                  each team seeing only what&apos;s waiting on them.
+                  Cropfort takes estate work from the annual plan to work
+                  orders and verified delivery with each team seeing only
+                  what&apos;s waiting on them.
                 </p>
 
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -451,7 +356,7 @@ function Hero({
                   {[
                     {
                       term: "Two-step approvals",
-                      detail: "Plans and monthly orders signed off",
+                      detail: "Plans and work orders signed off",
                       icon: ShieldCheck,
                     },
                     {
@@ -485,14 +390,11 @@ function Hero({
           </AnimatePresence>
         </div>
 
-        <div className="hidden justify-end lg:flex">
-          <DeskPreview />
-        </div>
       </div>
 
       <footer className="relative z-20 border-t border-white/10 bg-[#061408]/60 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-white/60 sm:px-8 lg:px-10">
-          <p>© {new Date().getFullYear()} Cropfort · Powered by SPX</p>
+          <p>© {new Date().getFullYear()} Cropfort</p>
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -517,28 +419,21 @@ function Hero({
 const ROLES = [
   {
     title: "Asset owners",
-    copy: "Approve plans and monthly work.",
+    copy: "Approve plans and work orders.",
     icon: ShieldCheck,
-  },
-  {
-    title: "SPX",
-    copy: "Plan the work and check it's done.",
-    icon: ClipboardCheck,
   },
   { title: "Vendors", copy: "Do the work and mark it done.", icon: Users },
 ] as const;
 
 const STEPS = [
-  { title: "Plan", copy: "SPX builds the season plan.", icon: MapPinned },
+  { title: "Plan", copy: "Build the season plan.", icon: MapPinned },
   { title: "Approve", copy: "The asset owner signs it off.", icon: FileCheck2 },
   {
-    title: "Monthly orders",
-    copy: "Each month is approved first.",
+    title: "Work orders",
+    copy: "Each month's work is approved first.",
     icon: CalendarRange,
   },
   { title: "Activate", copy: "Work orders go to vendors.", icon: Send },
-  { title: "Done", copy: "Vendors mark the work done.", icon: Sprout },
-  { title: "Verify", copy: "SPX checks and approves it.", icon: CheckCircle2 },
 ] as const;
 
 /** Staggered list used by the hero panels. */
@@ -649,7 +544,7 @@ const PANELS: Record<
 > = {
   "how-it-works": {
     title: "How it works",
-    copy: "Six simple steps, from plan to approved work.",
+    copy: "Four simple steps, from plan to work orders.",
     body: () => <StepsBody />,
   },
   roles: {
@@ -664,8 +559,8 @@ const PANELS: Record<
   },
 };
 
-/** Replaces the hero intro in place: a back link, a short title and the panel's content. */
-function HeroPanel({ panel, onBack }: { panel: PanelId; onBack: () => void }) {
+/** Replaces the hero intro in place: a short title and the panel's content. */
+function HeroPanel({ panel }: { panel: PanelId }) {
   const { title, copy, body } = PANELS[panel];
   return (
     <motion.section
@@ -676,20 +571,9 @@ function HeroPanel({ panel, onBack }: { panel: PanelId; onBack: () => void }) {
       aria-labelledby="hero-panel-title"
       className="w-full"
     >
-      <button
-        type="button"
-        onClick={onBack}
-        className="group inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 backdrop-blur-sm transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B7D4B9]"
-      >
-        <ArrowLeft
-          className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
-          aria-hidden
-        />
-        Back
-      </button>
       <h2
         id="hero-panel-title"
-        className="mt-5 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl"
+        className="font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl"
       >
         {title}
       </h2>

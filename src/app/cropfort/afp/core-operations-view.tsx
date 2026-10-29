@@ -29,6 +29,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { FormField } from "@/components/cropfort/form-field";
 import { BudgetYearPicker } from "@/components/cropfort/year-picker";
+import { PlanAssessmentCard } from "@/components/cropfort/plan-assessment-card";
 import { NotAuthorized } from "@/components/cropfort/not-authorized";
 import { PageContainer, PageHeader } from "@/components/cropfort/page-shell";
 import { StatusBadge } from "@/components/cropfort/status-badge";
@@ -1276,6 +1277,13 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
               </Link>
             </div>
           ) : null}
+
+          <PlanAssessmentCard
+            planId={plan.id}
+            farmEstateId={plan.farmEstateId}
+            planYear={plan.budgetYearGc}
+            canEdit={canEdit}
+          />
 
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-muted/40 px-4 py-3">
             <span className="text-sm text-muted-foreground">

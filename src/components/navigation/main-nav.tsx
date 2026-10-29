@@ -8,6 +8,8 @@ import {
   ChevronDown,
   FileText,
   Home,
+  Leaf,
+  ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
   Wrench,
@@ -48,17 +50,19 @@ function childLinksFor(workspace: Workspace) {
   return [];
 }
 
-/** SPX Account Manager: five links in the order the work happens, each with what's waiting. */
+/** SPX Account Manager: links in the order the work happens, each with what's waiting. */
 function FlatLinks() {
   const { isActive } = useNavigation();
   const { isMobile, setOpenMobile } = useSidebar();
   const { badges } = useDeskCounts();
   const links: { id: string; href: string; label: string; icon: LucideIcon; badge?: number; exact?: boolean }[] = [
     { id: "home", href: CROPFORT_ROUTES.dashboard, label: "Home", icon: Home, exact: true },
+    { id: "assessments", href: CROPFORT_ROUTES.farmAssessments, label: "Farm assessments", icon: Leaf },
     { id: "plans", href: CROPFORT_ROUTES.programmePlans, label: "Plans", icon: Briefcase, badge: badges.plans },
     { id: "monthly", href: CROPFORT_ROUTES.monthlyWorkOrders, label: "Monthly orders", icon: CalendarRange, badge: badges.monthly },
     { id: "work-orders", href: CROPFORT_ROUTES.workOrders, label: "Work orders", icon: Wrench, badge: badges.workOrders },
     { id: "reports", href: CROPFORT_ROUTES.reports, label: "Reports", icon: FileText },
+    { id: "activities", href: CROPFORT_ROUTES.activityTaxonomy, label: "Activities", icon: ListChecks },
   ];
 
   return (

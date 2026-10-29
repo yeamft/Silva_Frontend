@@ -122,6 +122,14 @@ export function getFarmAssessment(id: string) {
   return apiFetch<FarmAssessment>(`${base}/${encodeURIComponent(id)}`);
 }
 
+/** Attaches the assessment to a Core Operations plan, or detaches it with null. */
+export function linkFarmAssessmentToPlan(id: string, planId: string | null) {
+  return apiFetch<FarmAssessment>(`${base}/${encodeURIComponent(id)}/link-plan`, {
+    method: "POST",
+    body: { planId },
+  });
+}
+
 export function submitFarmAssessment(id: string, revision: number) {
   return apiFetch<FarmAssessment>(`${base}/${encodeURIComponent(id)}/submit`, {
     method: "POST",

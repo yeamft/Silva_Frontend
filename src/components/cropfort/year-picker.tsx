@@ -11,33 +11,36 @@ const PAGE = 12;
 
 type Props = {
   id?: string;
-  /** Gregorian year the budget year ends in (the plan's planYear). */
-  value: number;
+  /** Gregorian year the budget year ends in (the plan's planYear); null shows the placeholder. */
+  value: number | null;
   onChange: (year: number) => void;
   min?: number;
   max?: number;
   disabled?: boolean;
+  placeholder?: string;
 };
 
 /** Calendar-style budget year picker: a page of twelve years, any year in range. */
-export function BudgetYearPicker({ id, value, onChange, min = 2000, max = 2100, disabled }: Props) {
+export function BudgetYearPicker({ id, value, onChange, min = 2000, max = 2100, disabled, placeholder = "Select year" }: Props) {
   const [open, setOpen] = useState(false);
-  const pageStart = (y: number) => Math.max(min, Math.min(y - (y % PAGE), max - PAGE + 1));
-  const [start, setStart] = useState(() => pageStart(value));
   const thisYear = new Date().getFullYear();
+  const pageStart = (y: number) => Math.max(min, Math.min(y - (y % PAGE), max - PAGE + 1));
+  const [start, setStart] = useState(() => pageStart(value ?? thisYear));
   const years = Array.from({ length: PAGE }, (_, i) => start + i).filter((y) => y >= min && y <= max);
 
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next) setStart(pageStart(value));
+        if (next) setStart(pageStart(value ?? thisYear));
         setOpen(next);
       }}
     >
       <PopoverTrigger asChild>
         <Button id={id} type="button" variant="outline" disabled={disabled} className="h-11 w-full justify-between rounded-xl border-border/80 bg-background text-[15px] font-normal shadow-sm">
-          <span className="truncate">{budgetYearLabel(value).label}</span>
+          <span className={cn("truncate", value == null && "text-muted-foreground")}>
+            {value != null ? budgetYearLabel(value).label : placeholder}
+          </span>
           <CalendarDays className="ml-2 h-4 w-4 shrink-0 opacity-60" aria-hidden />
         </Button>
       </PopoverTrigger>

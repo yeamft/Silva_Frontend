@@ -479,19 +479,21 @@ const LoginPage = () => {
                         <ArrowLeft className="h-4 w-4" aria-hidden />
                         Back to sign in
                       </Button>
-                    ) : (
-                      <Link
-                        href="/"
-                        className="cf-focus mx-auto flex h-9 w-fit items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        <ArrowLeft className="h-4 w-4" aria-hidden />
-                        Back to home
-                      </Link>
-                    )}
+                    ) : null}
                   </form>
                 </motion.div>
               </AnimatePresence>
             </div>
+
+            {!mfaStep ? (
+              <Link
+                href="/"
+                className="cf-focus mx-auto -mt-2 flex h-9 w-fit items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Back to home
+              </Link>
+            ) : null}
 
             {!mfaStep ? (
               <section aria-labelledby="demo-heading" className="space-y-3">

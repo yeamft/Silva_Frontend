@@ -21,6 +21,7 @@ import {
   type FarmAssessmentSummary, type AssessmentStatus, type CreateAssessmentBody,
 } from "@/lib/api/farm-assessments";
 import { canCreateProgrammePlan, isBagroDesk } from "@/lib/cropfort/platform-access";
+import { BudgetYearPicker } from "@/components/cropfort/year-picker";
 
 const STATUS_LABELS: Record<AssessmentStatus, string> = {
   draft: "Draft",
@@ -301,9 +302,6 @@ function NewAssessmentDialog({
     setTitleTouched(false);
   }
 
-  const currentYear = new Date().getFullYear();
-  const yearOptions = [currentYear + 1, currentYear, currentYear - 1];
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -329,16 +327,11 @@ function NewAssessmentDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="na-year">Planning year</Label>
-            <Select value={planYear} onValueChange={setPlanYear}>
-              <SelectTrigger id="na-year">
-                <SelectValue placeholder="Select year" />
-              </SelectTrigger>
-              <SelectContent>
-                {yearOptions.map((y) => (
-                  <SelectItem key={y} value={String(y)}>{y} Programme</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <BudgetYearPicker
+              id="na-year"
+              value={planYear ? Number(planYear) : null}
+              onChange={(y) => setPlanYear(String(y))}
+            />
           </div>
 
           <div className="space-y-1.5">
