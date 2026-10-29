@@ -531,21 +531,9 @@ const LoginPage = () => {
                   })}
                 </div>
 
-                <p className="text-center text-xs text-muted-foreground">
-                  Password:{" "}
-                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground">
-                    {DEMO_PASSWORD}
-                  </code>
-                </p>
               </section>
             ) : null}
 
-            <p className="text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
-              <Link href="/#contact" className="font-medium text-primary underline-offset-4 hover:underline">
-                Request access
-              </Link>
-            </p>
           </motion.div>
         </div>
       </main>
