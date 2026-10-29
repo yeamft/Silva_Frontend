@@ -104,7 +104,7 @@ export function ScheduleActivityCard({
       </div>
 
       {/* Months */}
-      <div className="mt-3 grid grid-cols-3 gap-1.5 min-[420px]:grid-cols-4 sm:grid-cols-6 xl:grid-cols-12">
+      <div className="mt-4 grid grid-cols-3 gap-2.5 sm:grid-cols-6">
         {months.map((m) => {
           const on = act.intensities[m] !== "none";
           const pct = act.monthShares?.[m] ?? 0;
@@ -112,7 +112,7 @@ export function ScheduleActivityCard({
             <div
               key={m}
               className={cn(
-                "flex flex-col items-center rounded-lg border px-1 pb-1.5 pt-1 transition-colors",
+                "flex flex-col items-center rounded-xl border px-2 pb-2.5 pt-2 transition-colors",
                 on ? "border-primary/50 bg-primary/[0.06]" : "border-dashed border-border",
               )}
             >
@@ -123,16 +123,16 @@ export function ScheduleActivityCard({
                 aria-label={`${on ? "Remove" : "Add"} ${PLAN_MONTH_LABELS[m]} for ${act.activityName}`}
                 onClick={() => onToggleMonth(m)}
                 className={cn(
-                  "cf-focus w-full rounded-md py-1 text-xs font-semibold transition-colors disabled:cursor-default",
+                  "cf-focus w-full rounded-md py-1.5 text-sm font-semibold transition-colors disabled:cursor-default",
                   on ? "text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 {PLAN_MONTH_LABELS[m]}
-                <span className="block text-[10px] font-normal opacity-70">{yearOf(m)}</span>
+                <span className="block text-[11px] font-normal opacity-70">{yearOf(m)}</span>
               </button>
               {on ? (
                 <>
-                  <label className="mt-1 flex h-7 w-full max-w-[4.5rem] items-center rounded-md border border-border bg-background focus-within:border-primary">
+                  <label className="mt-1.5 flex h-9 w-full max-w-[5.5rem] items-center rounded-md border border-border bg-background focus-within:border-primary">
                     <input
                       type="number"
                       inputMode="decimal"
@@ -144,11 +144,11 @@ export function ScheduleActivityCard({
                       aria-label={`${act.activityName} ${PLAN_MONTH_LABELS[m]} percent`}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => onShare(m, Number(e.target.value) || 0)}
-                      className="h-full w-full min-w-0 bg-transparent pl-1.5 text-right text-xs font-medium tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                      className="h-full w-full min-w-0 bg-transparent pl-2 text-right text-sm font-semibold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                     />
-                    <span className="pr-1.5 text-[11px] text-muted-foreground">%</span>
+                    <span className="pr-2 text-xs text-muted-foreground">%</span>
                   </label>
-                  <span className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
+                  <span className="mt-1 text-[11px] tabular-nums text-muted-foreground">
                     {fmtQty((act.plannedQty * pct) / 100)} {act.uom}
                   </span>
                 </>
