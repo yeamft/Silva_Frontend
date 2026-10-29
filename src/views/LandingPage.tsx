@@ -2,7 +2,7 @@
 
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import {
   ArrowRight,
   CalendarRange,
@@ -146,54 +146,6 @@ function HeroBackground({
           />
         );
       })}
-    </div>
-  );
-}
-
-type Ripple = { id: number; x: number; y: number };
-
-/** Click / tap points on the hero, each kept just long enough for its rings to spread out. */
-function useRipples() {
-  const reduce = useReducedMotion();
-  const [ripples, setRipples] = useState<Ripple[]>([]);
-  const onPointerDown = (e: React.PointerEvent<HTMLElement>) => {
-    if (reduce) return;
-    const box = e.currentTarget.getBoundingClientRect();
-    const ripple = { id: e.timeStamp + Math.random(), x: e.clientX - box.left, y: e.clientY - box.top };
-    // A few at a time is plenty; older ones are already fading
-    setRipples((prev) => [...prev.slice(-4), ripple]);
-    window.setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== ripple.id)), 2200);
-  };
-  return { ripples, onPointerDown };
-}
-
-/** Rings that spread from where the hero was touched, like a drop on still water. */
-function Ripples({ ripples }: { ripples: Ripple[] }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-[15] overflow-hidden" aria-hidden>
-      <AnimatePresence>
-        {ripples.map((r) => (
-          <span key={r.id} className="absolute" style={{ left: r.x, top: r.y }}>
-            {/* Soft glow where the drop lands */}
-            <motion.span
-              className="absolute -left-10 -top-10 h-20 w-20 rounded-full bg-[#B7D4B9]/25 blur-md"
-              initial={{ scale: 0.2, opacity: 0.9 }}
-              animate={{ scale: 1.6, opacity: 0 }}
-              transition={{ duration: 0.9, ease: "easeOut" }}
-            />
-            {[0, 0.18, 0.36].map((delay, i) => (
-              <motion.span
-                key={i}
-                className="absolute -left-[60px] -top-[60px] h-[120px] w-[120px] rounded-full border border-[#B7D4B9]"
-                style={{ boxShadow: "0 0 18px rgba(183,212,185,0.25), inset 0 0 12px rgba(183,212,185,0.15)" }}
-                initial={{ scale: 0, opacity: 0.75 - i * 0.18 }}
-                animate={{ scale: 4.2 + i * 1.4, opacity: 0 }}
-                transition={{ duration: 1.6 + i * 0.25, delay, ease: [0.22, 0.61, 0.36, 1] }}
-              />
-            ))}
-          </span>
-        ))}
-      </AnimatePresence>
     </div>
   );
 }
@@ -371,15 +323,9 @@ function Hero({
   onOpen: (id: PanelId | null) => void;
 }) {
   const { activeIndex, ready } = useHeroSlides();
-  const { ripples, onPointerDown } = useRipples();
 
   return (
-    <section
-      // Hand cursor: the whole hero ripples when clicked
-      className="relative isolate flex h-full w-full cursor-pointer flex-col bg-[#0B1F0C]"
-      onPointerDown={onPointerDown}
-    >
-      <Ripples ripples={ripples} />
+    <section className="relative isolate flex h-full w-full cursor-pointer flex-col bg-[#0B1F0C]">
       <div className="absolute inset-0 overflow-hidden" aria-hidden>
         <HeroBackground activeIndex={activeIndex} ready={ready} />
         <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#061408]/90 via-[#0B1F0C]/70 to-[#0B1F0C]/40" />
