@@ -628,7 +628,7 @@ const PANELS: Record<
   },
   contact: {
     title: "Contact us",
-    copy: "Ask for a demo or access — we'll reply soon.",
+    copy: "Ask for a demo or access we'll reply soon.",
     body: () => <ContactBody />,
   },
 };

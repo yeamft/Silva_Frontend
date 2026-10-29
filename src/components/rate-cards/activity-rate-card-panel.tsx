@@ -119,19 +119,10 @@ export function ActivityRateCardPanel({
   const expert = expertRate.trim() === "" ? null : Number(expertRate);
   const hasFarmRates = industry != null;
 
-  const scenarios: { id: RatePlanBasis; label: string; rate: number | null; hint: string }[] = [
-    {
-      id: "industry_average",
-      label: "Industry average",
-      rate: industry,
-      hint: !hasFarmRates
-        ? "No farm rates"
-        : data.recommendedSource === "industry_average"
-          ? `${data.industryAverage.farmsWithRate} industry farm${data.industryAverage.farmsWithRate === 1 ? "" : "s"}`
-          : `All ${data.sixFarmAverage.farmsWithRate} farms`,
-    },
-    { id: "plus_25", label: `+${band1}%`, rate: industry != null ? round2(industry * (1 + band1 / 100)) : null, hint: "Above average" },
-    { id: "plus_50", label: `+${band2}%`, rate: industry != null ? round2(industry * (1 + band2 / 100)) : null, hint: "Well above average" },
+  const scenarios: { id: RatePlanBasis; label: string; rate: number | null }[] = [
+    { id: "industry_average", label: "Industry average", rate: industry },
+    { id: "plus_25", label: `+${band1}%`, rate: industry != null ? round2(industry * (1 + band1 / 100)) : null },
+    { id: "plus_50", label: `+${band2}%`, rate: industry != null ? round2(industry * (1 + band2 / 100)) : null },
   ];
   const effectiveBasis: RatePlanBasis =
     basis === "expert_input" || scenarios.find((s) => s.id === basis)?.rate == null ? "expert_input" : basis;
@@ -226,7 +217,6 @@ export function ActivityRateCardPanel({
 
       {/* 1 — the rate */}
       <section className="space-y-2">
-        <p className="text-sm font-medium">Choose the rate</p>
         {benchmarkQuery.isLoading ? (
           <p className="rounded-xl bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">Loading benchmark rates…</p>
         ) : (
@@ -254,7 +244,6 @@ export function ActivityRateCardPanel({
                   ) : null}
                   <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
                   <span className="mt-1 text-lg font-semibold tabular-nums">{available ? fmtEtb(s.rate) : "—"}</span>
-                  <span className="text-[11px] text-muted-foreground">{s.hint}</span>
                 </motion.button>
               );
             })}
@@ -328,11 +317,11 @@ export function ActivityRateCardPanel({
           className="cf-focus flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left"
         >
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium">Source farms</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {usedFarms.length
-                ? usedFarms.map((f) => `${f.name} ${fmtEtb(f.costPerUnit)}`).join(" · ")
-                : "No farm rates — add them to use the industry average"}
+            <span className="flex items-center gap-2 text-sm font-medium">
+              Source farms
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
+                {usedFarms.length}
+              </span>
             </span>
           </span>
           <span className="shrink-0 text-xs font-medium text-primary">{showFarms ? "Close" : "Change"}</span>
@@ -359,16 +348,8 @@ export function ActivityRateCardPanel({
                       key={x.label}
                       className={cn("rounded-lg border px-3 py-2", x.on ? "border-primary/40 bg-primary/[0.05]" : "border-border bg-muted/30")}
                     >
-                      <p className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        {x.label}
-                        {x.on ? <span className="font-semibold text-primary">used</span> : null}
-                      </p>
-                      <p className="text-sm font-semibold tabular-nums">
-                        {fmtEtb(x.avg.costPerUnit)}
-                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">
-                          {x.avg.farmsWithRate} farm{x.avg.farmsWithRate === 1 ? "" : "s"}
-                        </span>
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">{x.label}</p>
+                      <p className="text-sm font-semibold tabular-nums">{fmtEtb(x.avg.costPerUnit)}</p>
                     </div>
                   ))}
                 </div>
@@ -383,7 +364,7 @@ export function ActivityRateCardPanel({
                       void benchmarkQuery.refetch();
                     }}
                   >
-                    Reset to benchmark
+                    Reset
                   </button>
                   <button
                     type="button"
@@ -391,7 +372,7 @@ export function ActivityRateCardPanel({
                     className="font-medium text-primary hover:underline"
                     onClick={() => setShowPicker((v) => !v)}
                   >
-                    {showPicker ? "Hide benchmark data" : "Pick from benchmark data or upload a workbook"}
+                    {showPicker ? "Hide import" : "Import"}
                   </button>
                 </div>
 
@@ -415,7 +396,7 @@ export function ActivityRateCardPanel({
                 ) : null}
                 <div className="space-y-1.5">
                   <label htmlFor={`rc-evidence-${activity.activityId}`} className="text-sm font-medium">
-                    Source / evidence <span className="text-muted-foreground">(optional)</span>
+                    Source
                   </label>
                   <Input
                     id={`rc-evidence-${activity.activityId}`}

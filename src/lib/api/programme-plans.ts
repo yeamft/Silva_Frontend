@@ -214,6 +214,14 @@ export function decideProgrammePlan(
   });
 }
 
+/** Fix a returned plan: only removed lines and changed quantities are sent; optionally resubmit. */
+export function fixProgrammePlan(
+  id: string,
+  body: { removeLineIds?: string[]; quantities?: Record<string, number>; resubmit?: boolean },
+) {
+  return apiFetch<ProgrammePlanDto>(`/programme-plans/${id}/fix`, { method: "POST", body });
+}
+
 export function duplicateProgrammePlan(id: string) {
   return apiFetch<ProgrammePlanDto>(`/programme-plans/${id}/duplicate`, {
     method: "POST",

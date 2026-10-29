@@ -10,14 +10,17 @@ import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/pa
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { submitProgrammePlan, upsertProgrammePlan, type ProgrammePlanDto } from "@/lib/api/programme-plans";
+import { fixProgrammePlan, type ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { scheduledMonths } from "@/lib/cropfort/month-shares";
 import { PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
 import { useProgrammePlan } from "@/lib/query/hooks/use-programme-plans";
 import { queryKeys } from "@/lib/query/keys";
+import { moveRowStatus, restoreSnapshot } from "@/lib/query/optimistic-status";
 import { cn } from "@/lib/utils";
 import { fmtEtb } from "@/store/cropfortOpsStore";
 import type { CoreOpsActivity } from "@/types/core-ops";
+
+export const RETURNED_HREF = `${CROPFORT_ROUTES.programmePlans}/returned`;
 
 const costOf = (a: CoreOpsActivity, qty: number) => Math.round(qty * (a.agreedRate?.unitRateEtb ?? 0) * 100) / 100;
 
@@ -72,28 +75,37 @@ export default function PlanFixView({ planId }: { planId: string }) {
       return next;
     });
 
-  /** The plan with the fixes applied: removed activities leave the plan, quantities updated. */
-  const fixedPlan = (): ProgrammePlanDto => ({
-    ...plan,
-    activities: Object.fromEntries(
-      Object.entries(plan.activities).map(([id, a]) => {
-        if (removed.has(id)) return [id, { ...a, included: false, plannedCost: 0 }];
-        if (qty[id] != null) return [id, { ...a, plannedQty: qty[id], plannedCost: costOf(a, qty[id]) }];
-        return [id, a];
-      }),
-    ),
-  });
-
+  /** Sends only what changed — removed activities and edited quantities — not the whole plan. */
   const finish = async (resubmit: boolean) => {
+    const quantities = Object.fromEntries(
+      Object.entries(qty).filter(([id, q]) => !removed.has(id) && q !== plan.activities[id]?.plannedQty),
+    );
+    const body = { removeLineIds: [...removed], quantities, resubmit };
+    if (resubmit) {
+      // Leaves the returned list straight away; put back if the server refuses
+      const snapshot = await moveRowStatus<ProgrammePlanDto>(qc, queryKeys.programmePlans.all, plan.id, "returned", { statusRaw: "submitted" });
+      toast.success("Fixed and sent back to the asset owner");
+      router.push(RETURNED_HREF);
+      try {
+        await fixProgrammePlan(plan.id, body);
+      } catch (err) {
+        restoreSnapshot(qc, snapshot);
+        toast.error(err instanceof Error ? `Not sent: ${err.message}` : "Could not send the fix");
+      } finally {
+        void qc.invalidateQueries({ queryKey: queryKeys.programmePlans.all });
+      }
+      return;
+    }
     setBusy(true);
     try {
-      if (resubmit) await submitProgrammePlan(plan.id, fixedPlan());
-      else await upsertProgrammePlan(plan.id, fixedPlan(), "draft");
+      await fixProgrammePlan(plan.id, body);
       void qc.invalidateQueries({ queryKey: queryKeys.programmePlans.all });
-      toast.success(resubmit ? "Fixed and sent back to the asset owner" : "Changes saved");
-      router.push(CROPFORT_ROUTES.programmePlans);
+      toast.success("Changes saved");
+      setQty({});
+      setRemoved(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save the fix");
+    } finally {
       setBusy(false);
     }
   };
@@ -155,11 +167,11 @@ export default function PlanFixView({ planId }: { planId: string }) {
     <PageContainer className="cf-page-centered">
       <PageHeader
         title={`Fix · ${plan.name || "Plan"}`}
-        breadcrumbs={[{ label: "Plans", href: CROPFORT_ROUTES.programmePlans }, { label: "Fix" }]}
+        breadcrumbs={[{ label: "Returned to fix", href: RETURNED_HREF }, { label: plan.name || "Plan" }]}
         meta={<span>{[plan.farmName, plan.budgetYearLabel].filter(Boolean).join(" · ")}</span>}
         actions={
           <Button variant="outline" size="sm" asChild>
-            <Link href={CROPFORT_ROUTES.programmePlans}>
+            <Link href={RETURNED_HREF}>
               <X className="mr-1 h-4 w-4" aria-hidden />
               Exit
             </Link>
@@ -206,7 +218,7 @@ export default function PlanFixView({ planId }: { planId: string }) {
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <Button variant="ghost" asChild>
-              <Link href={`${CROPFORT_ROUTES.programmePlans}/${plan.id}`}>Open full planner</Link>
+              <Link href={`${CROPFORT_ROUTES.programmePlans}/${plan.id}?full=1`}>Open full planner</Link>
             </Button>
             <Button variant="outline" disabled={busy || !changed} onClick={() => void finish(false)}>
               Save

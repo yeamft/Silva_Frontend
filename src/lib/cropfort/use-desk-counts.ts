@@ -40,7 +40,8 @@ export function useDeskCounts() {
       workToIssue,
       /** Badge numbers for the sidebar. */
       badges: {
-        plans: draftPlans.length + returnedPlans.length,
+        plans: draftPlans.length,
+        returned: returnedPlans.length,
         monthly: monthsToActivate.length,
         workOrders: workToReview.length + workToIssue.length,
       },

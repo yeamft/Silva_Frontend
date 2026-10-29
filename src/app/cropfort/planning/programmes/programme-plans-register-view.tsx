@@ -4,7 +4,7 @@ import { useActiveFarmId } from "@/store/farmWorkspaceStore";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ClipboardList, MoreHorizontal, Plus, Search } from "lucide-react";
+import { ArrowRight, ClipboardList, MoreHorizontal, Plus, RotateCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/cropfort/confirm-dialog";
 import {
@@ -67,7 +67,6 @@ const STATUS_TABS: { id: StatusFilter; label: string; match: (raw?: string) => b
   { id: "all", label: "All", match: () => true },
   { id: "draft", label: "Draft", match: (r) => !r || r === "draft" || r === "ready_for_review" },
   { id: "submitted", label: "Pending", match: (r) => r === "submitted" },
-  { id: "returned", label: "Returned", match: (r) => r === "returned" },
   { id: "approved", label: "Approved", match: (r) => r === "approved" || r === "active" },
 ];
 
@@ -114,7 +113,9 @@ export default function ProgrammePlansRegisterView({
     farmEstateId: farmFilter !== "all" ? farmFilter : undefined,
     planYear: yearFilter !== "all" ? Number(yearFilter) : undefined,
   });
-  const allPlans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
+  // Returned plans live on their own "Returned to fix" page
+  const allPlans = useMemo(() => (plansQuery.data || []).filter((p) => p.statusRaw !== "returned"), [plansQuery.data]);
+  const returnedCount = (plansQuery.data || []).filter((p) => p.statusRaw === "returned").length;
   const duplicateMut = useDuplicateProgrammePlan();
   const archiveMut = useArchiveProgrammePlan();
   const submitMut = useSubmitProgrammePlanMutation();
@@ -487,6 +488,22 @@ export default function ProgrammePlansRegisterView({
           </div>
         }
       />
+
+      {!archiveMode && returnedCount ? (
+        <Link
+          href={`${CROPFORT_ROUTES.programmePlans}/returned`}
+          className="group flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] px-4 py-3 text-sm transition-colors hover:bg-amber-500/[0.12]"
+        >
+          <RotateCcw className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
+          <span className="flex-1 font-semibold">
+            {returnedCount} plan{returnedCount === 1 ? "" : "s"} returned to fix
+          </span>
+          <span className="inline-flex items-center gap-1 font-semibold text-primary">
+            Open
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </span>
+        </Link>
+      ) : null}
 
       <SectionCard flush>
         <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:px-5 lg:flex-row lg:items-center">

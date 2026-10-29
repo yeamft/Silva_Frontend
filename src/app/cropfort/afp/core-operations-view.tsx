@@ -353,6 +353,13 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
     })();
   }, [canView, activeProgram?.id, planId, loadContext, loadPlanById, setStep]);
 
+  // Returned plans are fixed on their own page; "Open full planner" there adds ?full=1
+  useEffect(() => {
+    if (!planId || plan?.id !== planId || plan.statusRaw !== "returned") return;
+    if (new URLSearchParams(window.location.search).get("full") === "1") return;
+    router.replace(`${CROPFORT_ROUTES.programmePlans}/${planId}/fix`);
+  }, [planId, plan?.id, plan?.statusRaw, router]);
+
   // Spend band: assigned automatically from the active program's band set
   const bandForEtb = useSpendBandStore((s) => s.bandForEtb);
   const ensureBandProgram = useSpendBandStore((s) => s.ensureProgram);

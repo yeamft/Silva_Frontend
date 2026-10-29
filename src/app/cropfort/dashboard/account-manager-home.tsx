@@ -29,7 +29,7 @@ export function AccountManagerHome() {
 
   const tiles: { label: string; value: number; href: string; icon: LucideIcon; tone: Tone }[] = [
     { label: "Plans to finish", value: c.draftPlans.length, href: CROPFORT_ROUTES.programmePlans, icon: FileText, tone: "primary" },
-    { label: "Returned to fix", value: c.returnedPlans.length, href: CROPFORT_ROUTES.programmePlans, icon: RotateCcw, tone: "warn" },
+    { label: "Returned to fix", value: c.returnedPlans.length, href: `${CROPFORT_ROUTES.programmePlans}/returned`, icon: RotateCcw, tone: "warn" },
     { label: "Waiting approval", value: c.waitingPlans.length, href: CROPFORT_ROUTES.programmePlans, icon: ClipboardCheck, tone: "info" },
     { label: "Months to activate", value: c.monthsToActivate.length, href: CROPFORT_ROUTES.monthlyWorkOrders, icon: CalendarRange, tone: "primary" },
     { label: "Work to review", value: c.workToReview.length, href: `${CROPFORT_ROUTES.workOrders}?view=review`, icon: Wrench, tone: "warn" },

@@ -14,6 +14,7 @@ import {
   PanelLeftOpen,
   Wrench,
   type LucideIcon,
+  RotateCcw,
 } from "lucide-react";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
@@ -51,6 +52,8 @@ function childLinksFor(workspace: Workspace) {
 }
 
 /** SPX Account Manager: links in the order the work happens, each with what's waiting. */
+const RETURNED_PLANS_HREF = `${CROPFORT_ROUTES.programmePlans}/returned`;
+
 function FlatLinks() {
   const { isActive } = useNavigation();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -59,6 +62,10 @@ function FlatLinks() {
     { id: "home", href: CROPFORT_ROUTES.dashboard, label: "Home", icon: Home, exact: true },
     { id: "assessments", href: CROPFORT_ROUTES.farmAssessments, label: "Farm assessments", icon: Leaf },
     { id: "plans", href: CROPFORT_ROUTES.programmePlans, label: "Plans", icon: Briefcase, badge: badges.plans },
+    // Only shown while something is waiting to be fixed
+    ...(badges.returned
+      ? [{ id: "returned", href: RETURNED_PLANS_HREF, label: "Returned to fix", icon: RotateCcw, badge: badges.returned }]
+      : []),
     { id: "monthly", href: CROPFORT_ROUTES.monthlyWorkOrders, label: "Monthly orders", icon: CalendarRange, badge: badges.monthly },
     { id: "work-orders", href: CROPFORT_ROUTES.workOrders, label: "Work orders", icon: Wrench, badge: badges.workOrders },
     { id: "reports", href: CROPFORT_ROUTES.reports, label: "Reports", icon: FileText },
@@ -70,7 +77,9 @@ function FlatLinks() {
       <SidebarGroupContent>
         <SidebarMenu className="gap-1">
           {links.map((link) => {
-            const active = isActive(link.href, { exact: link.exact });
+            // "Plans" isn't highlighted on the returned page, which sits under it
+            const active =
+              isActive(link.href, { exact: link.exact }) && !(link.id === "plans" && isActive(RETURNED_PLANS_HREF));
             const Icon = link.icon;
             return (
               <SidebarMenuItem key={link.id}>
