@@ -43,7 +43,7 @@ import {
   useUpdateOpsReport,
 } from "@/lib/query/hooks/use-ops-reports";
 import { PLAN_MONTH_NAMES } from "@/lib/annual-plan-budget";
-import { PLAN_MONTHS } from "@/lib/cropfort/ethiopian-year";
+import { PLAN_MONTH_LABELS, PLAN_MONTHS } from "@/lib/cropfort/ethiopian-year";
 import { monthsForPeriod, monthsLabel, planPeriodOf } from "@/lib/cropfort/plan-period";
 import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
@@ -87,32 +87,43 @@ const REPORT_SECTIONS = [
   { key: "outlook", label: "Outlook", rows: 2 },
 ] as const;
 
-/**
- * Report periods offered for a Core Operations plan. The plan runs Tikimt → Meskerem; its
- * planYear is the GC year it ends in, so Tikimt–Nehase fall in EC planYear − 8 and Meskerem in − 7.
- */
+/** Gregorian month names in plan order (the plan year runs October → September). */
+const GC_MONTH_NAMES = [
+  "October", "November", "December", "January", "February", "March",
+  "April", "May", "June", "July", "August", "September",
+] as const;
+
+/** Gregorian year of a plan month: October–December fall in the year before the plan's end year. */
+const gcYearOf = (plan: ProgrammePlanDto, index: number) => plan.budgetYearGc - (index <= 2 ? 1 : 0);
+
+/** "Oct 2026 – Mar 2027", or "Apr – Sep 2027" when both ends are in the same year. */
+function gcRangeLabel(plan: ProgrammePlanDto, first: number, last: number) {
+  const short = (i: number) => PLAN_MONTH_LABELS[PLAN_MONTHS[i]];
+  const [y1, y2] = [gcYearOf(plan, first), gcYearOf(plan, last)];
+  return y1 === y2 ? `${short(first)} – ${short(last)} ${y2}` : `${short(first)} ${y1} – ${short(last)} ${y2}`;
+}
+
+/** Report periods offered for a Core Operations plan, as Gregorian months and years. */
 function periodsForPlan(plan: ProgrammePlanDto, cadence: ReportCadence): string[] {
-  const ecYear = (index: number) => plan.budgetYearGc - (index === 11 ? 7 : 8);
   const period = planPeriodOf(plan);
   // A six-month plan has no full-year report, and one six-month report covering its own months
   if (cadence === "annual") return period === "annual" ? [plan.budgetYearLabel || `${plan.budgetYearGc} plan year`] : [];
   if (cadence === "six_month") {
     if (period !== "annual") {
       const months = monthsForPeriod(period);
-      const last = PLAN_MONTHS.indexOf(months[months.length - 1]);
-      return [`${monthsLabel(months)} ${ecYear(last)}`];
+      const idx = months.map((m) => PLAN_MONTHS.indexOf(m));
+      const consecutive = idx.every((v, i) => i === 0 || v === idx[i - 1] + 1);
+      const last = idx[idx.length - 1];
+      return [consecutive ? gcRangeLabel(plan, idx[0], last) : `${monthsLabel(months)} ${gcYearOf(plan, last)}`];
     }
-    return [
-      `${PLAN_MONTH_NAMES[0]}–${PLAN_MONTH_NAMES[5]} ${ecYear(0)}`,
-      `${PLAN_MONTH_NAMES[6]}–${PLAN_MONTH_NAMES[11]} ${ecYear(6)}`,
-    ];
+    return [gcRangeLabel(plan, 0, 5), gcRangeLabel(plan, 6, 11)];
   }
   const included = plan.activityIds.map((id) => plan.activities[id]).filter((a) => a?.included);
   const scheduled = PLAN_MONTHS.map((m, i) => ({ m, i })).filter(({ m }) =>
     included.some((a) => a.intensities?.[m] && a.intensities[m] !== "none"),
   );
   return (scheduled.length ? scheduled : PLAN_MONTHS.map((m, i) => ({ m, i }))).map(
-    ({ i }) => `${PLAN_MONTH_NAMES[i]} ${ecYear(i)}`,
+    ({ i }) => `${GC_MONTH_NAMES[i]} ${gcYearOf(plan, i)}`,
   );
 }
 
@@ -124,7 +135,9 @@ const INTENSITY_SHARE: Record<string, number> = { peak: 0.4, active: 0.25, light
 /** The plan's budget for the report period — one month, a half-year or the whole year. */
 function periodBudget(plan: ProgrammePlanDto, cadence: ReportCadence, periodLabel: string) {
   if (cadence === "annual") return plan.plannedCostEtb ?? 0;
-  const first = PLAN_MONTH_NAMES.findIndex((name) => periodLabel.startsWith(name));
+  // New labels start with the Gregorian month ("March 2027", "Oct 2026 – Mar 2027"); older ones with the EC name
+  let first = PLAN_MONTHS.findIndex((m) => periodLabel.startsWith(PLAN_MONTH_LABELS[m]));
+  if (first < 0) first = PLAN_MONTH_NAMES.findIndex((name) => periodLabel.startsWith(name));
   if (first < 0) return plan.plannedCostEtb ?? 0;
   const months = cadence === "six_month" ? PLAN_MONTHS.slice(first, first + 6) : [PLAN_MONTHS[first]];
   return plan.activityIds
