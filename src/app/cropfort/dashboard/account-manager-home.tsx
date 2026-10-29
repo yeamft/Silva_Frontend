@@ -3,7 +3,7 @@
 import { FarmAreaLabel } from "@/components/cropfort/farm-area-label";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, CalendarRange, CheckCircle2, ClipboardCheck, FileText, Plus, RotateCcw, Send, Wrench } from "lucide-react";
+import { CalendarRange, CheckCircle2, ClipboardCheck, FileText, Plus, RotateCcw, Send, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PageContainer } from "@/components/cropfort/page-shell";
 import { Button } from "@/components/ui/button";
@@ -132,7 +132,6 @@ export function AccountManagerHome() {
                   <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", busy ? tone.icon : "bg-muted text-muted-foreground")}>
                     <t.icon className="h-4 w-4" aria-hidden />
                   </span>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
                 </span>
                 <span>
                   <span className={cn("block text-3xl font-semibold tabular-nums", busy ? tone.number : "text-muted-foreground/50")}>
@@ -182,7 +181,6 @@ export function AccountManagerHome() {
                   </span>
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground transition-colors group-hover:border-primary/40 group-hover:text-primary">
                     {item.action}
-                    <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                   </span>
                 </Link>
               </li>

@@ -7,7 +7,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   ClipboardCheck,
   Eye,
@@ -180,7 +179,8 @@ const LoginPage = () => {
           : await completeTotpEnrollment(mfaStep.token, otpCode.trim());
       setIsLoading(false);
 
-      if (!mfaResult.ok) {
+      // `in` narrows the result type even with strictNullChecks off (where `ok` can't)
+      if ("error" in mfaResult) {
         setFormError(mfaResult.error);
         return;
       }
@@ -205,7 +205,7 @@ const LoginPage = () => {
     const loginResult = await login(email.trim(), password);
     setIsLoading(false);
 
-    if (loginResult.ok) {
+    if (!("error" in loginResult)) {
       void finishSuccess();
       return;
     }
@@ -229,14 +229,11 @@ const LoginPage = () => {
     setFormError(loginResult.error || t(locale, "login_invalidPassword"));
   };
 
-  const demoAccount = DEMO_ACCOUNTS.find((a) => a.email === selectedDemo);
   const submitLabel = isLoading
     ? t(locale, "login_signingIn")
     : mfaStep
       ? "Verify and continue"
-      : demoAccount
-        ? `Sign in as ${demoAccount.label}`
-        : "Sign in";
+      : "Sign in";
 
   return (
     <div className="cf-gold-marketing text-foreground">
@@ -457,12 +454,6 @@ const LoginPage = () => {
                     >
                       {isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                       <span className="truncate">{submitLabel}</span>
-                      {!isLoading ? (
-                        <ArrowRight
-                          className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5"
-                          aria-hidden
-                        />
-                      ) : null}
                     </Button>
 
                     {mfaStep ? (

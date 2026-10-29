@@ -4,7 +4,7 @@ import { SHOW_SPEND_BANDS } from "@/config/features";
 import { FarmAreaLabel } from "@/components/cropfort/farm-area-label";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, CalendarRange, CheckCircle2, ClipboardCheck, FileText, Leaf, WalletCards } from "lucide-react";
+import { CalendarRange, CheckCircle2, ClipboardCheck, FileText, Leaf, WalletCards } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PageContainer } from "@/components/cropfort/page-shell";
 import { Button } from "@/components/ui/button";
@@ -122,7 +122,6 @@ export function SilvaDeskHome() {
                   <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", busy ? tone.icon : "bg-muted text-muted-foreground")}>
                     <t.icon className="h-4 w-4" aria-hidden />
                   </span>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
                 </span>
                 <span>
                   <span className={cn("block text-3xl font-semibold tabular-nums", busy ? tone.number : "text-muted-foreground/50")}>
