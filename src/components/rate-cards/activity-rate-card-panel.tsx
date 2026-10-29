@@ -10,13 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnnualPlanBenchmarks, getScenarioSettings } from "@/lib/api/annual-plan-benchmarks";
-import { createBenchmarkSurvey, lockBenchmarkSurvey } from "@/lib/api/benchmark-surveys";
-import {
-  createRateCardFromSurvey,
-  createRateCardImport,
-  submitRateCardProposal,
-  updateRateCardProposal,
-} from "@/lib/api/rate-card-proposals";
+import { createQuickRateCard } from "@/lib/api/rate-card-proposals";
 import { buildBenchmarkData, findDuplicateBenchmarkFarmName, type BenchmarkFarmInputs } from "@/lib/benchmark-data";
 import { cn } from "@/lib/utils";
 import type { RatePlanBasis } from "@/types/rate-card-workflow";
@@ -40,6 +34,10 @@ type Props = {
   kind: "labor" | "materials" | "services";
   currentRate: number | null;
   onSaved: () => Promise<void> | void;
+  /** Called the moment Save is pressed, so the plan shows the new rate straight away. */
+  onApplied?: (rate: number) => void;
+  /** The save failed after onApplied — put the old rate back. */
+  onFailed?: () => void;
   onClose: () => void;
 };
 
@@ -48,7 +46,17 @@ type Props = {
  * from the uploaded benchmark data; the user picks one of the rate scenarios (or types their own) and
  * saves. Saving records the benchmark, builds the rate card from it and publishes it.
  */
-export function ActivityRateCardPanel({ farmEstateId, budgetYear, activity, kind, currentRate, onSaved, onClose }: Props) {
+export function ActivityRateCardPanel({
+  farmEstateId,
+  budgetYear,
+  activity,
+  kind,
+  currentRate,
+  onSaved,
+  onApplied,
+  onFailed,
+  onClose,
+}: Props) {
   const [farms, setFarms] = useState<BenchmarkFarmInputs>([]);
   const [dataNotes, setDataNotes] = useState("");
   const [evidence, setEvidence] = useState("");
@@ -137,45 +145,55 @@ export function ActivityRateCardPanel({ farmEstateId, budgetYear, activity, kind
     if (planRate == null || !Number.isFinite(planRate) || planRate < 0) return toast.error("Choose a rate");
     if (needsReason && !justification.trim()) return toast.error("Say why you're using your own rate");
 
-    setSaving(true);
-    try {
-      let cardId: string;
-      if (hasFarmRates) {
-        // Benchmark → locked → rate card with the chosen scenario
-        const survey = await createBenchmarkSurvey(farmEstateId, {
-          activityId: activity.activityId,
-          benchmarkData: { farms: farms.filter((f) => f.name.trim()), dataNotes: dataNotes.trim() },
-          sourceEvidence: evidence.trim(),
-          notes: dataNotes.trim(),
-        });
-        await lockBenchmarkSurvey(survey.id);
-        const card = await createRateCardFromSurvey(farmEstateId, {
-          sourceSurveyId: survey.id,
-          budgetYear,
-          norm: avg.manDaysPerUnit,
-          sourceBasis: "Core Operations plan",
-          sourceEvidence: evidence.trim(),
-          justificationNote: justification.trim(),
-        });
-        await updateRateCardProposal(card.id, {
+    // One request does the whole chain; the plan shows the new rate straight away
+    const request = hasFarmRates
+      ? createQuickRateCard(farmEstateId, {
+          mode: "survey",
+          survey: {
+            activityId: activity.activityId,
+            benchmarkData: { farms: farms.filter((f) => f.name.trim()), dataNotes: dataNotes.trim() },
+            sourceEvidence: evidence.trim(),
+            notes: dataNotes.trim(),
+          },
+          card: {
+            budgetYear,
+            norm: avg.manDaysPerUnit,
+            sourceBasis: "Core Operations plan",
+            sourceEvidence: evidence.trim(),
+            justificationNote: justification.trim(),
+          },
           planBasis: effectiveBasis,
           ...(expert != null ? { expertRate: expert } : {}),
+        })
+      : createQuickRateCard(farmEstateId, {
+          mode: "import",
+          card: {
+            activityId: activity.activityId,
+            kind,
+            proposedRate: planRate,
+            budgetYear,
+            sourceBasis: "Expert input · Core Operations plan",
+            sourceEvidence: evidence.trim(),
+            justificationNote: justification.trim(),
+          },
         });
-        cardId = card.id;
-      } else {
-        // No source farm rates: the user's own rate is the only one
-        const card = await createRateCardImport(farmEstateId, {
-          activityId: activity.activityId,
-          kind,
-          proposedRate: planRate,
-          budgetYear,
-          sourceBasis: "Expert input · Core Operations plan",
-          sourceEvidence: evidence.trim(),
-          justificationNote: justification.trim(),
+
+    if (onApplied) {
+      onApplied(planRate);
+      toast.success(`${activity.activityName} now uses ${fmtEtb(planRate)} per ${activity.uom}`);
+      onClose();
+      void request
+        .then(() => onSaved())
+        .catch((err) => {
+          onFailed?.();
+          toast.error(err instanceof Error ? `${activity.activityName}: ${err.message}` : "Could not save the rate");
         });
-        cardId = card.id;
-      }
-      await submitRateCardProposal(cardId);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await request;
       await onSaved();
       toast.success(`${activity.activityName} now uses ${fmtEtb(planRate)} per ${activity.uom}`);
       onClose();

@@ -1,11 +1,11 @@
 "use client";
 
+import { FarmAreaLabel } from "@/components/cropfort/farm-area-label";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, CalendarRange, CheckCircle2, ClipboardCheck, FileText, Plus, RotateCcw, Send, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PageContainer } from "@/components/cropfort/page-shell";
-import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
@@ -13,13 +13,6 @@ import { useDeskCounts } from "@/lib/cropfort/use-desk-counts";
 import { cn } from "@/lib/utils";
 
 type Tone = "primary" | "warn" | "info";
-
-function greeting(date: Date) {
-  const hour = date.getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
 
 const TONE: Record<Tone, { tile: string; number: string; icon: string }> = {
   primary: { tile: "border-primary/30 bg-primary/[0.05]", number: "text-foreground", icon: "bg-primary/10 text-primary" },
@@ -32,7 +25,6 @@ const TONE: Record<Tone, { tile: string; number: string; icon: string }> = {
  * few things to act on now, each with the button that does it.
  */
 export function AccountManagerHome() {
-  const { user, activeProgram } = useCropfortAuth();
   const c = useDeskCounts();
 
   const tiles: { label: string; value: number; href: string; icon: LucideIcon; tone: Tone }[] = [
@@ -44,27 +36,26 @@ export function AccountManagerHome() {
   ];
 
   // The few things to do now, most urgent first
-  const todo: { id: string; title: string; meta: string; href: string; action: string; icon: LucideIcon }[] = [
+  const todoAll: { id: string; title: string; meta: string; href: string; action: string; icon: LucideIcon; tone: Tone }[] = [
     ...c.returnedPlans.map((p) => ({
       id: `ret-${p.id}`,
       title: p.name || "Returned plan",
-      meta: "Returned by the asset owner — fix and resubmit",
-      href: `${CROPFORT_ROUTES.programmePlans}/${p.id}`,
+      meta: p.returnedComment ? `Asset owner: ${p.returnedComment}` : "Returned by the asset owner",
+      href: `${CROPFORT_ROUTES.programmePlans}/${p.id}/fix`,
       action: "Fix",
       icon: RotateCcw,
+      tone: "warn" as const,
     })),
-    ...(c.workToReview.length
-      ? [
-          {
-            id: "review",
-            title: `${c.workToReview.length} work order${c.workToReview.length === 1 ? "" : "s"} sent for review`,
-            meta: "The vendor marked the work done — check and approve",
-            href: `${CROPFORT_ROUTES.workOrders}?view=review`,
-            action: "Review",
-            icon: Wrench,
-          },
-        ]
-      : []),
+    // Each work order the vendor reported opens its own review page
+    ...c.workToReview.map((w) => ({
+      id: `rev-${w.id}`,
+      title: w.title,
+      meta: [w.code, w.vendor, w.vendorOutcome === "partial" ? "Partly done" : "Done"].filter(Boolean).join(" · "),
+      href: `${CROPFORT_ROUTES.workOrders}/${w.id}/review`,
+      action: "Review",
+      icon: Wrench,
+      tone: "info" as const,
+    })),
     ...(c.monthsToActivate.length
       ? [
           {
@@ -77,6 +68,7 @@ export function AccountManagerHome() {
             href: CROPFORT_ROUTES.monthlyWorkOrders,
             action: "Activate",
             icon: Send,
+            tone: "primary" as const,
           },
         ]
       : []),
@@ -89,30 +81,27 @@ export function AccountManagerHome() {
             href: CROPFORT_ROUTES.workOrders,
             action: "Issue",
             icon: Send,
+            tone: "primary" as const,
           },
         ]
       : []),
     ...c.draftPlans.map((p) => ({
       id: `draft-${p.id}`,
       title: p.name || "Draft plan",
-      meta: "Finish the activities and schedule, then submit",
+      meta: "Draft",
       href: `${CROPFORT_ROUTES.programmePlans}/${p.id}`,
       action: "Continue",
       icon: FileText,
+      tone: "primary" as const,
     })),
-  ].slice(0, 6);
+  ];
+  const todo = todoAll.slice(0, 6);
 
-  const firstName = user.name.trim().split(/\s+/)[0] || "there";
 
   return (
     <PageContainer className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {greeting(new Date())}, {firstName}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{activeProgram?.name || "Workspace"}</p>
-        </div>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <FarmAreaLabel size="lg" />
         <Button asChild>
           <Link href={`${CROPFORT_ROUTES.programmePlans}/new`}>
             <Plus className="mr-1.5 h-4 w-4" aria-hidden />
@@ -157,13 +146,18 @@ export function AccountManagerHome() {
         })}
       </ul>
 
-      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <h2 className="border-b border-border/70 bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent px-5 py-3.5 text-[15px] font-semibold">
-          Do next
-        </h2>
+      <section className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(15,23,20,0.05)]">
+        <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-5 py-3">
+          <h2 className="text-sm font-semibold">Do next</h2>
+          {todoAll.length ? (
+            <span className="rounded-full bg-card px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground ring-1 ring-border">
+              {todoAll.length}
+            </span>
+          ) : null}
+        </div>
         {c.loading ? (
           <p className="px-5 py-8 text-center text-sm text-muted-foreground">Loading…</p>
-        ) : todo.length === 0 ? (
+        ) : todoAll.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-5 py-10 text-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
               <CheckCircle2 className="h-5 w-5" />
@@ -174,17 +168,23 @@ export function AccountManagerHome() {
         ) : (
           <ul className="divide-y divide-border">
             {todo.map((item) => (
-              <li key={item.id} className="flex items-center gap-3 px-5 py-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary" aria-hidden>
-                  <item.icon className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{item.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{item.meta}</span>
-                </span>
-                <Button size="sm" asChild>
-                  <Link href={item.href}>{item.action}</Link>
-                </Button>
+              <li key={item.id}>
+                <Link
+                  href={item.href}
+                  className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+                >
+                  <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", TONE[item.tone].icon)} aria-hidden>
+                    <item.icon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{item.title}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{item.meta}</span>
+                  </span>
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground transition-colors group-hover:border-primary/40 group-hover:text-primary">
+                    {item.action}
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>

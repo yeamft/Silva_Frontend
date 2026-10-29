@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFieldTicket,
   createWorkOrder,
+  getWorkOrder,
   listWorkOrders,
+  submitWorkOrderCompletion,
   transitionFieldTicket,
   reportWorkOrderOutcome,
   reviewWorkOrder,
@@ -16,6 +18,7 @@ import {
   type WorkOrderStatus,
 } from "@/lib/api/work-orders";
 import { queryKeys } from "@/lib/query/keys";
+import { useFarmScopedSelect } from "@/store/farmWorkspaceStore";
 import type {
   Attention,
   FieldTicket,
@@ -139,9 +142,12 @@ export function useWorkOrders(
       ? false
       : (options?.refetchIntervalMs ?? LIVE_POLL_MS);
 
+  // Only the farm area chosen in the top bar (all when none is chosen)
+  const select = useFarmScopedSelect<WorkOrderDto>((w) => w.farmEstateId);
   return useQuery({
     queryKey: queryKeys.workOrders.list(),
     queryFn: () => listWorkOrders(),
+    select,
     enabled,
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -206,6 +212,27 @@ export function useReportWorkOrderOutcome() {
   );
   return useMutation({
     mutationFn: ({ id, outcome, note }: Vars) => reportWorkOrderOutcome(id, outcome, note),
+    ...optimistic,
+  });
+}
+
+export function useWorkOrder(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.workOrders.detail(id ?? ""),
+    queryFn: () => getWorkOrder(id!),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSubmitWorkOrderCompletion() {
+  type Vars = { id: string; report: Parameters<typeof submitWorkOrderCompletion>[1] };
+  const optimistic = useOptimisticWorkOrder<Vars>(({ report }) => ({
+    status: "complete",
+    statusRaw: "complete",
+    vendorOutcome: report.items.every((i) => i.status === "completed") ? "done" : "partial",
+  }));
+  return useMutation({
+    mutationFn: ({ id, report }: Vars) => submitWorkOrderCompletion(id, report),
     ...optimistic,
   });
 }

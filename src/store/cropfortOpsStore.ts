@@ -96,7 +96,7 @@ export type WorkOrder = {
   weeklyPlanLineId: string | null;
   manualsRef: string;
   /** Vendor's report: done, or not done with a reason. */
-  vendorOutcome?: "done" | "not_done" | "returned" | null;
+  vendorOutcome?: "done" | "partial" | "not_done" | "returned" | null;
   vendorNote?: string;
   /** SPX reviewed and approved the finished work (the order is closed). */
   spxApproved?: boolean;

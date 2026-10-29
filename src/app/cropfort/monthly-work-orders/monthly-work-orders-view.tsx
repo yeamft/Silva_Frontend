@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { PLAN_MONTHS, PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
+import { PLAN_MONTHS, PLAN_MONTH_LABELS, type PlanMonth } from "@/lib/cropfort/ethiopian-year";
 import { canApproveOutOfPlan, canEditPlanScope } from "@/lib/cropfort/platform-access";
 import { cn } from "@/lib/utils";
 import { fmtEtb } from "@/store/cropfortOpsStore";
@@ -92,9 +92,19 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
         ),
     [ordersQuery.data],
   );
-  // Only plans that don't have monthly work orders yet can be turned into them
-  const plansWithOrders = new Set(orders.map((o) => o.sourcePlanId).filter(Boolean));
-  const approvedPlans = (approvedPlansQuery.data || []).filter((p) => !plansWithOrders.has(p.id));
+  // Months each plan already has a work order for; a plan stays available until every month is taken
+  const monthsByPlan = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const o of orders) {
+      if (!o.sourcePlanId) continue;
+      if (!map.has(o.sourcePlanId)) map.set(o.sourcePlanId, new Set());
+      map.get(o.sourcePlanId)!.add(o.ethiopianMonth);
+    }
+    return map;
+  }, [orders]);
+  const approvedPlans = (approvedPlansQuery.data || []).filter(
+    (p) => (monthsByPlan.get(p.id)?.size ?? 0) < PLAN_MONTHS.length,
+  );
   const planHref = (key: string) => `${CROPFORT_ROUTES.monthlyWorkOrders}/plan/${encodeURIComponent(key)}`;
   const allPlansQuery = useProgrammePlans(enabled, {});
   const planNames = useMemo(
@@ -103,6 +113,9 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
   );
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [createPlanId, setCreatePlanId] = useState<string | null>(null);
+  const [createMonths, setCreateMonths] = useState<PlanMonth[]>([]);
+  const createPlan = approvedPlans.find((p) => p.id === createPlanId) ?? null;
   const [tabChoice, setTabChoice] = useState<"new" | "active" | null>(null);
   /** Order being returned — set from the detail view or a list row. */
   const [returnTarget, setReturnTarget] = useState<Order | null>(null);
@@ -326,16 +339,18 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
     return null;
   })();
 
-  const createFromPlan = (planId: string) =>
+  const createFromPlan = (planId: string, months: PlanMonth[]) =>
     void fromPlanMut
-      .mutateAsync(planId)
+      .mutateAsync({ id: planId, months })
       .then(({ created }) => {
         setCreateOpen(false);
-        if (!created.length) {
-          toast.info("Every scheduled month already has a work order");
-          return;
-        }
-        toast.success(`Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}`);
+        setCreatePlanId(null);
+        setCreateMonths([]);
+        const empty = months.length - created.length;
+        toast.success(
+          `Created ${created.length} monthly work order${created.length === 1 ? "" : "s"}` +
+            (empty > 0 ? ` · ${empty} month${empty === 1 ? "" : "s"} had nothing scheduled` : ""),
+        );
         setTabChoice("new");
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Could not create work orders"));
@@ -839,21 +854,94 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
               </Link>
             </p>
           ) : (
-            <ul className="divide-y divide-border rounded-md border border-border">
-              {approvedPlans.map((p) => (
-                <li key={p.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{p.name}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {p.farmName} · {p.budgetYearLabel} · {fmtEtb(p.plannedCostEtb ?? 0)}
-                    </span>
-                  </span>
-                  <Button size="sm" disabled={fromPlanMut.isPending} onClick={() => createFromPlan(p.id)}>
-                    Create
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="max-h-56 divide-y divide-border overflow-y-auto rounded-md border border-border">
+                {approvedPlans.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatePlanId(p.id);
+                        setCreateMonths([]);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50",
+                        createPlanId === p.id && "bg-primary/5 ring-1 ring-inset ring-primary/40",
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{p.name}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {p.farmName} · {p.budgetYearLabel} · {fmtEtb(p.plannedCostEtb ?? 0)}
+                        </span>
+                      </span>
+                      {createPlanId === p.id ? <Check className="h-4 w-4 text-primary" aria-hidden /> : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {createPlan ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Months</Label>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary hover:underline"
+                      onClick={() => {
+                        const open = PLAN_MONTHS.filter((m) => !monthsByPlan.get(createPlan.id)?.has(m));
+                        setCreateMonths(createMonths.length === open.length ? [] : open);
+                      }}
+                    >
+                      {createMonths.length &&
+                      createMonths.length === PLAN_MONTHS.filter((m) => !monthsByPlan.get(createPlan.id)?.has(m)).length
+                        ? "Clear"
+                        : "Select all"}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                    {PLAN_MONTHS.map((m, i) => {
+                      const taken = monthsByPlan.get(createPlan.id)?.has(m) ?? false;
+                      const year = createPlan.budgetYearGc - (i <= 2 ? 1 : 0);
+                      return (
+                        <Button
+                          key={m}
+                          type="button"
+                          size="sm"
+                          variant={createMonths.includes(m) ? "default" : "outline"}
+                          aria-pressed={createMonths.includes(m)}
+                          disabled={taken}
+                          title={taken ? "Already has a work order" : undefined}
+                          className="h-auto flex-col py-1.5 leading-tight"
+                          onClick={() =>
+                            setCreateMonths((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]))
+                          }
+                        >
+                          <span>{PLAN_MONTH_LABELS[m]}</span>
+                          <span className="text-[10px] opacity-70">{year}</span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={!createPlan || !createMonths.length || fromPlanMut.isPending}
+                  onClick={() => createPlan && createMonths.length && createFromPlan(createPlan.id, createMonths)}
+                >
+                  {fromPlanMut.isPending
+                    ? "Creating…"
+                    : createMonths.length === 1
+                      ? `Create ${PLAN_MONTH_LABELS[createMonths[0]]} work order`
+                      : createMonths.length
+                        ? `Create ${createMonths.length} work orders`
+                        : "Create"}
+                </Button>
+              </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>

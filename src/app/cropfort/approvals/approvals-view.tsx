@@ -3,13 +3,14 @@
 import { SHOW_SPEND_BANDS } from "@/config/features";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CalendarCheck2,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   FileDown,
   CircleDollarSign,
@@ -58,8 +59,12 @@ import {
 import { useDecideMonthlyWorkOrder, useMonthlyWorkOrders } from "@/lib/query/hooks/use-monthly-work-orders";
 import {
   useDecideProgrammePlan,
+  useProgrammePlan,
   useProgrammePlans,
 } from "@/lib/query/hooks/use-programme-plans";
+import { monthShareOf } from "@/lib/cropfort/month-shares";
+import { PlanAttachments, usePlanAssessments } from "@/components/cropfort/plan-attachments";
+import { openPlanPdf } from "@/lib/cropfort/plan-pdf";
 import { useDecideProject, useProjects } from "@/lib/query/hooks/use-projects";
 import { useDecideWeeklyPlan, useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
 import { useOpsReports, useReleaseOpsReport, useReturnOpsReport } from "@/lib/query/hooks/use-ops-reports";
@@ -67,7 +72,7 @@ import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { canApproveOperations } from "@/lib/cropfort/platform-access";
 import { canApproveAsAssetOwner } from "@/lib/cropfortAccess";
 import { fmtEtb } from "@/store/cropfortOpsStore";
-import { scheduleLabel, scheduleStatusOf } from "@/store/coreOpsPlanStore";
+import { scheduleStatusOf } from "@/store/coreOpsPlanStore";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSpendBandStore } from "@/store/spendBandStore";
 import { listFarmAssessments } from "@/lib/api/farm-assessments";
@@ -272,85 +277,6 @@ function AfeDetail({ afe }: { afe: CropfortAfeDto }) {
   );
 }
 
-const INTENSITY_CELL: Record<string, string> = {
-  peak: "bg-primary",
-  active: "bg-primary/55",
-  light: "bg-primary/25",
-  none: "bg-muted/60",
-};
-
-const INTENSITY_PRINT: Record<string, string> = { peak: "#2f6b3a", active: "#8fb996", light: "#d5e6d8" };
-
-function escapeHtml(value: unknown) {
-  return String(value ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-}
-
-/** Opens a printable copy of the plan; the browser's print dialog offers "Save as PDF". */
-function savePlanAsPdf(plan: CoreOpsPlan, promotion: AfpPromotion, included: CoreOpsActivity[]) {
-  const win = window.open("", "_blank", "width=1100,height=800");
-  if (!win) {
-    toast.error("Allow pop-ups for this site to save the PDF");
-    return;
-  }
-  const title = plan.name || "Core Operations plan";
-  const byCategory = new Map<string, number>();
-  for (const a of included) byCategory.set(a.category, (byCategory.get(a.category) ?? 0) + a.plannedCost);
-  const facts: [string, string][] = [
-    ["Farm", plan.farmName],
-    ["Budget year", plan.budgetYearLabel],
-    ["Area", plan.totalHa ? `${plan.totalHa.toLocaleString()} ha` : "—"],
-    ["Vendor", plan.vendorLabel || "—"],
-    ...(SHOW_SPEND_BANDS ? ([["Band", promotion.band]] as [string, string][]) : []),
-    ["Submitted", new Date(promotion.createdAt).toLocaleString()],
-    ["Total", fmtEtb(promotion.totalEtb)],
-  ];
-  const rows = included
-    .map(
-      (a) => `<tr>
-        <td><b>${escapeHtml(a.activityName)}</b><br><small>${escapeHtml(a.activityCode)} · ${escapeHtml(a.category)}</small></td>
-        <td class="n">${escapeHtml(a.plannedQty.toLocaleString())} ${escapeHtml(a.uom)}${(a.frequency ?? 1) !== 1 ? ` × ${escapeHtml(a.frequency)}/yr` : ""}</td>
-        <td class="n">${a.agreedRate ? escapeHtml(fmtEtb(a.agreedRate.unitRateEtb)) : "—"}</td>
-        <td class="n">${escapeHtml(fmtEtb(a.plannedCost))}</td>
-        ${PLAN_MONTHS.map((m) => {
-          const level = a.intensities?.[m] ?? "none";
-          return `<td class="m"${level !== "none" ? ` style="background:${INTENSITY_PRINT[level]}"` : ""}></td>`;
-        }).join("")}
-      </tr>`,
-    )
-    .join("");
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
-<style>
-  @page { size: A4 landscape; margin: 14mm; }
-  body { font: 12px/1.4 system-ui, sans-serif; color: #111; margin: 0; }
-  h1 { font-size: 18px; margin: 0 0 4px; }
-  .facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 8px 0 14px; }
-  .facts span { color: #666; margin-right: 4px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; }
-  th { background: #f3f3f3; font-size: 11px; }
-  .n { text-align: right; white-space: nowrap; }
-  .m { width: 22px; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  small { color: #666; }
-  .cats { margin: 0 0 12px; color: #444; }
-  .sign { display: flex; gap: 60px; margin-top: 36px; }
-  .sign div { border-top: 1px solid #333; padding-top: 4px; width: 220px; }
-</style></head><body>
-<h1>${escapeHtml(title)}</h1>
-<div class="facts">${facts.map(([k, v]) => `<div><span>${k}</span><b>${escapeHtml(v)}</b></div>`).join("")}</div>
-<p class="cats">${[...byCategory.entries()].map(([c, v]) => `${escapeHtml(c)}: <b>${escapeHtml(fmtEtb(v))}</b>`).join(" · ")}</p>
-<table>
-  <thead><tr><th>Activity</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Cost</th>
-  ${PLAN_MONTHS.map((m) => `<th class="m">${PLAN_MONTH_LABELS[m]}</th>`).join("")}</tr></thead>
-  <tbody>${rows}</tbody>
-  <tfoot><tr><th colspan="3">Total · ${included.length} activities</th><th class="n">${escapeHtml(fmtEtb(promotion.totalEtb))}</th><th colspan="12"></th></tr></tfoot>
-</table>
-<div class="sign"><div>Asset owner</div><div>Date</div></div>
-</body></html>`);
-  win.document.close();
-  win.focus();
-  win.onload = () => win.print();
-  setTimeout(() => win.print(), 400);
-}
 
 function AfpDetail({
   plan,
@@ -370,14 +296,12 @@ function AfpDetail({
 }) {
   const included = activities.filter((a) => a.included);
   const choosing = Boolean(wanted && onToggleWanted);
+  const { linked: linkedAssessments } = usePlanAssessments(plan.id, plan.farmEstateId);
+  /** Activity whose month calendar is open under its row. */
+  const [openId, setOpenId] = useState<string | null>(null);
   const wantedRows = choosing ? included.filter((a) => wanted!.has(a.id)) : included;
   const wantedTotal = wantedRows.reduce((sum, a) => sum + (a.plannedCost || 0), 0);
   const activeMonths = PLAN_MONTHS.filter((m) => included.some((a) => (a.intensities?.[m] ?? "none") !== "none"));
-  const byCategory = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const a of included) map.set(a.category, (map.get(a.category) ?? 0) + a.plannedCost);
-    return [...map.entries()].sort((a, b) => b[1] - a[1]);
-  }, [included]);
 
   const issues = [
     included.filter((a) => a.plannedQty <= 0).length && `${included.filter((a) => a.plannedQty <= 0).length} without quantity`,
@@ -387,84 +311,87 @@ function AfpDetail({
   ].filter(Boolean) as string[];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+    <div className="space-y-6">
+      {/* Plan details */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
           {(
             [
               ["Farm", plan.farmName],
               ["Budget year", plan.budgetYearLabel],
               ["Area", plan.totalHa ? `${plan.totalHa.toLocaleString()} ha` : "—"],
               ["Vendor", plan.vendorLabel || "—"],
-              ["Submitted", new Date(promotion.createdAt).toLocaleDateString()],
+              ["Submitted", new Date(promotion.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })],
             ] as const
           ).map(([label, value]) => (
-            <div key={label}>
-              <dt className="text-[11px] text-muted-foreground">{label}</dt>
-              <dd className="font-medium">{value}</dd>
+            <div key={label} className="min-w-0">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+              <dd className="mt-1 truncate text-sm font-semibold" title={String(value)}>
+                {value}
+              </dd>
             </div>
           ))}
         </dl>
-        <Button size="sm" variant="outline" onClick={() => savePlanAsPdf(plan, promotion, included)}>
+        <Button
+          variant="outline"
+          className="shrink-0"
+          onClick={() => {
+            const opened = openPlanPdf(plan, promotion, included, {
+              assessments: linkedAssessments,
+              issues,
+              showBand: SHOW_SPEND_BANDS,
+            });
+            if (!opened) toast.error("Allow pop-ups for this site to save the PDF");
+          }}
+        >
           <FileDown className="mr-1.5 h-4 w-4" aria-hidden />
           Save as PDF
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* Totals */}
+      <div className="grid gap-3 sm:grid-cols-3">
         {[
-          { label: "Plan total", value: fmtEtb(promotion.totalEtb) },
+          { label: "Plan total", value: fmtEtb(promotion.totalEtb), big: true },
           { label: "Activities", value: String(included.length) },
           { label: "Months with work", value: `${activeMonths.length} of ${PLAN_MONTHS.length}` },
-          choosing
-            ? { label: "You want", value: `${wantedRows.length} · ${fmtEtb(wantedTotal)}`, strong: wantedRows.length !== included.length }
-            : { label: "Categories", value: String(byCategory.length) },
         ].map((tile) => (
-          <div
-            key={tile.label}
-            className={cn(
-              "rounded-xl border px-3 py-2",
-              "strong" in tile && tile.strong ? "border-amber-500/40 bg-amber-500/[0.06]" : "border-border bg-muted/30",
-            )}
-          >
-            <p className="text-[11px] text-muted-foreground">{tile.label}</p>
-            <p className="text-sm font-semibold tabular-nums">{tile.value}</p>
+          <div key={tile.label} className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+            <p className="text-xs font-medium text-muted-foreground">{tile.label}</p>
+            <p className={cn("mt-1 font-semibold tabular-nums", tile.big ? "text-2xl" : "text-xl")}>{tile.value}</p>
           </div>
         ))}
       </div>
 
-      {byCategory.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {byCategory.map(([cat, cost]) => {
-            const count = included.filter((a) => a.category === cat).length;
-            return (
-              <span key={cat} className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs">
-                {cat} · {count} <span className="ml-1 font-semibold tabular-nums">{fmtEtb(cost)}</span>
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
+      <p className={cn("flex items-center gap-2 text-sm font-medium", issues.length ? "text-warning" : "text-success")}>
+        {issues.length ? <AlertTriangle className="h-4 w-4" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
+        {issues.length ? issues.join(" · ") : "All checks passed"}
+      </p>
 
-      {choosing ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-primary/[0.06] px-3 py-2 text-sm">
-          <span>
-            <span className="font-medium">Tick the activities you want.</span>{" "}
-            <span className="text-muted-foreground">Untick any you don&apos;t — the plan goes back to SPX with your choice.</span>
-          </span>
-          <span className="flex gap-3 text-xs font-medium">
-            <button type="button" className="text-primary hover:underline" onClick={() => onSetAllWanted?.(true)}>
+      <PlanAttachments planId={plan.id} farmEstateId={plan.farmEstateId} />
+
+      {/* Activities */}
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h3 className="text-base font-semibold">Activities</h3>
+        {choosing ? (
+          <div className="flex items-center gap-3 text-sm">
+            {wantedRows.length !== included.length ? (
+              <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                You want {wantedRows.length} · {fmtEtb(wantedTotal)}
+              </span>
+            ) : null}
+            <button type="button" className="font-medium text-primary hover:underline" onClick={() => onSetAllWanted?.(true)}>
               Want all
             </button>
-            <button type="button" className="text-primary hover:underline" onClick={() => onSetAllWanted?.(false)}>
+            <button type="button" className="font-medium text-primary hover:underline" onClick={() => onSetAllWanted?.(false)}>
               Clear
             </button>
-          </span>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
 
       {included.length > 0 ? (
-        <div className="cf-table-scroll max-h-[28rem] rounded-md border border-border">
+        <div className="cf-table-scroll max-h-[32rem] rounded-xl border border-border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -473,18 +400,23 @@ function AfpDetail({
                 <TableHead className="text-right">Qty</TableHead>
                 <TableHead className="text-right">Rate</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
-                {PLAN_MONTHS.map((m) => (
-                  <TableHead key={m} className="w-7 px-0.5 text-center text-[10px]">
-                    {PLAN_MONTH_LABELS[m]}
-                  </TableHead>
-                ))}
+                <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {included.map((a) => {
                 const isWanted = !choosing || wanted!.has(a.id);
+                const open = openId === a.id;
                 return (
-                <TableRow key={a.id} className={cn(choosing && !isWanted && "opacity-50")}>
+                <Fragment key={a.id}>
+                <TableRow
+                  className={cn("cursor-pointer", choosing && !isWanted && "opacity-50", open && "bg-muted/40")}
+                  aria-expanded={open}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest("button, [role='checkbox']")) return;
+                    setOpenId(open ? null : a.id);
+                  }}
+                >
                   {choosing ? (
                     <TableCell>
                       <Checkbox
@@ -504,7 +436,6 @@ function AfpDetail({
                           ? " · Nursery"
                           : ""}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">{scheduleLabel(a)}</p>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
                     {a.plannedQty ? a.plannedQty.toLocaleString() : "—"}{" "}
@@ -519,18 +450,46 @@ function AfpDetail({
                   <TableCell className="whitespace-nowrap text-right tabular-nums text-sm font-medium">
                     {fmtEtb(a.plannedCost)}
                   </TableCell>
-                  {PLAN_MONTHS.map((m) => {
-                    const level = a.intensities?.[m] ?? "none";
-                    return (
-                      <TableCell key={m} className="px-0.5 text-center">
-                        <span
-                          className={cn("mx-auto block h-4 w-5 rounded-sm", INTENSITY_CELL[level])}
-                          title={`${PLAN_MONTH_LABELS[m]}: ${level === "none" ? "—" : level}`}
-                        />
-                      </TableCell>
-                    );
-                  })}
+                  <TableCell className="px-1 text-right">
+                    <ChevronDown
+                      className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")}
+                      aria-hidden
+                    />
+                  </TableCell>
                 </TableRow>
+                {open ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={choosing ? 6 : 5} className="bg-muted/20 px-3 py-3">
+                      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-12">
+                        {PLAN_MONTHS.map((m, i) => {
+                          const pct = Math.round(monthShareOf(a, m) * 100);
+                          const year = plan.budgetYearGc - (i <= 2 ? 1 : 0);
+                          return (
+                            <div
+                              key={m}
+                              className={cn(
+                                "rounded-lg border px-1.5 py-1.5 text-center",
+                                pct > 0 ? "border-primary/40 bg-primary/[0.07]" : "border-dashed border-border",
+                              )}
+                            >
+                              <p className="text-xs font-semibold">{PLAN_MONTH_LABELS[m]}</p>
+                              <p className="text-[10px] text-muted-foreground">{year}</p>
+                              <p className={cn("mt-1 text-sm font-semibold tabular-nums", pct > 0 ? "text-primary" : "text-muted-foreground/50")}>
+                                {pct > 0 ? `${pct}%` : "—"}
+                              </p>
+                              {pct > 0 ? (
+                                <p className="text-[10px] tabular-nums text-muted-foreground">
+                                  {fmtEtb((a.plannedCost * pct) / 100)}
+                                </p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                </Fragment>
                 );
               })}
             </TableBody>
@@ -538,14 +497,6 @@ function AfpDetail({
         </div>
       ) : null}
 
-      <p className={cn("flex items-center gap-1.5 text-sm", issues.length ? "text-warning" : "text-success")}>
-        {issues.length ? (
-          <AlertTriangle className="h-4 w-4" aria-hidden />
-        ) : (
-          <CheckCircle2 className="h-4 w-4" aria-hidden />
-        )}
-        {issues.length ? issues.join(" · ") : "All checks passed"}
-      </p>
     </div>
   );
 }
@@ -877,8 +828,12 @@ export default function ApprovalsView({
 
   const selectedAfe =
     selected?.kind === "afe" ? afes.find((p) => p.id === selected.id) : null;
-  const selectedAfpPlan =
+  // The list only carries line counts; the detail call brings every activity with its months
+  const afpDetailQuery = useProgrammePlan(selected?.kind === "afp" ? selected.id : null);
+  const selectedAfpListRow =
     selected?.kind === "afp" ? afpPlans.find((p) => p.id === selected.id) ?? null : null;
+  const selectedAfpPlan =
+    selectedAfpListRow && afpDetailQuery.data?.id === selectedAfpListRow.id ? afpDetailQuery.data : null;
   const selectedPromo = selectedAfpPlan ? afpPromotionFromPlan(selectedAfpPlan) : null;
   // What the asset owner wants from this plan: everything until they untick something
   const planIncluded = selectedAfpPlan ? Object.values(selectedAfpPlan.activities).filter((x) => x.included) : [];
@@ -909,7 +864,7 @@ export default function ApprovalsView({
       ? pendingRateCards.find((card) => card.id === selected.id) ?? null
       : null;
 
-  const decideRow = async (decision: "approved" | "returned", noteOverride?: string) => {
+  const decideRow = async (decision: "approved" | "returned", noteOverride?: string, removeLineIds?: string[]) => {
     if (!selected) return;
     if (!canDecide) {
       toast.error("Only Silva / asset owners can approve or return");
@@ -933,6 +888,7 @@ export default function ApprovalsView({
           id: selected.id,
           decision: decision === "approved" ? "approve" : "return",
           comment: note,
+          removeLineIds,
         });
       } else if (selected.kind === "projects") {
         await decideProjectMut.mutateAsync({
@@ -1074,9 +1030,6 @@ export default function ApprovalsView({
             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
               {selected?.title || "Review request"}
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {APPROVAL_TYPES.find((t) => t.id === tab)?.label} · check the details, then approve or request changes.
-            </p>
           </div>
         </header>
       ) : isSilva ? (
@@ -1205,7 +1158,7 @@ export default function ApprovalsView({
               action={<StatusBadge status="submitted" />}
             >
               <div className="space-y-5">
-                <div className="flex flex-wrap items-center gap-2 text-sm">
+                <div className={cn("flex flex-wrap items-center gap-2 text-sm", selected.kind === "afp" && "hidden")}>
                   <span className="cf-numeric text-lg font-semibold">
                     {fmtEtb(selected.amount)}
                   </span>
@@ -1224,6 +1177,11 @@ export default function ApprovalsView({
                 </div>
 
                 {selectedAfe ? <AfeDetail afe={selectedAfe} /> : null}
+                {selectedAfpListRow && !selectedAfpPlan ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    {afpDetailQuery.isError ? "Couldn't load the plan's activities." : "Loading activities…"}
+                  </p>
+                ) : null}
                 {selectedPromo && selectedAfpPlan ? (
                   <AfpDetail
                     plan={selectedAfpPlan}
@@ -1325,13 +1283,11 @@ export default function ApprovalsView({
                   </div>
                 ) : null}
 
-                <div className="space-y-2 border-t border-border pt-4">
-                  <label className="text-sm font-medium" htmlFor="approval-decision-note">
-                    Note
-                    <span className="ml-1 font-normal text-muted-foreground">
-                      (needed to request changes)
-                    </span>
+                <div className="space-y-2 border-t border-border pt-5">
+                  <label className="text-base font-semibold" htmlFor="approval-decision-note">
+                    Comment
                   </label>
+                  <p className="text-sm text-muted-foreground">Needed when you request changes.</p>
                   <Textarea
                     id="approval-decision-note"
                     rows={3}
@@ -1343,10 +1299,12 @@ export default function ApprovalsView({
                 </div>
 
                 {canDecide ? (
-                  <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-border bg-card pt-3">
+                  <div className="sticky bottom-0 flex flex-wrap-reverse justify-end gap-3 border-t border-border bg-card py-4">
+                    <Button variant="outline" onClick={() => decideRow("returned")}>
+                      Request changes
+                    </Button>
                     {selectedAfpPlan && planUnwanted.length > 0 ? (
                       <Button
-                        size="sm"
                         onClick={() => {
                           const keep = planIncluded.filter((a) => planWanted?.has(a.id));
                           const note = [
@@ -1356,23 +1314,21 @@ export default function ApprovalsView({
                           ]
                             .filter(Boolean)
                             .join("\n");
-                          void decideRow("returned", note);
+                          void decideRow(
+                            "returned",
+                            note,
+                            planUnwanted.map((a) => a.id),
+                          );
                         }}
                       >
                         Send back with my selection ({planUnwanted.length} removed)
                       </Button>
                     ) : (
-                      <Button size="sm" onClick={() => setConfirmApprove(true)}>
+                      <Button className="min-w-[8rem]" onClick={() => setConfirmApprove(true)}>
+                        <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden />
                         Approve
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => decideRow("returned")}
-                    >
-                      Request changes
-                    </Button>
                   </div>
                 ) : (
                   <p className="border-t border-border pt-3 text-sm text-muted-foreground">

@@ -158,6 +158,21 @@ export const createRateCardImport = (
     body: input,
   });
 
+/** Plan editor's "set rate" in one request: benchmark → lock → rate card → basis → submit, or import → submit. */
+export const createQuickRateCard = (
+  farmId: string,
+  input:
+    | {
+        mode: "survey";
+        survey: Record<string, unknown>;
+        card: Record<string, unknown>;
+        planBasis?: string;
+        expertRate?: number;
+      }
+    | { mode: "import"; card: Record<string, unknown> },
+) =>
+  call<RateCardProposalDto>(`/farms/${farmId}/rate-card-proposals/quick`, { method: "POST", body: input });
+
 export const updateRateCardProposal = (id: string, input: Record<string, unknown>) =>
   call<RateCardProposalDto>(`/rate-card-proposals/${id}`, { method: "PATCH", body: input });
 

@@ -1,7 +1,7 @@
 
 @theme inline {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-ibm-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-ibm-plex), ui-sans-serif, system-ui, sans-serif;
 }
 
 @tailwind base;
@@ -37,7 +37,7 @@
 
     --muted: 120 38% 94%;
     /* #66706A */
-    --muted-foreground: 150 5% 42%;
+    --muted-foreground: 150 6% 34%;
 
     /* #E8F1EC selected / soft accent wash */
     --accent: 120 44% 97%;
@@ -85,9 +85,9 @@
     --cf-density: 1;
     --cf-row-h: 56px;
 
-    /* Active UI font — ThemeToggle can switch this to another next/font var */
-    --font-sans: var(--font-inter);
-    --font-display: var(--font-inter);
+    /* Active UI font — IBM Plex Sans: built for data-dense work tools, clear figures and labels */
+    --font-sans: var(--font-ibm-plex);
+    --font-display: var(--font-ibm-plex);
   }
 
   .dark {
@@ -108,7 +108,7 @@
     --secondary-foreground: 90 10% 92%;
 
     --muted: 150 8% 14%;
-    --muted-foreground: 120 6% 62%;
+    --muted-foreground: 120 6% 70%;
 
     --accent: 154 18% 16%;
     --accent-foreground: 150 30% 82%;
@@ -176,7 +176,7 @@
     --secondary-foreground: 150 18% 11%;
 
     --muted: 120 38% 94%;
-    --muted-foreground: 150 5% 42%;
+    --muted-foreground: 150 6% 34%;
 
     --accent: 120 44% 97%;
     --accent-foreground: 114 55% 28%;
@@ -203,7 +203,6 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans, var(--font-inter)), ui-sans-serif, system-ui, sans-serif;
-    font-feature-settings: "cv11", "ss01";
     font-variant-numeric: tabular-nums;
     font-size: 15px;
     line-height: 1.55;
@@ -341,6 +340,18 @@
 
   .cf-page {
     @apply mx-auto w-full max-w-[1600px] space-y-8 px-4 pb-16 pt-6 sm:px-8 sm:pb-20 sm:pt-8 lg:px-10;
+  }
+
+  /* Centred, narrower board (plan editor) */
+  .cf-page.cf-page-centered {
+    max-width: 72rem;
+  }
+
+  /* Plan editor focus: the shell's top bar steps aside on desktop (phones keep it for the menu button) */
+  @media (min-width: 768px) {
+    html.cf-plan-focus .cf-shell-topbar {
+      display: none;
+    }
   }
 
   .cf-table-scroll {

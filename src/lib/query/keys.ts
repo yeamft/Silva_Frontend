@@ -145,6 +145,7 @@ export const queryKeys = {
       /** Workspace id — plans are scoped by active-program auth headers. */
       programId?: string | null;
     }) => [...queryKeys.programmePlans.all, "list", params ?? {}] as const,
+    detail: (id: string) => [...queryKeys.programmePlans.all, "detail", id] as const,
   },
   auditLog: {
     all: ["audit-log"] as const,

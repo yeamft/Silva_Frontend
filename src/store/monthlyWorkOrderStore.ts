@@ -10,6 +10,7 @@ import {
   buildLoopGInsights,
 } from "@/lib/cropfort/loop-g";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
+import { monthShareOf } from "@/lib/cropfort/month-shares";
 import { useReportsStore } from "@/store/reportsStore";
 import type {
   MonthlyWoLine,
@@ -17,28 +18,11 @@ import type {
   MonthlyWorkOrder,
   ProcessLoop,
 } from "@/types/agronomic-cycle";
-import type { MonthIntensity } from "@/types/core-ops";
 
 const STORAGE_KEY = "cropfort.monthly-wo.v3";
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function intensityShare(intensity: MonthIntensity): number {
-  if (intensity === "peak") return 0.4;
-  if (intensity === "active") return 0.25;
-  if (intensity === "light") return 0.1;
-  return 0;
-}
-
-function intensityWeightTotal(
-  intensities: Record<PlanMonth, MonthIntensity>,
-): number {
-  return (Object.values(intensities) as MonthIntensity[]).reduce(
-    (sum, i) => sum + intensityShare(i),
-    0,
-  );
 }
 
 export function deriveMonthlyLinesFromPlan(
@@ -51,11 +35,8 @@ export function deriveMonthlyLinesFromPlan(
 
   for (const act of Object.values(plan.activities)) {
     if (!act.included) continue;
-    const intensity = act.intensities[month] ?? "none";
-    if (intensity === "none") continue;
-
-    const totalWeight = intensityWeightTotal(act.intensities) || 1;
-    const monthShare = intensityShare(intensity) / totalWeight;
+    const monthShare = monthShareOf(act, month);
+    if (!monthShare) continue;
     const monthQty = Math.round(act.plannedQty * monthShare * 100) / 100;
     if (monthQty <= 0) continue;
 

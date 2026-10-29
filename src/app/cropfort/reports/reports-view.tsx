@@ -46,6 +46,7 @@ import { PLAN_MONTH_NAMES } from "@/lib/annual-plan-budget";
 import { PLAN_MONTH_LABELS, PLAN_MONTHS } from "@/lib/cropfort/ethiopian-year";
 import { monthsForPeriod, monthsLabel, planPeriodOf } from "@/lib/cropfort/plan-period";
 import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
+import { monthShareOf } from "@/lib/cropfort/month-shares";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
 import type { OpsReport, ReportCadence } from "@/store/reportsStore";
 
@@ -129,9 +130,6 @@ function periodsForPlan(plan: ProgrammePlanDto, cadence: ReportCadence): string[
 
 type SourcedMetrics = OpsReport["metrics"] & { sourcePlanId?: string };
 
-/** Same weights monthly work orders use to spread a plan line over its scheduled months. */
-const INTENSITY_SHARE: Record<string, number> = { peak: 0.4, active: 0.25, light: 0.1 };
-
 /** The plan's budget for the report period — one month, a half-year or the whole year. */
 function periodBudget(plan: ProgrammePlanDto, cadence: ReportCadence, periodLabel: string) {
   if (cadence === "annual") return plan.plannedCostEtb ?? 0;
@@ -144,10 +142,9 @@ function periodBudget(plan: ProgrammePlanDto, cadence: ReportCadence, periodLabe
     .map((id) => plan.activities[id])
     .filter((a) => a?.included)
     .reduce((sum, a) => {
-      const weight = (m: (typeof PLAN_MONTHS)[number]) => INTENSITY_SHARE[a.intensities?.[m] ?? "none"] ?? 0;
-      const total = PLAN_MONTHS.reduce((t, m) => t + weight(m), 0);
-      if (!total) return sum;
-      return sum + a.plannedCost * (months.reduce((t, m) => t + weight(m), 0) / total);
+      // Same split monthly work orders use: the planner's percentages, else schedule intensity
+      if (!a.intensities) return sum;
+      return sum + a.plannedCost * months.reduce((t, m) => t + monthShareOf(a, m), 0);
     }, 0);
 }
 

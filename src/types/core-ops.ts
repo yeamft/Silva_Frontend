@@ -50,6 +50,8 @@ export type CoreOpsActivity = {
   rateStatus?: string;
   plannedCost: number;
   intensities: Record<PlanMonth, MonthIntensity>;
+  /** Percent of the annual quantity done in each scheduled month; totals 100. */
+  monthShares?: Partial<Record<PlanMonth, number>>;
   /** Operating manual on the Platform (RB09.3) — required before submit. */
   manualsRef: string;
   /** Core / Project / Intervention (RB10). */

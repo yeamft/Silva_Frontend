@@ -6,11 +6,13 @@ import {
   createWorkOrdersFromPlan,
   decideProgrammePlan,
   duplicateProgrammePlan,
+  getProgrammePlan,
   listProgrammePlans,
   submitProgrammePlan,
   type ProgrammePlanDto,
 } from "@/lib/api/programme-plans";
 import { useCoreOpsPlanStore } from "@/store/coreOpsPlanStore";
+import { useFarmScopedSelect } from "@/store/farmWorkspaceStore";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { queryKeys } from "@/lib/query/keys";
 import { moveRowStatus, restoreSnapshot } from "@/lib/query/optimistic-status";
@@ -34,6 +36,8 @@ export function useProgrammePlans(
     includeArchived: params?.includeArchived ?? false,
     programId,
   };
+  // Only the farm area chosen in the top bar (all when none is chosen)
+  const select = useFarmScopedSelect<ProgrammePlanDto>((p) => p.farmEstateId);
   return useQuery({
     queryKey: queryKeys.programmePlans.list(listParams),
     queryFn: () =>
@@ -44,6 +48,7 @@ export function useProgrammePlans(
         q: params?.q,
         includeArchived: listParams.includeArchived,
       }),
+    select,
     enabled: enabled && Boolean(programId),
   });
 }
@@ -103,10 +108,19 @@ export function useSubmitProgrammePlanMutation() {
 export function useCreateWorkOrdersFromPlan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => createWorkOrdersFromPlan(id),
+    mutationFn: ({ id, months }: { id: string; months?: string[] }) => createWorkOrdersFromPlan(id, months),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.monthlyWorkOrders.all });
     },
+  });
+}
+
+/** One plan with every line (the list only carries counts). */
+export function useProgrammePlan(id: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.programmePlans.detail(id ?? ""),
+    queryFn: () => getProgrammePlan(id!),
+    enabled: Boolean(id),
   });
 }
 
@@ -118,11 +132,13 @@ export function useDecideProgrammePlan() {
       id,
       decision,
       comment,
+      removeLineIds,
     }: {
       id: string;
       decision: "approve" | "return";
       comment?: string;
-    }) => decideProgrammePlan(id, decision, comment),
+      removeLineIds?: string[];
+    }) => decideProgrammePlan(id, decision, comment, removeLineIds),
     // Leaves the approvals queue the moment the button is pressed
     onMutate: ({ id, decision }) =>
       moveRowStatus<ProgrammePlanDto>(qc, queryKeys.programmePlans.all, id, "submitted", {

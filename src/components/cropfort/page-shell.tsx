@@ -408,29 +408,28 @@ export function SectionCard({
   return (
     <Card
       className={cn(
-        "flex flex-col overflow-hidden rounded-2xl border-border shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_32px_-20px_rgba(15,23,20,0.25)]",
+        "flex flex-col overflow-hidden rounded-xl border-border/80 bg-card shadow-[0_1px_2px_rgba(15,23,20,0.05)]",
         className,
       )}
     >
       {showHeader ? (
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-border/70 bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent px-4 py-3.5 sm:px-5">
-          <div className="flex min-w-0 items-center gap-3">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 bg-muted/30 px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5">
             {Icon ? (
-              <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_6px_16px_-8px_hsl(var(--primary))]"
-                aria-hidden
-              >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-card text-foreground/70" aria-hidden>
                 <Icon className="h-4 w-4" />
               </span>
-            ) : title ? (
-              <span className="h-6 w-1 shrink-0 rounded-full bg-primary/70" aria-hidden />
             ) : null}
-            <div className="min-w-0 space-y-0.5">
-              {title ? <CardTitle className="text-[15px] font-semibold tracking-tight">{title}</CardTitle> : null}
-              {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
+            <div className="min-w-0">
+              {title ? (
+                <CardTitle className="truncate text-sm font-semibold leading-tight text-foreground">{title}</CardTitle>
+              ) : null}
+              {description ? (
+                <CardDescription className="mt-0.5 truncate text-xs text-muted-foreground">{description}</CardDescription>
+              ) : null}
             </div>
           </div>
-          {action ? <div className="shrink-0">{action}</div> : null}
+          {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
         </CardHeader>
       ) : null}
       <CardContent className={cn(flush ? "flex-1 p-0" : "flex-1 p-4 sm:p-5", bodyClassName)}>{children}</CardContent>

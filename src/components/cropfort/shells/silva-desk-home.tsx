@@ -1,12 +1,12 @@
 "use client";
 
 import { SHOW_SPEND_BANDS } from "@/config/features";
+import { FarmAreaLabel } from "@/components/cropfort/farm-area-label";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, CalendarRange, CheckCircle2, ClipboardCheck, FileText, Leaf, WalletCards } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PageContainer } from "@/components/cropfort/page-shell";
-import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import { CROPFORT_ROUTES } from "@/config/navigation-routes";
 import { PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
@@ -19,13 +19,6 @@ type Tone = "primary" | "warn" | "info";
 const reviewHref = (kind: string, id: string) =>
   `${CROPFORT_ROUTES.approvals}/review/${kind}/${encodeURIComponent(id)}`;
 
-function greeting(date: Date) {
-  const hour = date.getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 const TONE: Record<Tone, { tile: string; number: string; icon: string }> = {
   primary: { tile: "border-primary/30 bg-primary/[0.05]", number: "text-foreground", icon: "bg-primary/10 text-primary" },
   warn: { tile: "border-amber-500/40 bg-amber-500/[0.07]", number: "text-amber-700 dark:text-amber-400", icon: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
@@ -37,7 +30,6 @@ const TONE: Record<Tone, { tile: string; number: string; icon: string }> = {
  * "Review next" lists the submissions themselves, each with the button that opens it.
  */
 export function SilvaDeskHome() {
-  const { activeProgram, user } = useCropfortAuth();
   const c = useOwnerCounts();
 
   const tiles: { label: string; value: number; href: string; icon: LucideIcon; tone: Tone }[] = [
@@ -95,17 +87,11 @@ export function SilvaDeskHome() {
   ];
   const shown = decisions.slice(0, 6);
 
-  const firstName = user.name.trim().split(/\s+/)[0] || "there";
 
   return (
     <PageContainer className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {greeting(new Date())}, {firstName}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{activeProgram?.name || "Asset owner"}</p>
-        </div>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <FarmAreaLabel size="lg" />
         <Button asChild>
           <Link href={CROPFORT_ROUTES.approvals}>
             <ClipboardCheck className="mr-1.5 h-4 w-4" aria-hidden />
@@ -150,9 +136,9 @@ export function SilvaDeskHome() {
         })}
       </ul>
 
-      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b border-border/70 bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent px-5 py-3.5">
-          <h2 className="text-[15px] font-semibold">Review next</h2>
+      <section className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(15,23,20,0.05)]">
+        <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-5 py-3">
+          <h2 className="text-sm font-semibold">Review next</h2>
           {decisions.length > shown.length ? (
             <Link href={CROPFORT_ROUTES.approvals} className="text-xs font-medium text-primary hover:underline">
               All {decisions.length}

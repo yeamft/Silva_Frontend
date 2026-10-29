@@ -20,6 +20,7 @@ import {
   type PlanMonth,
 } from "@/lib/cropfort/ethiopian-year";
 import { useSpendBandStore } from "@/store/spendBandStore";
+import { evenShares, scheduledMonths, sharesTotal, withSchedule } from "@/lib/cropfort/month-shares";
 import type {
   AfpPromotion,
   CoreOpsActivity,
@@ -204,12 +205,21 @@ type CoreOpsPlanStore = {
   setActivitiesIncluded: (activityRowIds: string[], included: boolean) => number;
   setPlannedQty: (activityRowId: string, qty: number) => void;
   setFrequency: (activityRowId: string, frequency: number) => void;
+  /** Show a rate on a plan line straight away (rate card still saving), or put the old one back. */
+  setAgreedRate: (activityRowId: string, rate: CoreOpsActivity["agreedRate"]) => void;
   setActivitiesPlannedQty: (activityRowIds: string[], qty: number) => number;
   setBlockAllocations: (
     activityRowId: string,
     allocations: { blockId: string; blockCode: string; qty: number }[],
   ) => void;
   cycleMonthIntensity: (activityRowId: string, month: PlanMonth) => void;
+  /** Percent of the annual quantity done in a scheduled month. */
+  setMonthShare: (activityRowId: string, month: PlanMonth, percent: number) => void;
+  splitSharesEvenly: (activityRowId: string) => void;
+  /** Schedule exactly these months for one activity (others cleared), split evenly. */
+  setActivityMonths: (activityRowId: string, months: PlanMonth[]) => void;
+  /** Give other activities the same months and percentages as one activity. Returns how many changed. */
+  copySchedule: (fromRowId: string, toRowIds: string[]) => number;
   setMonthIntensity: (
     activityRowId: string,
     month: PlanMonth,
@@ -241,6 +251,9 @@ type CoreOpsPlanStore = {
   categories: () => string[];
   activitiesByCategory: (category: string) => CoreOpsActivity[];
 };
+
+/** Plan id of the most recent loadPlanById call; older responses are ignored. */
+let latestPlanRequest: string | null = null;
 
 export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
   persist(
@@ -399,24 +412,39 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
 
       loadPlanById: async (planId) => {
         if (!planId) return;
-        set({ loading: true, error: null });
+        latestPlanRequest = planId;
+        // Drop the previously opened plan straight away so it is never shown (or edited) as this one
+        const switching = get().plan?.id !== planId;
+        set(switching ? { loading: true, error: null, plan: null, step: "setup" } : { loading: true, error: null });
         try {
           if (!get().farms.length) {
             await get().loadContext();
           }
           const remote = await getProgrammePlan(planId);
+          // Another plan was opened while this one loaded
+          if (latestPlanRequest !== planId) return;
           const farm = get().farms.find((f) => f.id === remote.farmEstateId);
           const bandSet = useSpendBandStore.getState().getActiveSet();
+          const activities = Object.fromEntries(
+            Object.entries(remote.activities ?? {}).map(([id, a]) => [
+              id,
+              a.monthShares && Object.keys(a.monthShares).length
+                ? a
+                : { ...a, monthShares: evenShares(scheduledMonths(a.intensities)) },
+            ]),
+          );
           const plan: CoreOpsPlan = {
             ...remote,
+            activities,
             name: remote.name || remote.farmName || "Core Operations plan",
             farmName: remote.farmName || farm?.name || "",
             programBandSetId: remote.programBandSetId ?? bandSet?.id ?? null,
             promotions: remote.promotions ?? [],
           };
-          set({ plan, loading: false, error: null, step: "setup" });
+          set(switching ? { plan, loading: false, error: null, step: "setup" } : { plan, loading: false, error: null });
           get().syncActivitiesFromEligible();
         } catch (err) {
+          if (latestPlanRequest !== planId) return;
           set({
             loading: false,
             error: err instanceof Error ? err.message : "Failed to load Core Operations plan",
@@ -675,6 +703,22 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
         return changed;
       },
 
+      setAgreedRate: (activityRowId, rate) => {
+        const plan = get().plan;
+        const act = plan?.activities[activityRowId];
+        if (!plan || !act) return;
+        set({
+          plan: {
+            ...plan,
+            activities: {
+              ...plan.activities,
+              [activityRowId]: recomputeActivity({ ...act, agreedRate: rate, rateStatus: rate ? "VALID" : "MISSING" }),
+            },
+            updatedAt: nowIso(),
+          },
+        });
+      },
+
       setFrequency: (activityRowId, frequency) => {
         const plan = get().plan;
         if (!plan || !plan.activities[activityRowId]) return;
@@ -724,7 +768,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
         for (const id of activityRowIds) {
           const prev = activities[id];
           if (!prev) continue;
-          let act = { ...prev, plannedQty };
+          const act = { ...prev, plannedQty };
           if (act.blockAllocations.length === 1) {
             act.blockAllocations = [
               { ...act.blockAllocations[0], qty: plannedQty },
@@ -749,7 +793,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
         const plan = get().plan;
         if (!plan || !plan.activities[activityRowId]) return;
         const plannedQty = allocations.reduce((s, a) => s + Math.max(0, a.qty), 0);
-        let act = recomputeActivity({
+        const act = recomputeActivity({
           ...plan.activities[activityRowId],
           blockAllocations: allocations.map((a) => ({
             ...a,
@@ -779,7 +823,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             ...plan,
             activities: {
               ...plan.activities,
-              [activityRowId]: { ...act, intensities },
+              [activityRowId]: withSchedule(act, intensities),
             },
             updatedAt: nowIso(),
           },
@@ -796,10 +840,87 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             ...plan,
             activities: {
               ...plan.activities,
-              [activityRowId]: {
-                ...act,
-                intensities: { ...act.intensities, [month]: intensity },
-              },
+              [activityRowId]: withSchedule(act, { ...act.intensities, [month]: intensity }),
+            },
+            status: plan.status === "submitted" ? plan.status : "draft",
+            updatedAt: nowIso(),
+          },
+        });
+      },
+
+      setMonthShare: (activityRowId, month, percent) => {
+        const plan = get().plan;
+        const act = plan?.activities[activityRowId];
+        if (!plan || !act || act.intensities[month] === "none") return;
+        const value = Math.min(100, Math.max(0, Math.round(percent * 100) / 100));
+        set({
+          plan: {
+            ...plan,
+            activities: {
+              ...plan.activities,
+              [activityRowId]: { ...act, monthShares: { ...act.monthShares, [month]: value } },
+            },
+            status: plan.status === "submitted" ? plan.status : "draft",
+            updatedAt: nowIso(),
+          },
+        });
+      },
+
+      setActivityMonths: (activityRowId, months) => {
+        const plan = get().plan;
+        const act = plan?.activities[activityRowId];
+        if (!plan || !act) return;
+        const intensities = Object.fromEntries(
+          PLAN_MONTHS.map((m) => [m, months.includes(m) ? (act.intensities[m] !== "none" ? act.intensities[m] : "active") : "none"]),
+        ) as CoreOpsActivity["intensities"];
+        set({
+          plan: {
+            ...plan,
+            activities: {
+              ...plan.activities,
+              [activityRowId]: { ...act, intensities, monthShares: evenShares(scheduledMonths(intensities)) },
+            },
+            status: plan.status === "submitted" ? plan.status : "draft",
+            updatedAt: nowIso(),
+          },
+        });
+      },
+
+      copySchedule: (fromRowId, toRowIds) => {
+        const plan = get().plan;
+        const from = plan?.activities[fromRowId];
+        if (!plan || !from) return 0;
+        const activities = { ...plan.activities };
+        let changed = 0;
+        for (const id of toRowIds) {
+          const act = activities[id];
+          if (!act || id === fromRowId) continue;
+          activities[id] = { ...act, intensities: { ...from.intensities }, monthShares: { ...from.monthShares } };
+          changed += 1;
+        }
+        if (changed) {
+          set({
+            plan: {
+              ...plan,
+              activities,
+              status: plan.status === "submitted" ? plan.status : "draft",
+              updatedAt: nowIso(),
+            },
+          });
+        }
+        return changed;
+      },
+
+      splitSharesEvenly: (activityRowId) => {
+        const plan = get().plan;
+        const act = plan?.activities[activityRowId];
+        if (!plan || !act) return;
+        set({
+          plan: {
+            ...plan,
+            activities: {
+              ...plan.activities,
+              [activityRowId]: { ...act, monthShares: evenShares(scheduledMonths(act.intensities)) },
             },
             status: plan.status === "submitted" ? plan.status : "draft",
             updatedAt: nowIso(),
@@ -823,7 +944,7 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
           for (let i = lo; i <= hi; i++) {
             intensities[PLAN_MONTHS[i]] = intensity;
           }
-          activities[id] = { ...act, intensities };
+          activities[id] = withSchedule(act, intensities);
         }
         set({ plan: { ...plan, activities, updatedAt: nowIso() } });
       },
@@ -846,9 +967,8 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             intensities[PLAN_MONTHS[i]] = intensity;
           }
           let next: CoreOpsActivity = {
-            ...act,
+            ...withSchedule(act, intensities),
             included: true,
-            intensities,
           };
           if (act.plannedQty <= 0) {
             const defaultQty =
@@ -956,6 +1076,14 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
               step: "calendar",
               activityId: id,
             });
+          } else if (Math.abs(sharesTotal(act) - 100) > 0.01) {
+            issues.push({
+              id: `share-${id}`,
+              severity: "block",
+              message: `${act.activityName}: monthly split is ${sharesTotal(act)}% — it must add up to 100%`,
+              step: "calendar",
+              activityId: id,
+            });
           }
         }
         return issues;
@@ -1033,8 +1161,16 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
           );
         }
 
-        // Details, activity lines and schedule go with the submit and are saved in the same step.
-        const result = await submitProgrammePlan(plan.id, plan);
+        // Shown as submitted straight away; put back if the server refuses
+        set({ plan: { ...plan, status: "submitted" } });
+        let result: Awaited<ReturnType<typeof submitProgrammePlan>>;
+        try {
+          // Details, activity lines and schedule go with the submit and are saved in the same step.
+          result = await submitProgrammePlan(plan.id, plan);
+        } catch (err) {
+          if (get().plan?.id === plan.id) set({ plan });
+          throw err;
+        }
         const promo: AfpPromotion =
           result.promotion ||
           result.plan.promotions?.[0] || {

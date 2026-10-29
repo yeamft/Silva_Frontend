@@ -24,6 +24,7 @@ import {
   Sprout,
   TreeDeciduous,
   Search,
+  X,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -36,7 +37,6 @@ import { StatusBadge } from "@/components/cropfort/status-badge";
 import { TablePagination } from "@/components/cropfort/data-table";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -52,15 +52,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useOptionalSidebar } from "@/components/ui/sidebar";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query/keys";
+import { useActiveFarmId } from "@/store/farmWorkspaceStore";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { canViewRateCard } from "@/lib/cropfortAccess";
 import { canCreateProgrammePlan, canApproveOperations } from "@/lib/cropfort/platform-access";
@@ -72,10 +68,11 @@ import {
 } from "@/lib/cropfort/ethiopian-year";
 import { cn } from "@/lib/utils";
 import {
-  scheduleLabel,
   scheduleStatusOf,
   useCoreOpsPlanStore,
 } from "@/store/coreOpsPlanStore";
+import { sharesTotal } from "@/lib/cropfort/month-shares";
+import { ScheduleActivityCard, ScheduleActivityRow } from "@/components/cropfort/schedule-activity-card";
 import {
   PLAN_PERIOD_MONTH_NAMES,
   PLAN_PERIOD_KINDS,
@@ -103,7 +100,7 @@ const STEPS: { id: CoreOpsStep; label: string; hint: string }[] = [
 const PAGE_SIZES = [25, 50, 100];
 
 const IN_PLAN = "__plan";
-type ScheduleFilter = "all" | "scheduled" | "unscheduled";
+type ScheduleFilter = "all" | "todo" | "ready";
 
 /** Brushes double as the legend for the month grid. */
 const BRUSHES: { value: MonthIntensity; label: string; letter: string }[] = [
@@ -123,25 +120,21 @@ function fmtEtb(n: number | null | undefined) {
   return `ETB ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-function intensityClass(i: MonthIntensity): string {
-  if (i === "peak") return "bg-primary text-primary-foreground";
-  if (i === "active") return "bg-primary text-primary-foreground";
-  if (i === "light") return "bg-primary/15 text-foreground";
-  return "bg-muted/50 text-muted-foreground hover:bg-primary/20";
-}
-
 /** The box behind each plan step: a soft header with an icon, title and one line of help. */
 function StepPanel({
   icon: Icon,
   title,
   description,
   flush,
+  actions,
   children,
 }: {
   icon: typeof ListChecks;
   title: string;
   description?: string;
   flush?: boolean;
+  /** Step buttons (Back, Save, Continue…) in the card's footer. */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -150,21 +143,21 @@ function StepPanel({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_32px_-18px_rgba(15,23,20,0.25)]"
+      className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(15,23,20,0.05)]"
     >
-      <header className="relative flex items-center gap-3 border-b border-border/70 bg-gradient-to-br from-primary/[0.10] via-primary/[0.04] to-transparent px-4 py-4 sm:px-6">
-        <span
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_20px_-10px_hsl(var(--primary))]"
-          aria-hidden
-        >
-          <Icon className="h-5 w-5" />
+      <header className="flex items-center gap-2.5 border-b border-border/60 bg-muted/30 px-4 py-3.5 sm:px-6">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-card text-foreground/70" aria-hidden>
+          <Icon className="h-4 w-4" />
         </span>
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold leading-tight tracking-tight">{title}</h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-semibold leading-tight">{title}</h2>
           {description ? <p className="mt-0.5 text-sm text-muted-foreground">{description}</p> : null}
         </div>
       </header>
       <div className={flush ? undefined : "p-4 sm:p-6"}>{children}</div>
+      {actions ? (
+        <footer className="border-t border-border/70 px-4 py-3 sm:px-6">{actions}</footer>
+      ) : null}
     </motion.section>
   );
 }
@@ -187,7 +180,30 @@ function stepIndex(step: CoreOpsStep) {
 export default function CoreOperationsView({ planId, isNew = false }: { planId?: string; isNew?: boolean } = {}) {
   const { user, activeProgram } = useCropfortAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const canView = canViewRateCard(user.role);
+
+  // Hide the shell's top bar while a plan is open (see .cf-plan-focus in globals.css)
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("cf-plan-focus");
+    return () => root.classList.remove("cf-plan-focus");
+  }, []);
+
+  // The plan editor needs the room: fold the sidebar while a plan is open, then put it back
+  const sidebar = useOptionalSidebar();
+  const sidebarRef = useRef(sidebar);
+  sidebarRef.current = sidebar;
+  useEffect(() => {
+    const ctx = sidebarRef.current;
+    if (!ctx || ctx.isMobile || !ctx.open) return;
+    ctx.setOpen(false);
+    return () => {
+      // Leave it alone if the user opened it again themselves
+      const now = sidebarRef.current;
+      if (now && !now.open) now.setOpen(true);
+    };
+  }, [planId, isNew]);
 
   const farms = useCoreOpsPlanStore((s) => s.farms);
   const eligible = useCoreOpsPlanStore((s) => s.eligible);
@@ -196,12 +212,12 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   // A new plan has no saved plan yet: the editor shows only the Details step until it's created
   const storedPlan = useCoreOpsPlanStore((s) => s.plan);
   const storedStep = useCoreOpsPlanStore((s) => s.step);
-  const plan = isNew ? null : storedPlan;
+  // Only show the stored plan when it is the one in the URL (the store keeps the last plan opened)
+  const plan = isNew ? null : planId && storedPlan?.id !== planId ? null : storedPlan;
   const step: CoreOpsStep = isNew ? "setup" : storedStep;
   const focusActivityId = useCoreOpsPlanStore((s) => s.focusActivityId);
   const loadContext = useCoreOpsPlanStore((s) => s.loadContext);
   const syncActivitiesFromEligible = useCoreOpsPlanStore((s) => s.syncActivitiesFromEligible);
-  const setFrequency = useCoreOpsPlanStore((s) => s.setFrequency);
 
   // Rate card for a plan line, opened under its row: source farm rates, rate scenarios, plan rate
   const [rateCardFor, setRateCardFor] = useState<string | null>(null);
@@ -215,6 +231,9 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
     return own === "materials" || own === "services" ? own : "labor";
   };
   const openExpertInput = (act: CoreOpsActivity) => setRateCardFor(act.id);
+  const setAgreedRate = useCoreOpsPlanStore((s) => s.setAgreedRate);
+  /** Rate a line had before an instant rate change, to restore if the save fails. */
+  const rateBeforeRef = useRef<{ id: string; rate: CoreOpsActivity["agreedRate"] } | null>(null);
   const rateCardTarget = rateCardFor && plan ? plan.activities[rateCardFor] ?? null : null;
   const loadPlanById = useCoreOpsPlanStore((s) => s.loadPlanById);
   const ensurePlan = useCoreOpsPlanStore((s) => s.ensurePlan);
@@ -226,6 +245,10 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   const setPlannedQty = useCoreOpsPlanStore((s) => s.setPlannedQty);
   const setBlockAllocations = useCoreOpsPlanStore((s) => s.setBlockAllocations);
   const setMonthIntensity = useCoreOpsPlanStore((s) => s.setMonthIntensity);
+  const setMonthShare = useCoreOpsPlanStore((s) => s.setMonthShare);
+  const splitSharesEvenly = useCoreOpsPlanStore((s) => s.splitSharesEvenly);
+  const setActivityMonths = useCoreOpsPlanStore((s) => s.setActivityMonths);
+  const copySchedule = useCoreOpsPlanStore((s) => s.copySchedule);
   const applyScheduleToActivities = useCoreOpsPlanStore((s) => s.applyScheduleToActivities);
   const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
   const reviewIssues = useCoreOpsPlanStore((s) => s.reviewIssues);
@@ -256,9 +279,13 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
       if (d.months.length >= SIX_MONTH_COUNT) return d;
       return { ...d, months: [...d.months, m] };
     });
+  // A new plan starts on the farm area chosen in the top bar (or the only one there is)
+  const workspaceFarmId = useActiveFarmId();
   useEffect(() => {
-    if (isNew && !draft.farmEstateId && farms.length === 1) setDraft((d) => ({ ...d, farmEstateId: farms[0].id }));
-  }, [isNew, farms, draft.farmEstateId]);
+    if (!isNew || draft.farmEstateId) return;
+    const start = farms.find((f) => f.id === workspaceFarmId)?.id ?? (farms.length === 1 ? farms[0].id : "");
+    if (start) setDraft((d) => ({ ...d, farmEstateId: start }));
+  }, [isNew, farms, draft.farmEstateId, workspaceFarmId]);
   const onCreatePlan = async () => {
     if (!canCreatePlan) {
       toast.error("Only SPX can create Core Operations plans");
@@ -285,7 +312,6 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   };
   const [splitId, setSplitId] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   const [activityQuery, setActivityQuery] = useState("");
   /** Activities step shows one category at a time ("" = none chosen yet, IN_PLAN = what's in the plan). */
@@ -299,6 +325,10 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   const [schedulePageSize, setSchedulePageSize] = useState(25);
   const [scheduleSelectedIds, setScheduleSelectedIds] = useState<Set<string>>(() => new Set());
   const [rangeOpen, setRangeOpen] = useState(false);
+  /** Activity whose calendar is open in the Schedule modal. */
+  const [calendarFor, setCalendarFor] = useState<string | null>(null);
+  /** Order of activities for Previous / Next, fixed when the modal opens so filters don't shift it. */
+  const [calendarList, setCalendarList] = useState<string[]>([]);
   const [rangeFrom, setRangeFrom] = useState<PlanMonth>("oct");
   const [rangeTo, setRangeTo] = useState<PlanMonth>("dec");
   // A six-month plan only schedules the months in its half of the year
@@ -309,8 +339,6 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
     if (!periodMonths.includes(rangeTo)) setRangeTo(periodMonths[Math.min(2, periodMonths.length - 1)]);
   }, [periodMonths, rangeFrom, rangeTo]);
   const [rangeIntensity, setRangeIntensity] = useState<MonthIntensity>("active");
-  const paintingRef = useRef(false);
-  const paintValueRef = useRef<MonthIntensity>("active");
 
   useEffect(() => {
     if (!canView) return;
@@ -349,6 +377,7 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   const needQty = issues.filter((i) => i.id.startsWith("qty-")).length;
   const needRate = issues.filter((i) => i.id.startsWith("rate-")).length;
   const unscheduled = issues.filter((i) => i.id.startsWith("sched-")).length;
+  const badSplits = issues.filter((i) => i.id.startsWith("share-")).length;
   const stepTodo: Record<CoreOpsStep, string | null> = {
     setup: !plan ? "Create the plan" : !plan.name?.trim() ? "Give the plan a name" : null,
     activities:
@@ -360,9 +389,9 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
     calendar:
       completion.includedCount === 0
         ? "Choose activities first"
-        : unscheduled
-          ? `${unscheduled} without months`
-          : null,
+        : [unscheduled ? `${unscheduled} without months` : "", badSplits ? `${badSplits} not at 100%` : ""]
+            .filter(Boolean)
+            .join(" · ") || null,
     review: null,
   };
   const planBlocks = blocksForPlan();
@@ -423,9 +452,9 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   const filteredSchedule = useMemo(() => {
     const q = scheduleQuery.trim().toLowerCase();
     return includedActivities.filter((act) => {
-      const status = scheduleStatusOf(act);
-      if (scheduleFilter === "scheduled" && status !== "scheduled") return false;
-      if (scheduleFilter === "unscheduled" && status !== "not_scheduled") return false;
+      const ready = scheduleStatusOf(act) === "scheduled" && Math.abs(sharesTotal(act) - 100) <= 0.01;
+      if (scheduleFilter === "ready" && !ready) return false;
+      if (scheduleFilter === "todo" && ready) return false;
       return activityMatchesQuery(act, q);
     });
   }, [includedActivities, scheduleFilter, scheduleQuery]);
@@ -441,19 +470,12 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
     setScheduleSelectedIds(new Set());
   }, [scheduleQuery, scheduleFilter, schedulePageSize, plan?.id]);
 
-  useEffect(() => {
-    const stopPaint = () => {
-      paintingRef.current = false;
-    };
-    window.addEventListener("mouseup", stopPaint);
-    window.addEventListener("touchend", stopPaint);
-    return () => {
-      window.removeEventListener("mouseup", stopPaint);
-      window.removeEventListener("touchend", stopPaint);
-    };
-  }, []);
-
   const pageScheduleSelected = pagedSchedule.filter((a) => scheduleSelectedIds.has(a.id)).length;
+  const calendarAct = calendarFor && plan ? plan.activities[calendarFor] ?? null : null;
+  const calendarIndex = calendarFor ? calendarList.indexOf(calendarFor) : -1;
+  const scheduleReadyCount = includedActivities.filter(
+    (a) => scheduleStatusOf(a) === "scheduled" && Math.abs(sharesTotal(a) - 100) <= 0.01,
+  ).length;
 
   const toggleScheduleRow = (id: string, on: boolean) =>
     setScheduleSelectedIds((prev) => {
@@ -462,10 +484,6 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
       else next.delete(id);
       return next;
     });
-
-  const paint = (activityId: string, month: PlanMonth) => {
-    if (canEdit) setMonthIntensity(activityId, month, paintValueRef.current);
-  };
 
   if (!canView) return <NotAuthorized title="Core Operations" />;
 
@@ -487,20 +505,72 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   };
 
   const onSubmit = async () => {
-    setSubmitting(true);
+    // The plan shows as submitted at once; the save runs behind it and is undone if it fails
+    setSubmitOpen(false);
+    toast.success("Submitted to the asset owner");
     try {
-      const promo = await submitToAfps();
-      toast.success(SHOW_SPEND_BANDS ? `Submitted to the asset owner · Band ${promo.band}` : "Submitted to the asset owner");
-      setSubmitOpen(false);
+      await submitToAfps();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.programmePlans.all });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Submit failed");
-    } finally {
-      setSubmitting(false);
+      toast.error(err instanceof Error ? `Not submitted: ${err.message}` : "Submit failed");
     }
   };
 
+  // Step buttons, shown in the footer of each step's card
+  const todo = step !== "review" ? stepTodo[step] : blockingIssues.length ? `${blockingIssues.length} to fix before submitting` : null;
+  const stepActions = plan ? (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex items-center gap-3">
+        <div className="leading-tight">
+          <p className="text-xs text-muted-foreground">Plan total</p>
+          <p className="text-lg font-semibold tabular-nums">{fmtEtb(completion.budgetEtb)}</p>
+        </div>
+        {todo ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+            {todo}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+            Step done
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 sm:ml-auto">
+        {currentIndex > 0 ? (
+          <Button variant="ghost" onClick={() => goTo(currentIndex - 1)}>
+            <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
+            Back
+          </Button>
+        ) : null}
+        {canEdit ? (
+          <Button variant="outline" onClick={() => void onSave()}>
+            Save draft
+          </Button>
+        ) : null}
+        {step !== "review" ? (
+          <Button className="ml-auto sm:ml-0" onClick={() => goTo(currentIndex + 1)}>
+            Next: {STEPS[currentIndex + 1]?.label}
+            <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+          </Button>
+        ) : canEdit ? (
+          <Button
+            className="ml-auto sm:ml-0"
+            disabled={blockingIssues.length > 0 || completion.budgetEtb <= 0}
+            title={blockingIssues.length ? "Fix the issues above first" : undefined}
+            onClick={() => setSubmitOpen(true)}
+          >
+            <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden />
+            Submit for approval
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <PageContainer>
+    <PageContainer className="cf-page-centered">
       <PageHeader
         title={isNew ? "New plan" : plan?.name || "Plan"}
         meta={
@@ -512,12 +582,29 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
             </span>
           ) : undefined
         }
-        actions={plan && !isNew ? <StatusBadge status={plan.status} /> : null}
+        actions={
+          <div className="flex items-center gap-2">
+            {plan && !isNew ? <StatusBadge status={plan.status} /> : null}
+            {/* Leaving the editor brings the sidebar and top bar back */}
+            <Button
+              variant="outline"
+              size="sm"
+              title="Exit planning"
+              onClick={() => {
+                if (canEdit && plan) void saveDraft().catch(() => undefined);
+                router.push(CROPFORT_ROUTES.programmePlans);
+              }}
+            >
+              <X className="mr-1 h-4 w-4" aria-hidden />
+              Exit
+            </Button>
+          </div>
+        }
       />
 
       {/* ——— DETAILS ——— */}
       {isNew ? (
-        <StepPanel icon={FileText} title="Plan details" description="Start with the basics — activities and months come next.">
+        <StepPanel icon={FileText} title="Plan details">
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               label="Plan name"
@@ -704,8 +791,10 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
             </Button>
           </div>
         </StepPanel>
+      ) : planId && !plan ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">{error && !loading ? error : "Loading plan…"}</p>
       ) : step === "setup" ? (
-        <StepPanel icon={FileText} title="Plan details" description="Name the plan and choose the farm area.">
+        <StepPanel icon={FileText} title="Plan details">
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               label="Plan name"
@@ -795,7 +884,7 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
 
       {/* ——— ACTIVITIES ——— */}
       {step === "activities" && plan ? (
-        <StepPanel icon={ListChecks} title="Activities" description="Pick a category, then tap the activities this farm needs." flush>
+        <StepPanel icon={ListChecks} title="Activities" flush actions={stepActions}>
           <div className="space-y-3 border-b border-border px-4 py-3 sm:px-5">
             <div>
               <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-3" role="tablist" aria-label="Activity categories">
@@ -896,15 +985,6 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
                     : activityCategory === IN_PLAN && !activityQuery.trim()
                       ? "Nothing in this plan yet"
                       : "No activities match"}
-              </p>
-              <p className="max-w-sm text-xs text-muted-foreground">
-                {allActivities.length === 0
-                  ? "Add them under Activities first."
-                  : !activityCategory && !activityQuery.trim()
-                    ? "Its activities appear here — tap one to add it to the plan."
-                    : activityCategory === IN_PLAN && !activityQuery.trim()
-                      ? "Pick a category and tap the activities this farm needs."
-                      : "Try another word or category."}
               </p>
             </div>
           ) : (
@@ -1012,6 +1092,18 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
                             </span>
                           )}
 
+                          {canEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => openExpertInput(act)}
+                              aria-label={`Open the rate card for ${act.activityName}`}
+                              className="cf-focus inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-foreground/80 transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                            >
+                              <FileText className="h-3.5 w-3.5" aria-hidden />
+                              Rate card
+                            </button>
+                          ) : null}
+
                           <div className="flex items-center rounded-lg border border-border bg-background">
                             <button
                               type="button"
@@ -1045,21 +1137,6 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
                           </div>
                           <span className="text-xs text-muted-foreground">{act.uom}</span>
 
-                          <label className="flex items-center gap-1 text-xs text-muted-foreground" title="Times per year">
-                            ×
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              min={1}
-                              step="any"
-                              value={act.frequency ?? 1}
-                              disabled={!canEdit}
-                              aria-label={`Times per year for ${act.activityName}`}
-                              onChange={(e) => setFrequency(act.id, Number(e.target.value) || 1)}
-                              className="h-9 w-12 rounded-lg border border-border bg-background text-center text-sm tabular-nums outline-none [appearance:textfield] focus:border-primary [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                            /yr
-                          </label>
 
                           <span
                             className={cn(
@@ -1135,7 +1212,7 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
 
       {/* ——— SCHEDULE ——— */}
       {step === "calendar" && plan ? (
-        <StepPanel icon={CalendarDays} title="Schedule" description="Tap the months each activity runs." flush>
+        <StepPanel icon={CalendarDays} title="Schedule" flush actions={stepActions}>
           {canEdit && scheduleSelectedIds.size > 0 ? (
             <div className="flex items-center justify-end border-b border-border px-4 py-2 sm:px-5">
               <Button size="sm" variant="outline" className="h-8" onClick={() => setRangeOpen(true)}>
@@ -1144,113 +1221,98 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
             </div>
           ) : null}
 
-          <Table containerClassName="cf-fit-table">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="sticky left-0 z-[1] w-10 bg-card px-3">
-                  <Checkbox
-                    checked={
-                      pagedSchedule.length > 0 && pageScheduleSelected === pagedSchedule.length
-                        ? true
-                        : pageScheduleSelected > 0
-                          ? "indeterminate"
-                          : false
-                    }
-                    disabled={!canEdit || pagedSchedule.length === 0}
-                    aria-label="Select all on this page"
-                    onCheckedChange={(v) =>
-                      setScheduleSelectedIds((prev) => {
-                        const next = new Set(prev);
-                        for (const a of pagedSchedule) {
-                          if (v) next.add(a.id);
-                          else next.delete(a.id);
-                        }
-                        return next;
-                      })
-                    }
-                  />
-                </TableHead>
-                <TableHead className="sticky left-10 z-[1] min-w-[11rem] bg-card">Activity</TableHead>
-                {periodMonths.map((m) => (
-                  <TableHead key={m} className="px-1 text-center text-[11px]">
-                    {PLAN_MONTH_LABELS[m]}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pagedSchedule.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={periodMonths.length + 2} className="py-12 text-center text-sm text-muted-foreground">
-                    {includedActivities.length === 0
-                      ? "Nothing to schedule yet — choose activities first."
-                      : "No activities match."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                pagedSchedule.map((act) => {
-                  const selected = scheduleSelectedIds.has(act.id);
-                  return (
-                    <TableRow
-                      key={act.id}
-                      id={`sched-${act.id}`}
-                      className={cn(selected && "bg-accent/40", focusActivityId === act.id && "bg-muted/40")}
-                    >
-                      <TableCell className="sticky left-0 z-[1] bg-card px-3">
-                        <Checkbox
-                          checked={selected}
-                          disabled={!canEdit}
-                          aria-label={`Select ${act.activityName}`}
-                          onCheckedChange={(v) => toggleScheduleRow(act.id, Boolean(v))}
-                        />
-                      </TableCell>
-                      <TableCell className="sticky left-10 z-[1] bg-card">
-                        <p className="truncate text-sm font-medium">{act.activityName}</p>
-                        <p className="truncate text-[10px] text-muted-foreground">
-                          {scheduleStatusOf(act) === "scheduled" ? scheduleLabel(act) : "Not scheduled"}
-                        </p>
-                      </TableCell>
-                      {periodMonths.map((m) => (
-                        <TableCell key={m} className="p-0.5 text-center">
-                          <button
-                            type="button"
-                            disabled={!canEdit}
-                            title={PLAN_MONTH_LABELS[m]}
-                            aria-label={`${act.activityName} ${PLAN_MONTH_LABELS[m]} ${act.intensities[m]}`}
-                            className={cn(
-                              "inline-flex h-8 w-8 select-none items-center justify-center rounded text-[10px] font-medium touch-manipulation",
-                              intensityClass(act.intensities[m]),
-                              !canEdit && "cursor-default",
-                            )}
-                            onMouseDown={(e) => {
-                              if (!canEdit || e.button !== 0) return;
-                              e.preventDefault();
-                              // Tap turns a month on or off; dragging carries the same choice across months
-                              paintValueRef.current = act.intensities[m] === "none" ? "active" : "none";
-                              paintingRef.current = true;
-                              paint(act.id, m);
-                            }}
-                            onMouseEnter={() => {
-                              if (paintingRef.current) paint(act.id, m);
-                            }}
-                            onTouchStart={(e) => {
-                              if (!canEdit) return;
-                              e.preventDefault();
-                              paintValueRef.current = act.intensities[m] === "none" ? "active" : "none";
-                              paintingRef.current = true;
-                              paint(act.id, m);
-                            }}
-                          >
-                            {act.intensities[m] !== "none" ? <Check className="h-3.5 w-3.5" aria-hidden /> : null}
-                          </button>
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+          <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-28 overflow-hidden rounded-full bg-muted" aria-hidden>
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${includedActivities.length ? (scheduleReadyCount / includedActivities.length) * 100 : 0}%` }}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{scheduleReadyCount}</span> of {includedActivities.length} ready
+              </span>
+            </div>
+            <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
+              {(
+                [
+                  ["all", "All"],
+                  ["todo", "To do"],
+                  ["ready", "Ready"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setScheduleFilter(value)}
+                  className={cn(
+                    "cf-focus rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    scheduleFilter === value
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {label}
+                  {value === "todo" ? ` (${includedActivities.length - scheduleReadyCount})` : ""}
+                </button>
+              ))}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input
+                  value={scheduleQuery}
+                  onChange={(e) => setScheduleQuery(e.target.value)}
+                  placeholder="Find an activity"
+                  className="h-8 w-44 pl-8 text-xs"
+                />
+              </div>
+              {canEdit && pagedSchedule.length ? (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:underline"
+                  onClick={() =>
+                    setScheduleSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      const all = pageScheduleSelected === pagedSchedule.length;
+                      for (const a of pagedSchedule) {
+                        if (all) next.delete(a.id);
+                        else next.add(a.id);
+                      }
+                      return next;
+                    })
+                  }
+                >
+                  {pageScheduleSelected === pagedSchedule.length ? "Unselect all" : "Select all"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {pagedSchedule.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+              {includedActivities.length === 0
+                ? "Nothing to schedule yet — choose activities first."
+                : scheduleFilter === "todo"
+                  ? "All done — every activity adds up to 100%."
+                  : "No activities match."}
+            </p>
+          ) : (
+            <ul className="space-y-2 px-3 py-3 sm:px-4">
+              {pagedSchedule.map((act) => (
+                <ScheduleActivityRow
+                  key={act.id}
+                  act={act}
+                  canEdit={canEdit}
+                  selected={scheduleSelectedIds.has(act.id)}
+                  focused={focusActivityId === act.id}
+                  onSelect={(on) => toggleScheduleRow(act.id, on)}
+                  onOpen={() => {
+                    setCalendarList(filteredSchedule.map((a) => a.id));
+                    setCalendarFor(act.id);
+                  }}
+                />
+              ))}
+            </ul>
+          )}
 
           <div className="px-3 sm:px-4">
             <TablePagination
@@ -1268,7 +1330,7 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
 
       {/* ——— REVIEW ——— */}
       {step === "review" && plan ? (
-        <StepPanel icon={ClipboardCheck} title="Review" description="Check the total and fix anything flagged, then submit.">
+        <StepPanel icon={ClipboardCheck} title="Review" actions={stepActions}>
           {canApprovePlan ? (
             <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
               Waiting for your decision —{" "}
@@ -1341,51 +1403,60 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
         </StepPanel>
       ) : null}
 
-      {/* Action bar */}
-      <div className={cn("sticky bottom-3 z-10", (isNew || step === "setup") && "hidden")}>
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card/95 px-3 py-2.5 shadow-[0_8px_30px_-12px_rgba(15,23,20,0.35)] backdrop-blur sm:px-4">
-          {currentIndex > 0 ? (
-            <Button variant="ghost" onClick={() => goTo(currentIndex - 1)}>
-              <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
-              Back
-            </Button>
+      <Dialog open={Boolean(calendarAct)} onOpenChange={(open) => !open && setCalendarFor(null)}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Schedule</DialogTitle>
+          </DialogHeader>
+          {calendarAct && plan ? (
+            <ScheduleActivityCard
+              bare
+              act={calendarAct}
+              months={periodMonths}
+              yearOf={(m) => plan.budgetYearGc - (PLAN_MONTHS.indexOf(m) <= 2 ? 1 : 0)}
+              canEdit={canEdit}
+              selected={false}
+              focused={false}
+              onSelect={() => undefined}
+              onToggleMonth={(m) =>
+                setMonthIntensity(calendarAct.id, m, calendarAct.intensities[m] === "none" ? "active" : "none")
+              }
+              onShare={(m, pct) => setMonthShare(calendarAct.id, m, pct)}
+              onSetMonths={(months) => setActivityMonths(calendarAct.id, months)}
+              onSplitEvenly={() => splitSharesEvenly(calendarAct.id)}
+              onCopyToAll={() => {
+                const n = copySchedule(
+                  calendarAct.id,
+                  includedActivities.map((a) => a.id),
+                );
+                if (n) toast.success(`Copied ${calendarAct.activityName}'s months to ${n} activit${n === 1 ? "y" : "ies"}`);
+              }}
+            />
           ) : null}
-          {canEdit && step !== "setup" ? (
-            <Button variant="outline" disabled={!plan} onClick={() => void onSave()}>
-              Save draft
-            </Button>
-          ) : null}
-          {plan ? (
-            <div className="hidden min-w-0 flex-col px-2 leading-tight md:flex">
-              <span className="text-[11px] text-muted-foreground">Plan total</span>
-              <span className="text-sm font-semibold tabular-nums">{fmtEtb(completion.budgetEtb)}</span>
-            </div>
-          ) : null}
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            {step !== "review" ? (
-              <>
-                {plan && stepTodo[step] && step !== "setup" ? (
-                  <span className="hidden text-xs text-amber-700 sm:inline dark:text-amber-400">{stepTodo[step]}</span>
-                ) : null}
-                <Button disabled={!plan} onClick={() => goTo(currentIndex + 1)} className="min-w-[10rem]">
-                  Continue to {STEPS[currentIndex + 1]?.label}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <span className="text-xs text-muted-foreground sm:self-center">
+              {calendarIndex + 1} of {calendarList.length}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={calendarIndex <= 0}
+                onClick={() => setCalendarFor(calendarList[calendarIndex - 1] ?? null)}
+              >
+                Previous
+              </Button>
+              {calendarIndex < calendarList.length - 1 ? (
+                <Button onClick={() => setCalendarFor(calendarList[calendarIndex + 1] ?? null)}>
+                  Next activity
                   <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
                 </Button>
-              </>
-            ) : canEdit ? (
-              <Button
-                disabled={!plan || blockingIssues.length > 0 || completion.budgetEtb <= 0}
-                title={blockingIssues.length ? "Fix the issues above first" : undefined}
-                onClick={() => setSubmitOpen(true)}
-                className="min-w-[10rem]"
-              >
-                <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden />
-                Submit for approval
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </div>
+              ) : (
+                <Button onClick={() => setCalendarFor(null)}>Done</Button>
+              )}
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
         <DialogContent>
@@ -1479,9 +1550,24 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
               activity={rateCardTarget}
               kind={kindOf(rateCardTarget)}
               currentRate={rateCardTarget.agreedRate?.unitRateEtb ?? null}
-              onSaved={async () => {
-                await loadContext();
-                syncActivitiesFromEligible();
+              onApplied={(rate) => {
+                const target = rateCardTarget;
+                rateBeforeRef.current = { id: target.id, rate: target.agreedRate };
+                setAgreedRate(target.id, {
+                  rateCardId: target.agreedRate?.rateCardId || "pending",
+                  unitRateEtb: rate,
+                  costKind: kindOf(target),
+                  normMdPerUnit: target.agreedRate?.normMdPerUnit ?? null,
+                  approvedAt: null,
+                });
+              }}
+              onFailed={() => {
+                const before = rateBeforeRef.current;
+                if (before) setAgreedRate(before.id, before.rate);
+              }}
+              // Refresh rates in the background once the server has saved the card
+              onSaved={() => {
+                void loadContext().then(() => syncActivitiesFromEligible());
               }}
               onClose={() => setRateCardFor(null)}
             />
@@ -1499,11 +1585,11 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
             {SHOW_SPEND_BANDS ? ` · Band ${band}` : ""} — goes to the Silva asset owner for approval.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={submitting}>
+            <Button variant="outline" onClick={() => setSubmitOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void onSubmit()} disabled={submitting}>
-              {submitting ? "Submitting…" : "Submit"}
+            <Button onClick={() => void onSubmit()}>
+              Submit
             </Button>
           </DialogFooter>
         </DialogContent>

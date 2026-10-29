@@ -33,6 +33,34 @@ export type FieldTicketDto = {
   updatedAt: string;
 };
 
+export type CompletionItemStatus = "completed" | "partial" | "not_done";
+
+export type CompletionItem = {
+  label: string;
+  plannedQty: number | null;
+  unit: string;
+  doneQty: number | null;
+  status: CompletionItemStatus;
+  /** Required when the item isn't completed. */
+  reason: string;
+};
+
+/** Vendor's report when sending a work order for review. */
+export type CompletionReport = {
+  narrative: string;
+  startedOn: string | null;
+  finishedOn: string | null;
+  items: CompletionItem[];
+  workers: number | null;
+  mandays: number | null;
+  materialsUsed: string;
+  issues: string;
+  safety: string;
+  nextSteps: string;
+  submittedBy?: string | null;
+  submittedAt?: string;
+};
+
 export type WorkOrderDto = {
   id: string;
   programId: string;
@@ -57,8 +85,12 @@ export type WorkOrderDto = {
   attention?: "insurance" | null;
   status: WorkOrderStatus;
   statusRaw: string;
-  vendorOutcome?: "done" | "not_done" | "returned" | null;
+  vendorOutcome?: "done" | "partial" | "not_done" | "returned" | null;
   vendorNote?: string;
+  vendorReportedAt?: string | null;
+  completionReport?: CompletionReport | null;
+  plannedQty?: number | null;
+  unit?: string | null;
   blocks: { blockId: string; blockCode: string | null; blockName: string | null }[];
   block: string | null;
   ticketsDone: number;
@@ -107,6 +139,17 @@ export function reportWorkOrderOutcome(id: string, outcome: "done" | "not_done",
     method: "POST",
     body: note ? { outcome, note } : { outcome },
   });
+}
+
+/** Vendor sends the completion report; the work order goes to SPX for review. */
+export function submitWorkOrderCompletion(
+  id: string,
+  report: Omit<CompletionReport, "submittedBy" | "submittedAt" | "startedOn" | "finishedOn"> & {
+    startedOn?: string;
+    finishedOn?: string;
+  },
+) {
+  return apiFetch<WorkOrderDto>(`/work-orders/${id}/completion-report`, { method: "POST", body: report });
 }
 
 /** SPX reviews work sent by the vendor: approve closes it, return sends it back with a comment. */

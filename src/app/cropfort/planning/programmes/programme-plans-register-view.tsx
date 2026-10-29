@@ -1,5 +1,6 @@
 "use client";
 
+import { useActiveFarmId } from "@/store/farmWorkspaceStore";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -65,7 +66,7 @@ type StatusFilter = "all" | "draft" | "submitted" | "returned" | "approved";
 const STATUS_TABS: { id: StatusFilter; label: string; match: (raw?: string) => boolean }[] = [
   { id: "all", label: "All", match: () => true },
   { id: "draft", label: "Draft", match: (r) => !r || r === "draft" || r === "ready_for_review" },
-  { id: "submitted", label: "Waiting approval", match: (r) => r === "submitted" },
+  { id: "submitted", label: "Pending", match: (r) => r === "submitted" },
   { id: "returned", label: "Returned", match: (r) => r === "returned" },
   { id: "approved", label: "Approved", match: (r) => r === "approved" || r === "active" },
 ];
@@ -105,6 +106,7 @@ export default function ProgrammePlansRegisterView({
     enabled: Boolean(activeProgram?.id),
   });
   const farms = farmsQuery.data || [];
+  const workspaceFarmId = useActiveFarmId();
 
   const plansQuery = useProgrammePlans(Boolean(activeProgram?.id), {
     status: archiveMode ? "archived" : undefined,
@@ -169,7 +171,8 @@ export default function ProgrammePlansRegisterView({
     p: ProgrammePlanDto,
   ): { label: string; href?: string; onClick?: () => void; primary: boolean; disabled?: boolean } | null => {
     if (archiveMode) return null;
-    if (p.statusRaw === "returned" && canEditRow(p)) return { label: "Fix", primary: true };
+    if (p.statusRaw === "returned" && canEditRow(p))
+      return { label: "Fix", href: `${planHref(p.id)}/fix`, primary: true };
     if (canEditRow(p)) return { label: "Continue", primary: true };
     if (p.statusRaw === "submitted") return { label: "View approval", href: CROPFORT_ROUTES.approvals, primary: false };
     if (canCreate && (p.statusRaw === "approved" || p.statusRaw === "active"))
@@ -179,7 +182,7 @@ export default function ProgrammePlansRegisterView({
         disabled: workOrdersMut.isPending,
         onClick: () =>
           void workOrdersMut
-            .mutateAsync(p.id)
+            .mutateAsync({ id: p.id })
             .then(({ created, skipped }) => {
               if (!created.length) {
                 toast.info(
@@ -295,28 +298,13 @@ export default function ProgrammePlansRegisterView({
                             ) : null}
                           </p>
                         </TableCell>
-                        <TableCell className="hidden min-w-[140px] md:table-cell">
-                          <div className="max-w-36">
-                            <p className="text-xs tabular-nums">
-                              <span className="font-semibold text-foreground">{scheduled}</span>
-                              <span className="text-muted-foreground"> / {included} activities</span>
-                            </p>
-                            <div
-                              className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
-                              role="progressbar"
-                              aria-label={`${scheduled} of ${included} activities scheduled`}
-                              aria-valuemin={0}
-                              aria-valuemax={Math.max(included, 1)}
-                              aria-valuenow={Math.min(scheduled, included)}
-                            >
-                              <div
-                                className="h-full rounded-full bg-primary transition-[width]"
-                                style={{
-                                  width: `${included > 0 ? Math.min(100, (scheduled / included) * 100) : 0}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
+                        <TableCell className="hidden md:table-cell">
+                          <span className="text-sm tabular-nums">
+                            <span className={cn("font-semibold", included > 0 && scheduled >= included ? "text-primary" : "text-foreground")}>
+                              {scheduled}
+                            </span>
+                            <span className="text-muted-foreground"> / {included}</span>
+                          </span>
                         </TableCell>
                         <TableCell className="min-w-[130px] text-right font-semibold tabular-nums text-foreground">
                           {fmtEtb(row.plannedCostEtb || 0)}
@@ -412,7 +400,7 @@ export default function ProgrammePlansRegisterView({
                                   disabled={workOrdersMut.isPending}
                                   onClick={() =>
                                     void workOrdersMut
-                                      .mutateAsync(row.id)
+                                      .mutateAsync({ id: row.id })
                                       .then(({ created, skipped }) => {
                                         if (!created.length) {
                                           toast.info(
@@ -501,12 +489,14 @@ export default function ProgrammePlansRegisterView({
       />
 
       <SectionCard flush>
-        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:px-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:px-5 lg:flex-row lg:items-center">
           {!archiveMode ? (
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter by status">
+            <div className="flex flex-wrap gap-1" role="tablist" aria-label="Filter by status">
               {STATUS_TABS.map((tab) => {
                 const active = statusFilter === tab.id;
                 const count = allPlans.filter((p) => tab.match(p.statusRaw)).length;
+                // Empty statuses only add noise
+                if (!count && !active && tab.id !== "all") return null;
                 return (
                   <button
                     key={tab.id}
@@ -518,23 +508,19 @@ export default function ProgrammePlansRegisterView({
                       setPage(1);
                     }}
                     className={cn(
-                      "cf-focus inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors",
-                      active
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background text-muted-foreground hover:text-foreground",
+                      "cf-focus inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors",
+                      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
                     {tab.label}
-                    <span className={cn("rounded-full px-1.5 text-[10px] tabular-nums", active ? "bg-primary-foreground/20" : "bg-muted")}>
-                      {count}
-                    </span>
+                    <span className={cn("tabular-nums", active ? "opacity-80" : "opacity-60")}>{count}</span>
                   </button>
                 );
               })}
             </div>
           ) : null}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:justify-end">
-            <div className="relative min-w-0 sm:w-60">
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+            <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden
@@ -546,70 +532,70 @@ export default function ProgrammePlansRegisterView({
                   setQuery(event.target.value);
                   setPage(1);
                 }}
-                placeholder="Search plans"
+                placeholder="Search"
                 aria-label="Search plans"
-                className="h-9 rounded-xl bg-background pl-9"
+                className="h-9 rounded-lg bg-background pl-9"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-
-                <Select
-                  value={farmFilter}
-                  aria-label="Filter by farm area"
-                  onValueChange={(v) => {
-                    setFarmFilter(v);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-full rounded-xl bg-background sm:w-[150px]">
-                    <SelectValue placeholder="Farm area" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All farm areas</SelectItem>
-                    {farms.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={yearFilter}
-                  aria-label="Filter by budget year"
-                  onValueChange={(v) => {
-                    setYearFilter(v);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-full rounded-xl bg-background sm:w-[120px]">
-                    <SelectValue placeholder="Budget year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All years</SelectItem>
-                    {years.map((y) => (
-                      <SelectItem key={y} value={String(y)}>
-                        {y} GC
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              {hasActiveFilters ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="col-span-2 h-10 sm:col-span-1 sm:h-9"
-                  onClick={() => {
-                    setQuery("");
-                    setStatusFilter("all");
-                    setFarmFilter("all");
-                    setYearFilter("all");
-                    setPage(1);
-                  }}
-                >
-                  Clear filters
-                </Button>
-              ) : null}
-            </div>
+            {farms.length > 1 && !workspaceFarmId ? (
+              <Select
+                value={farmFilter}
+                aria-label="Filter by farm area"
+                onValueChange={(v) => {
+                  setFarmFilter(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 w-[150px] rounded-lg bg-background">
+                  <SelectValue placeholder="Farm area" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All farms</SelectItem>
+                  {farms.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {years.length > 1 ? (
+              <Select
+                value={yearFilter}
+                aria-label="Filter by budget year"
+                onValueChange={(v) => {
+                  setYearFilter(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 w-[110px] rounded-lg bg-background">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All years</SelectItem>
+                  {years.map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                className="text-xs font-medium text-primary hover:underline"
+                onClick={() => {
+                  setQuery("");
+                  setStatusFilter("all");
+                  setFarmFilter("all");
+                  setYearFilter("all");
+                  setPage(1);
+                }}
+              >
+                Clear
+              </button>
+            ) : null}
           </div>
         </div>
 

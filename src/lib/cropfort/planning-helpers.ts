@@ -5,6 +5,7 @@ import {
 } from "@/lib/cropfort/ethiopian-year";
 import type { CoreOpsActivity, CoreOpsPlan, MonthIntensity } from "@/types/core-ops";
 import { scheduleLabel, scheduleStatusOf } from "@/store/coreOpsPlanStore";
+import { monthShareOf } from "@/lib/cropfort/month-shares";
 
 export function fmtEtb(n: number | null | undefined) {
   if (n == null || !Number.isFinite(n)) return "—";
@@ -48,12 +49,7 @@ function activeMonthWeights(act: CoreOpsActivity): Record<PlanMonth, number> {
     aug: 0,
     sep: 0,
   };
-  for (const m of PLAN_MONTHS) {
-    const i = act.intensities[m];
-    if (i === "peak") weights[m] = 3;
-    else if (i === "active") weights[m] = 2;
-    else if (i === "light") weights[m] = 1;
-  }
+  for (const m of PLAN_MONTHS) weights[m] = monthShareOf(act, m);
   return weights;
 }
 

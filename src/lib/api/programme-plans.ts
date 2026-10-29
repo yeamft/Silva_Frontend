@@ -14,6 +14,8 @@ export type ProgrammePlanDto = CoreOpsPlan & {
   resolvedBand?: "A" | "B" | "C" | "D" | null;
   approvalRequirement?: string | null;
   returnedComment?: string | null;
+  /** Lines the asset owner asked to remove when returning the plan. */
+  returnedLineIds?: string[];
   submittedAt?: string | null;
   reviewedAt?: string | null;
   createdAt?: string;
@@ -83,6 +85,7 @@ function linesFromPlan(plan: CoreOpsPlan) {
       rateReadiness: a.rateReadiness,
       rateStatus: a.rateStatus,
       intensities: a.intensities,
+      monthShares: a.monthShares ?? {},
       blockAllocations: a.blockAllocations,
       manualsRef: a.manualsRef,
       serviceType: a.serviceType,
@@ -172,6 +175,7 @@ export function patchProgrammeSchedule(
   lines: {
     id: string;
     intensities?: Record<PlanMonth, MonthIntensity>;
+    monthShares?: Partial<Record<PlanMonth, number>>;
     from?: PlanMonth;
     to?: PlanMonth;
     intensity?: MonthIntensity;
@@ -202,10 +206,11 @@ export function decideProgrammePlan(
   id: string,
   decision: "approve" | "return",
   comment?: string,
+  removeLineIds?: string[],
 ) {
   return apiFetch<ProgrammePlanDto>(`/programme-plans/${id}/decide`, {
     method: "POST",
-    body: { decision, comment },
+    body: removeLineIds?.length ? { decision, comment, removeLineIds } : { decision, comment },
   });
 }
 
@@ -221,10 +226,10 @@ export function archiveProgrammePlan(id: string) {
   });
 }
 
-/** Turn an approved plan into one monthly work order per scheduled month (SPX desk). */
-export function createWorkOrdersFromPlan(id: string) {
+/** Turn an approved plan into monthly work orders (SPX desk) — only the given months when `months` is set. */
+export function createWorkOrdersFromPlan(id: string, months?: string[]) {
   return apiFetch<{ created: MonthlyWorkOrderDto[]; skipped: string[] }>(
     `/programme-plans/${id}/work-orders`,
-    { method: "POST" },
+    { method: "POST", body: months?.length ? { months } : {} },
   );
 }

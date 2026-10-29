@@ -1,5 +1,6 @@
 "use client";
 
+import { FarmAreaSelector } from "@/components/cropfort/farm-area-label";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -94,7 +95,6 @@ function CountBadge({ value, dot }: { value: number; dot?: boolean }) {
 /** Field desk for bagro_office / field_supervisor — slim rail on desktop that can be closed, menu sheet on phone. */
 export function VendorFieldShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { activeProgram } = useCropfortAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const { badge } = useVendorCounts();
@@ -228,16 +228,8 @@ export function VendorFieldShell({ children }: { children: ReactNode }) {
                 </nav>
               </SheetContent>
             </Sheet>
-            <div className="min-w-0 flex-1 md:hidden">
-              <p className="truncate text-sm font-semibold tracking-tight">
-                {activeProgram?.name || "Cropfort"}
-              </p>
-              <p className="truncate text-[11px] text-muted-foreground">Field desk</p>
-            </div>
-            <div className="hidden min-w-0 flex-1 md:block">
-              <p className="truncate text-sm font-medium">
-                {activeProgram?.name || "Cropfort"}
-              </p>
+            <div className="flex min-w-0 flex-1 items-center">
+              <FarmAreaSelector />
             </div>
             <NotificationBell />
             <UserMenu />

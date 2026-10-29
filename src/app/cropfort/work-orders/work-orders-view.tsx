@@ -431,7 +431,9 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                           {wo.spxApproved
                             ? "Approved"
                             : wo.status === "complete"
-                              ? "Sent for review"
+                              ? wo.vendorOutcome === "partial"
+                                ? "Sent for review · partly done"
+                                : "Sent for review"
                               : open
                                 ? wo.vendorOutcome === "not_done"
                                   ? "Not done"
@@ -448,14 +450,12 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                       </TableCell>
                       {view === "review" && canAct ? (
                         <TableCell className="text-right">
-                          <span className="inline-flex gap-1.5">
-                            <Button size="sm" variant="ghost" className="h-8" disabled={busy} onClick={() => setReturnFor([wo])}>
-                              Return
-                            </Button>
-                            <Button size="sm" className="h-8" disabled={busy} onClick={() => setConfirm([wo])}>
-                              Approve
-                            </Button>
-                          </span>
+                          <Button size="sm" className="h-8" asChild>
+                            <Link href={`${CROPFORT_ROUTES.workOrders}/${wo.id}/review`}>
+                              <Eye className="mr-1 h-3.5 w-3.5" aria-hidden />
+                              Review
+                            </Link>
+                          </Button>
                         </TableCell>
                       ) : view !== "todo" ? (
                         showActions ? <TableCell /> : null
@@ -466,8 +466,10 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                               <Button size="sm" variant="ghost" className="h-8" disabled={busy} onClick={() => setNotDoneFor(wo)}>
                                 Not done
                               </Button>
-                              <Button size="sm" className="h-8" disabled={busy} onClick={() => setConfirm([wo])}>
-                                Done
+                              <Button size="sm" className="h-8" asChild>
+                                <Link href={`${CROPFORT_ROUTES.workOrders}/${wo.id}/complete`}>
+                                  {wo.vendorOutcome === "returned" ? "Fix & resend" : "Report done"}
+                                </Link>
                               </Button>
                             </span>
                           ) : null}
@@ -760,8 +762,8 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                     ) : isVendor && !canAct ? (
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         {plan.open.length ? (
-                          <Button size="sm" className="h-8" disabled={busy} onClick={() => setConfirm(plan.open)}>
-                            Mark all done ({plan.open.length})
+                          <Button size="sm" className="h-8" asChild>
+                            <Link href={detailHref(plan.key)}>Report work ({plan.open.length})</Link>
                           </Button>
                         ) : null}
                       </TableCell>

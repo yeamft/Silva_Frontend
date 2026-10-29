@@ -1,5 +1,6 @@
 "use client";
 
+import { FarmAreaSelector } from "@/components/cropfort/farm-area-label";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { MainNav } from "@/components/navigation/main-nav";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
@@ -81,12 +82,13 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
         className="min-w-0 overflow-x-hidden pb-[env(safe-area-inset-bottom)]"
       >
         <header className="sticky top-0 z-30 bg-background supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
-          <div className="flex h-16 items-center gap-3 border-b border-border/70 bg-background/85 px-4 backdrop-blur-md sm:px-8 lg:px-10">
+          <div className="cf-shell-topbar flex h-16 items-center gap-3 border-b border-border/70 bg-background/85 px-4 backdrop-blur-md sm:px-8 lg:px-10">
             <SidebarTrigger
               // Phones only: it's how the menu opens there
               className="h-9 w-9 shrink-0 rounded-xl border border-border/80 bg-card text-muted-foreground shadow-sm hover:bg-primary/10 hover:text-primary md:hidden"
               aria-label="Toggle navigation"
             />
+            <FarmAreaSelector className="max-w-[10rem] sm:max-w-[16rem]" />
             <div className="ml-auto min-w-0 shrink-0">
               <GlobalContextBar
                 onOpenSearch={() => setSearchOpen(true)}
@@ -119,7 +121,9 @@ export function SpxPlatformShell({ children }: { children: ReactNode }) {
             </div>
           ) : null}
 
-          <WorkspaceNav />
+          <div className="cf-shell-topbar">
+            <WorkspaceNav />
+          </div>
         </header>
 
         {children}

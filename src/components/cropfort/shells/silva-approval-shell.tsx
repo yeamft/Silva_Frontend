@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { FarmAreaSelector } from "@/components/cropfort/farm-area-label";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -233,12 +234,13 @@ export function SilvaApprovalShell({ children }: { children: ReactNode }) {
         tabIndex={-1}
         className="min-w-0 overflow-x-hidden pb-[env(safe-area-inset-bottom)]"
       >
-        <header className="sticky top-0 z-30 border-b border-border bg-card supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
-          <div className="flex h-14 items-center gap-3 px-3 sm:px-5">
+        <header className="sticky top-0 z-30 bg-card supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)]">
+          <div className="cf-shell-topbar flex h-14 items-center gap-3 border-b border-border px-3 sm:px-5">
             <SidebarTrigger
               className="shrink-0 md:hidden border border-sidebar-border bg-sidebar-accent/70 text-sidebar-foreground hover:bg-sidebar-accent"
               aria-label="Toggle navigation"
             />
+            <FarmAreaSelector className="min-w-0" />
             <div className="flex-1" />
             <NotificationBell />
             <UserMenu />

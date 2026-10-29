@@ -98,7 +98,6 @@ export function PlanAssessmentCard({
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold">Farm assessment</h3>
-          <p className="text-xs text-muted-foreground">Optional — gives the asset owner the field findings behind this plan.</p>
         </div>
       </div>
 

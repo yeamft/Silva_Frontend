@@ -12,13 +12,17 @@ import {
   type MonthlyWorkOrderDto,
 } from "@/lib/api/monthly-work-orders";
 import { queryKeys } from "@/lib/query/keys";
+import { useFarmScopedSelect } from "@/store/farmWorkspaceStore";
 import { moveRowStatus, restoreSnapshot } from "@/lib/query/optimistic-status";
 import type { ProcessLoop } from "@/types/agronomic-cycle";
 
 export function useMonthlyWorkOrders(enabled = true, status?: string) {
+  // Only the farm area chosen in the top bar (all when none is chosen)
+  const select = useFarmScopedSelect<MonthlyWorkOrderDto>((o) => o.farmId);
   return useQuery({
     queryKey: queryKeys.monthlyWorkOrders.list(status),
     queryFn: () => listMonthlyWorkOrders(status ? { status } : undefined),
+    select,
     enabled,
   });
 }
