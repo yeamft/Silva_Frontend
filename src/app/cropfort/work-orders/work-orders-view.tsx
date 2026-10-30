@@ -3,18 +3,17 @@
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardList, Eye, Search, Send, ThumbsUp } from "lucide-react";
+import { CheckCircle2, ClipboardList, Eye, Search, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CROPFORT_ROUTES } from "@/config/navigation";
-import { isSpxDesk } from "@/lib/cropfort/platform-access";
+import { isBagroDesk, isSpxDesk } from "@/lib/cropfort/platform-access";
 import { cn } from "@/lib/utils";
 import {
   mapWorkOrderDto,
@@ -27,15 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useMonthlyWorkOrders } from "@/lib/query/hooks/use-monthly-work-orders";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
 import { PLAN_MONTHS, PLAN_MONTH_LABELS } from "@/lib/cropfort/ethiopian-year";
-import { fmtEtb, type WoStatus, type WorkOrder } from "@/store/cropfortOpsStore";
-
-/** Steps a work order still has to go through to be submitted (complete). */
-const PATH_TO_SUBMITTED: Record<WoStatus, WoStatus[]> = {
-  draft: ["issued", "in_progress", "complete"],
-  issued: ["in_progress", "complete"],
-  in_progress: ["complete"],
-  complete: [],
-};
+import { fmtEtb, type WorkOrder } from "@/store/cropfortOpsStore";
 
 /** Runs one action per work order in parallel; failures are collected rather than stopping the rest. */
 async function runAll(items: WorkOrder[], action: (wo: WorkOrder) => Promise<unknown>, fallback: string) {
@@ -55,9 +46,10 @@ const canSubmit = (wo: WorkOrder) => wo.status === "issued" || wo.status === "in
 export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
   const { user, activeProgram } = useCropfortAuth();
   const router = useRouter();
-  const canAct = isSpxDesk(user.role) || user.role === "field_supervisor";
+  // SPX issues and reviews work; only the vendor reports it done
+  const canAct = isSpxDesk(user.role);
   // Vendors report on the orders issued to them: done, or not done with a reason
-  const isVendor = user.role === "bagro_office";
+  const isVendor = isBagroDesk(user.role);
   const showActions = canAct || isVendor;
   const reportOutcome = useReportWorkOrderOutcome();
   const [notDoneFor, setNotDoneFor] = useState<WorkOrder | null>(null);
@@ -72,7 +64,6 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
 
   const [month, setMonth] = useState("all");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [confirm, setConfirm] = useState<WorkOrder[] | null>(null);
   const [busy, setBusy] = useState(false);
   // To do = still open; Sent for review = vendor marked done, SPX to verify; Approved = SPX approved
@@ -193,52 +184,7 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
     if (done) toast.success(`Issued ${done} work order${done === 1 ? "" : "s"} to the vendor`);
     if (failed.length) toast.error(failed.join("\n"), { duration: 10000 });
   };
-  const submittable = rows.filter(canSubmit);
-  const selectedRows = submittable.filter((o) => selected.has(o.id));
-  const allSelected = submittable.length > 0 && selectedRows.length === submittable.length;
-
-  const toggle = (id: string, on: boolean) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (on) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-
-  /** Moves each work order through the remaining steps to submitted, one after another. */
-  const submit = async (items: WorkOrder[]) => {
-    // The list updates straight away, so the dialog can close before the server answers
-    setConfirm(null);
-    setSelected(new Set());
-    setBusy(true);
-    const { done, failed } = await runAll(
-      items,
-      async (wo) => {
-        for (const status of PATH_TO_SUBMITTED[wo.status]) {
-          await transitionWo.mutateAsync({ id: wo.id, status });
-        }
-      },
-      "failed",
-    );
-    setBusy(false);
-    if (done) toast.success(`Submitted ${done} work order${done === 1 ? "" : "s"}`);
-    if (failed.length) toast.error(failed.join("\n"));
-  };
-
   const totalOf = (items: WorkOrder[]) => items.reduce((sum, o) => sum + (o.etb || 0), 0);
-
-  const markDone = async (items: WorkOrder[]) => {
-    setConfirm(null);
-    setBusy(true);
-    const { done, failed } = await runAll(
-      items,
-      (wo) => reportOutcome.mutateAsync({ id: wo.id, outcome: "done" }),
-      "failed",
-    );
-    setBusy(false);
-    if (done) toast.success(`Marked ${done} work order${done === 1 ? "" : "s"} as done`);
-    if (failed.length) toast.error(failed.join("\n"));
-  };
 
   const approveWorkOrders = async (items: WorkOrder[]) => {
     setConfirm(null);
@@ -342,12 +288,6 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                     Issue all ({plan.drafts.length})
                   </Button>
                 ) : null}
-                {plan.open.length ? (
-                  <Button disabled={busy} onClick={() => setConfirm(plan.open)}>
-                    <Send className="mr-1.5 h-4 w-4" aria-hidden />
-                    Submit all ({plan.open.length})
-                  </Button>
-                ) : null}
               </div>
             ) : null
           }
@@ -380,11 +320,6 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                   {a.drafts.length ? (
                     <Button size="sm" className="h-8" disabled={busy} onClick={() => void issue(a.drafts)}>
                       Issue ({a.drafts.length})
-                    </Button>
-                  ) : null}
-                  {a.open.length ? (
-                    <Button size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => setConfirm(a.open)}>
-                      Submit ({a.open.length})
                     </Button>
                   ) : null}
                 </span>
@@ -477,9 +412,7 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                       ) : canAct ? (
                         <TableCell className="text-right">
                           {open ? (
-                            <Button size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => setConfirm([wo])}>
-                              Submit
-                            </Button>
+                            <span className="text-xs text-muted-foreground">With vendor</span>
                           ) : (
                             <Button size="sm" className="h-8" disabled={busy} onClick={() => void issue([wo])}>
                               Issue
@@ -515,20 +448,10 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                 Approve all ({rows.length})
               </Button>
             ) : null
-          ) : view === "approved" ? null : canAct && (submittable.length > 0 || notIssued.length > 0) ? (
-            <div className="flex flex-wrap gap-2">
-              {notIssued.length ? (
-                <Button variant="outline" disabled={busy} onClick={() => void issue(notIssued)}>
-                  Issue all ({notIssued.length})
-                </Button>
-              ) : null}
-              {submittable.length ? (
-                <Button disabled={busy} onClick={() => setConfirm(selectedRows.length ? selectedRows : submittable)}>
-              <Send className="mr-1.5 h-4 w-4" aria-hidden />
-              {selectedRows.length ? `Submit selected (${selectedRows.length})` : `Submit all (${submittable.length})`}
+          ) : view === "approved" ? null : canAct && notIssued.length > 0 ? (
+            <Button variant="outline" disabled={busy} onClick={() => void issue(notIssued)}>
+              Issue all ({notIssued.length})
             </Button>
-              ) : null}
-            </div>
           ) : null
         }
       />
@@ -572,7 +495,6 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
               aria-selected={active}
               onClick={() => {
                 setView(t.id);
-                setSelected(new Set());
               }}
               className={cn(
                 "cf-focus inline-flex h-9 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors",
@@ -597,7 +519,6 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
               value={month}
               onValueChange={(v) => {
                 setMonth(v);
-                setSelected(new Set());
               }}
             >
               <SelectTrigger className="h-10 w-full rounded-xl sm:w-[16rem]" aria-label="Month">
@@ -628,16 +549,6 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
         <Table containerClassName="cf-fit-table">
           <TableHeader>
             <TableRow>
-              {canAct ? (
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={allSelected ? true : selectedRows.length ? "indeterminate" : false}
-                    disabled={submittable.length === 0 || busy}
-                    aria-label="Select all to submit"
-                    onCheckedChange={(v) => setSelected(v ? new Set(submittable.map((o) => o.id)) : new Set())}
-                  />
-                </TableHead>
-              ) : null}
               <TableHead>Activity</TableHead>
               <TableHead className="hidden md:table-cell">Months</TableHead>
               <TableHead className="text-right">Work orders</TableHead>
@@ -697,24 +608,6 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
               planGroups.map((plan) => (
                 <Fragment key={plan.key}>
                   <TableRow className="cursor-pointer" onClick={() => router.push(detailHref(plan.key))}>
-                    {canAct ? (
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={
-                            plan.open.length && plan.open.every((o) => selected.has(o.id))
-                              ? true
-                              : plan.open.some((o) => selected.has(o.id))
-                                ? "indeterminate"
-                                : false
-                          }
-                          disabled={!plan.open.length || busy}
-                          aria-label={`Select ${plan.name}`}
-                          onCheckedChange={(v) => {
-                            for (const o of plan.open) toggle(o.id, Boolean(v));
-                          }}
-                        />
-                      </TableCell>
-                    ) : null}
                     <TableCell className="py-3">
                       <Link
                         href={detailHref(plan.key)}
@@ -773,11 +666,6 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
                           {plan.drafts.length ? (
                             <Button size="sm" className="h-8" disabled={busy} onClick={() => void issue(plan.drafts)}>
                               Issue ({plan.drafts.length})
-                            </Button>
-                          ) : null}
-                          {plan.open.length ? (
-                            <Button size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => setConfirm(plan.open)}>
-                              Submit ({plan.open.length})
                             </Button>
                           ) : null}
                         </span>
@@ -846,17 +734,7 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {view === "review"
-                ? confirm?.length === 1
-                  ? "Approve this work order?"
-                  : `Approve ${confirm?.length ?? 0} work orders?`
-                : isVendor && !canAct
-                ? confirm?.length === 1
-                  ? "Mark this work order as done?"
-                  : `Mark ${confirm?.length ?? 0} work orders as done?`
-                : confirm?.length === 1
-                  ? "Submit this work order?"
-                  : `Submit ${confirm?.length ?? 0} work orders?`}
+              {confirm?.length === 1 ? "Approve this work order?" : `Approve ${confirm?.length ?? 0} work orders?`}
             </DialogTitle>
           </DialogHeader>
           <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-xl border border-border text-sm">
@@ -874,7 +752,7 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
           </ul>
           <p className="text-sm text-muted-foreground">
             Total <span className="font-semibold text-foreground">{fmtEtb(totalOf(confirm ?? []))}</span>.{" "}
-            {view === "review" ? "Approving confirms the vendor's work is verified." : "Submitting marks the work as done."}
+            Approving confirms the vendor&apos;s work is verified.
           </p>
           <DialogFooter>
             <Button variant="outline" disabled={busy} onClick={() => setConfirm(null)}>
@@ -882,13 +760,10 @@ export default function WorkOrdersView({ planKey }: { planKey?: string } = {}) {
             </Button>
             <Button
               disabled={busy}
-              onClick={() =>
-                confirm &&
-                void (view === "review" ? approveWorkOrders(confirm) : isVendor && !canAct ? markDone(confirm) : submit(confirm))
-              }
+              onClick={() => confirm && void approveWorkOrders(confirm)}
             >
-              <Send className="mr-1.5 h-4 w-4" aria-hidden />
-              {busy ? "Saving…" : view === "review" ? "Approve" : isVendor && !canAct ? "Mark as done" : "Submit"}
+              <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden />
+              {busy ? "Saving…" : "Approve"}
             </Button>
           </DialogFooter>
         </DialogContent>

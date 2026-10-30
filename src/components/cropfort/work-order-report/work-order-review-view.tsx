@@ -35,7 +35,8 @@ const fmtDate = (d: string | null | undefined) =>
 export default function WorkOrderReviewView({ id }: { id: string }) {
   const router = useRouter();
   const { user } = useCropfortAuth();
-  const canReview = isSpxDesk(user.role) || user.role === "field_supervisor";
+  // SPX reviews; the vendor's own desk never approves its work
+  const canReview = isSpxDesk(user.role);
   const query = useWorkOrder(id);
   const review = useReviewWorkOrder();
   const [returning, setReturning] = useState(false);

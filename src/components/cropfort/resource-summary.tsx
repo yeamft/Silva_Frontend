@@ -30,15 +30,26 @@ export function ResourceSummary({
 
   return (
     <div className={cn("overflow-x-auto rounded-xl border border-border", className)}>
-      <table className="w-full min-w-[22rem] text-sm">
-        <thead className="bg-muted/40 text-left text-[11px] text-muted-foreground">
+      <table className="w-full min-w-[22rem] table-fixed text-sm">
+        {/* Fixed widths so the figures line up under their headers */}
+        <colgroup>
+          <col className={showActual ? "w-[40%]" : "w-[65%]"} />
+          <col className={showActual ? "w-[20%]" : "w-[35%]"} />
+          {showActual ? (
+            <>
+              <col className="w-[20%]" />
+              <col className="w-[20%]" />
+            </>
+          ) : null}
+        </colgroup>
+        <thead className="bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           <tr>
-            <th className="px-3 py-2 font-medium">Item</th>
-            <th className="px-3 py-2 text-right font-medium">Planned</th>
+            <th className="px-3 py-2.5 text-left">Item</th>
+            <th className="px-3 py-2.5 text-right">Planned</th>
             {showActual ? (
               <>
-                <th className="px-3 py-2 text-right font-medium">Actual</th>
-                <th className="px-3 py-2 text-right font-medium">Variance</th>
+                <th className="px-3 py-2.5 text-right">Actual</th>
+                <th className="px-3 py-2.5 text-right">Variance</th>
               </>
             ) : null}
           </tr>
@@ -61,18 +72,20 @@ export function ResourceSummary({
                   const diff = l.actual != null ? l.actual - l.planned : null;
                   return (
                     <tr key={`${l.kind}-${l.name}-${l.unit}`} className="border-t border-border/60">
-                      <td className="px-3 py-1.5">{l.name}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
+                      <td className="truncate px-3 py-2" title={l.name}>
+                        {l.name}
+                      </td>
+                      <td className="truncate px-3 py-2 text-right tabular-nums">
                         {fmt(l.planned)} <span className="text-xs text-muted-foreground">{l.unit}</span>
                       </td>
                       {showActual ? (
                         <>
-                          <td className="px-3 py-1.5 text-right tabular-nums">
+                          <td className="truncate px-3 py-2 text-right tabular-nums">
                             {l.actual != null ? fmt(l.actual) : "—"}
                           </td>
                           <td
                             className={cn(
-                              "px-3 py-1.5 text-right tabular-nums",
+                              "truncate px-3 py-2 text-right tabular-nums",
                               diff == null || Math.abs(diff) < 0.005
                                 ? "text-muted-foreground"
                                 : diff > 0

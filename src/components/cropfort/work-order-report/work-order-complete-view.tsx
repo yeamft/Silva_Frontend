@@ -24,6 +24,8 @@ import { useActivity } from "@/lib/query/hooks/use-activities";
 import { resourcesFor, type ResourceLine } from "@/lib/cropfort/resources";
 import { ResourceActualsEditor } from "@/components/cropfort/work-order-report/resource-actuals-editor";
 import { cn } from "@/lib/utils";
+import { useCropfortAuth } from "@/components/navigation/auth-context";
+import { isBagroDesk } from "@/lib/cropfort/platform-access";
 
 const STATUS_OPTIONS: { value: CompletionItemStatus; label: string; tone: string }[] = [
   { value: "completed", label: "Completed", tone: "border-primary bg-primary text-primary-foreground" },
@@ -88,6 +90,8 @@ const numOrNull = (v: string) => (v.trim() === "" || !Number.isFinite(Number(v))
 /** Vendor: report the finished work — what was done, anything not done and why — and send it to SPX. */
 export default function WorkOrderCompleteView({ id }: { id: string }) {
   const router = useRouter();
+  const { user } = useCropfortAuth();
+  const isVendorDesk = isBagroDesk(user.role);
   const query = useWorkOrder(id);
   const submit = useSubmitWorkOrderCompletion();
   const wo = query.data;
@@ -115,7 +119,8 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
     );
   }
 
-  const open = wo.status === "issued" || wo.status === "in_progress";
+  // Only the vendor reports work done; others see the report read-only
+  const open = isVendorDesk && (wo.status === "issued" || wo.status === "in_progress");
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => (d ? { ...d, [key]: value } : d));
   const setItem = (index: number, patch: Partial<CompletionItem>) =>
     set(
@@ -192,7 +197,9 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
       {!open ? (
         <SectionCard>
           <p className="text-sm text-muted-foreground">
-            This work order is {wo.statusRaw === "closed" ? "approved" : wo.status === "complete" ? "already sent for review" : "not issued yet"}.{" "}
+            {!isVendorDesk
+              ? "Only the vendor reports this work as done."
+              : `This work order is ${wo.statusRaw === "closed" ? "approved" : wo.status === "complete" ? "already sent for review" : "not issued yet"}.`}{" "}
             <Link href={CROPFORT_ROUTES.workOrders} className="font-medium text-primary hover:underline">
               Back to work orders
             </Link>

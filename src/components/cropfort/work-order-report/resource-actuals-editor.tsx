@@ -30,15 +30,24 @@ export function ResourceActualsEditor({
     <div className="space-y-2">
       {lines.length ? (
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead className="bg-muted/40 text-left text-[11px] text-muted-foreground">
+          <table className="w-full min-w-[36rem] table-fixed text-sm">
+            {/* Fixed widths so every row lines up with its header */}
+            <colgroup>
+              <col className="w-[16%]" />
+              <col className="w-[30%]" />
+              <col className="w-[17%]" />
+              <col className="w-[17%]" />
+              <col className="w-[15%]" />
+              <col className="w-[5%]" />
+            </colgroup>
+            <thead className="bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-medium">Type</th>
-                <th className="px-3 py-2 font-medium">Item</th>
-                <th className="px-3 py-2 text-right font-medium">Planned</th>
-                <th className="px-3 py-2 text-right font-medium">Actual</th>
-                <th className="px-3 py-2 text-right font-medium">Variance</th>
-                <th className="w-8" />
+                <th className="px-3 py-2.5 text-left">Type</th>
+                <th className="px-3 py-2.5 text-left">Item</th>
+                <th className="px-3 py-2.5 text-right">Planned</th>
+                <th className="px-3 py-2.5 text-right">Actual</th>
+                <th className="px-3 py-2.5 text-right">Variance</th>
+                <th aria-label="Remove" />
               </tr>
             </thead>
             <tbody>
@@ -47,8 +56,8 @@ export function ResourceActualsEditor({
                 const diff = l.actual != null ? l.actual - l.planned : null;
                 return (
                   <tr key={i} className="border-t border-border">
-                    <td className="px-3 py-1.5 text-xs text-muted-foreground">{RESOURCE_KIND_LABEL[l.kind]}</td>
-                    <td className="px-2 py-1">
+                    <td className="truncate px-3 py-2 text-xs text-muted-foreground">{RESOURCE_KIND_LABEL[l.kind]}</td>
+                    <td className="px-3 py-2">
                       {extra ? (
                         <div className="flex gap-1.5">
                           <Input
@@ -57,7 +66,7 @@ export function ResourceActualsEditor({
                             onChange={(e) => update(i, { name: e.target.value })}
                             placeholder="Item"
                             aria-label="Item name"
-                            className="h-8 min-w-[8rem]"
+                            className="h-8 min-w-0 flex-1"
                           />
                           {l.kind === "labour" ? null : (
                             <Input
@@ -71,13 +80,15 @@ export function ResourceActualsEditor({
                           )}
                         </div>
                       ) : (
-                        <span className="font-medium">{l.name}</span>
+                        <span className="block truncate font-medium" title={l.name}>
+                          {l.name}
+                        </span>
                       )}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums">
+                    <td className="truncate px-3 py-2 text-right tabular-nums">
                       {extra ? "—" : fmt(l.planned)} <span className="text-xs text-muted-foreground">{l.unit}</span>
                     </td>
-                    <td className="px-2 py-1 text-right">
+                    <td className="px-3 py-2 text-right">
                       <Input
                         type="number"
                         min={0}
@@ -87,12 +98,12 @@ export function ResourceActualsEditor({
                         disabled={disabled}
                         onChange={(e) => update(i, { actual: e.target.value === "" ? null : Number(e.target.value) })}
                         aria-label={`Actual ${l.name || "amount"}`}
-                        className="ml-auto h-8 w-24 text-right tabular-nums"
+                        className="h-8 w-full text-right tabular-nums"
                       />
                     </td>
                     <td
                       className={cn(
-                        "px-3 py-1.5 text-right tabular-nums",
+                        "truncate px-3 py-2 text-right tabular-nums",
                         diff == null || Math.abs(diff) < 0.005
                           ? "text-muted-foreground"
                           : diff > 0
@@ -102,7 +113,7 @@ export function ResourceActualsEditor({
                     >
                       {extra ? "—" : diff == null ? "—" : Math.abs(diff) < 0.005 ? "On plan" : `${diff > 0 ? "+" : "−"}${fmt(Math.abs(diff))}`}
                     </td>
-                    <td className="px-1 text-center">
+                    <td className="px-1 py-2 text-center">
                       {extra && !disabled ? (
                         <button
                           type="button"
