@@ -43,6 +43,10 @@ export type CompletionItem = {
   status: CompletionItemStatus;
   /** Required when the item isn't completed. */
   reason: string;
+  /** Optional note on the activity. */
+  remark?: string;
+  /** Actual − planned (set by the server). */
+  variance?: number | null;
 };
 
 /** Vendor's report when sending a work order for review. */
@@ -54,6 +58,8 @@ export type CompletionReport = {
   workers: number | null;
   mandays: number | null;
   materialsUsed: string;
+  /** Hired services: tractor, transport, spraying contractor… */
+  servicesUsed?: string;
   issues: string;
   safety: string;
   nextSteps: string;

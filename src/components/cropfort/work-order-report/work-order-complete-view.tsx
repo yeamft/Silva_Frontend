@@ -3,10 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Plus, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
-import { WorkOrderSummary, monthlyCodeOf, plannedOf } from "@/components/cropfort/work-order-report/work-order-summary";
+import {
+  WorkOrderSummary,
+  monthlyCodeOf,
+  plannedOf,
+  varianceLabel,
+  varianceOf,
+} from "@/components/cropfort/work-order-report/work-order-summary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +36,7 @@ type Draft = {
   workers: string;
   mandays: string;
   materialsUsed: string;
+  servicesUsed: string;
   issues: string;
   safety: string;
   nextSteps: string;
@@ -46,6 +53,7 @@ function initialDraft(wo: WorkOrderDto): Draft {
       workers: r.workers != null ? String(r.workers) : "",
       mandays: r.mandays != null ? String(r.mandays) : "",
       materialsUsed: r.materialsUsed,
+      servicesUsed: r.servicesUsed ?? "",
       issues: r.issues,
       safety: r.safety,
       nextSteps: r.nextSteps,
@@ -62,6 +70,7 @@ function initialDraft(wo: WorkOrderDto): Draft {
     workers: "",
     mandays: "",
     materialsUsed: "",
+    servicesUsed: "",
     issues: "",
     safety: "",
     nextSteps: "",
@@ -115,10 +124,16 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
           narrative: draft.narrative.trim(),
           startedOn: draft.startedOn || undefined,
           finishedOn: draft.finishedOn || undefined,
-          items: draft.items.map((i) => ({ ...i, label: i.label.trim(), reason: i.reason.trim() })),
+          items: draft.items.map(({ variance: _v, ...i }) => ({
+            ...i,
+            label: i.label.trim(),
+            reason: i.reason.trim(),
+            remark: (i.remark ?? "").trim(),
+          })),
           workers: numOrNull(draft.workers),
           mandays: numOrNull(draft.mandays),
           materialsUsed: draft.materialsUsed.trim(),
+          servicesUsed: draft.servicesUsed.trim(),
           issues: draft.issues.trim(),
           safety: draft.safety.trim(),
           nextSteps: draft.nextSteps.trim(),
@@ -168,7 +183,7 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
       ) : null}
 
       {/* 1. Narrative */}
-      <SectionCard title="What was done" description="Describe the work in your own words — how it went and what was achieved.">
+      <SectionCard title="What was done" description="Describe the work in your own words how it went and what was achieved.">
         <div className="space-y-4">
           <Textarea
             rows={5}
@@ -198,23 +213,6 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
       <SectionCard
         title="Activities"
         description={`${doneCount} of ${draft.items.length} completed. For anything not completed, say why.`}
-        action={
-          open ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                set("items", [
-                  ...draft.items,
-                  { label: "", plannedQty: null, unit: draft.items[0]?.unit || "", doneQty: null, status: "completed", reason: "" },
-                ])
-              }
-            >
-              <Plus className="mr-1 h-4 w-4" aria-hidden />
-              Add activity
-            </Button>
-          ) : null
-        }
       >
         <ul className="space-y-3">
           {draft.items.map((item, index) => (
@@ -287,7 +285,7 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Done</Label>
+                  <Label className="text-xs text-muted-foreground">Actual</Label>
                   <Input
                     type="number"
                     min={0}
@@ -306,6 +304,40 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
                     className="h-9 w-20"
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Variance</Label>
+                  {(() => {
+                    const v = varianceOf(item);
+                    return (
+                      <p
+                        className={cn(
+                          "flex h-9 min-w-[7rem] items-center rounded-md border border-dashed px-3 text-sm font-semibold tabular-nums",
+                          !v || v.diff === 0
+                            ? "border-border text-muted-foreground"
+                            : v.diff < 0
+                              ? "border-amber-500/50 text-amber-700 dark:text-amber-400"
+                              : "border-sky-500/50 text-sky-700 dark:text-sky-300",
+                        )}
+                        aria-live="polite"
+                      >
+                        {varianceLabel(item)}
+                      </p>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-1.5">
+                <Label htmlFor={`remark-${index}`} className="text-xs text-muted-foreground">
+                  Remark
+                </Label>
+                <Input
+                  id={`remark-${index}`}
+                  value={item.remark ?? ""}
+                  disabled={!open}
+                  onChange={(e) => setItem(index, { remark: e.target.value })}
+                  placeholder="Optional note"
+                />
               </div>
 
               {item.status !== "completed" ? (
@@ -329,7 +361,7 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
       </SectionCard>
 
       {/* 3. Resources and notes */}
-      <SectionCard title="Labour, materials and notes" description="Optional, but it helps SPX approve faster.">
+      <SectionCard title="Labour, materials and services" description="Optional, but it helps SPX approve faster.">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="workers">Workers on site</Label>
@@ -339,21 +371,13 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
             <Label htmlFor="mandays">Man-days used</Label>
             <Input id="mandays" type="number" min={0} value={draft.mandays} disabled={!open} onChange={(e) => set("mandays", e.target.value)} />
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5">
             <Label htmlFor="materials">Materials and tools used</Label>
             <Textarea id="materials" rows={2} value={draft.materialsUsed} disabled={!open} onChange={(e) => set("materialsUsed", e.target.value)} placeholder="e.g. 20 kg urea, 4 knapsack sprayers" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="issues">Problems or delays</Label>
-            <Textarea id="issues" rows={2} value={draft.issues} disabled={!open} onChange={(e) => set("issues", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="safety">Safety incidents</Label>
-            <Textarea id="safety" rows={2} value={draft.safety} disabled={!open} onChange={(e) => set("safety", e.target.value)} placeholder="None" />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="next">Recommendations or follow-up</Label>
-            <Textarea id="next" rows={2} value={draft.nextSteps} disabled={!open} onChange={(e) => set("nextSteps", e.target.value)} />
+            <Label htmlFor="services">Services used</Label>
+            <Textarea id="services" rows={2} value={draft.servicesUsed} disabled={!open} onChange={(e) => set("servicesUsed", e.target.value)} placeholder="e.g. Tractor hire 1 day, truck transport" />
           </div>
         </div>
       </SectionCard>

@@ -3,17 +3,7 @@
  * Loaded via next/font CSS variables on <html>.
  */
 
-export type WorkspaceFontId =
-  | "inter"
-  | "plus-jakarta"
-  | "dm-sans"
-  | "source-sans"
-  | "ibm-plex"
-  | "nunito-sans"
-  | "libre-franklin"
-  | "manrope"
-  | "space-grotesk"
-  | "fraunces";
+export type WorkspaceFontId = "ibm-plex" | "inter";
 
 export type WorkspaceFontDef = {
   id: WorkspaceFontId;
@@ -27,68 +17,20 @@ export type WorkspaceFontDef = {
 
 export const WORKSPACE_FONTS: WorkspaceFontDef[] = [
   {
-    id: "inter",
-    label: "Inter",
-    description: "Default — easy to read on screen, even figures in tables",
-    cssVar: "--font-inter",
-  },
-  {
-    id: "plus-jakarta",
-    label: "Plus Jakarta Sans",
-    description: "Modern, clear operational UI",
-    cssVar: "--font-plus-jakarta",
-  },
-  {
-    id: "dm-sans",
-    label: "DM Sans",
-    description: "Default — clean operational UI",
-    cssVar: "--font-dm-sans",
-  },
-  {
-    id: "source-sans",
-    label: "Source Sans",
-    description: "Readable + professional",
-    cssVar: "--font-source-sans",
-  },
-  {
     id: "ibm-plex",
-    label: "IBM Plex",
-    description: "Enterprise + technical",
+    label: "IBM Plex Sans",
+    description: "Default — clear figures and labels for planning",
     cssVar: "--font-ibm-plex",
   },
   {
-    id: "nunito-sans",
-    label: "Nunito Sans",
-    description: "Friendly + approachable",
-    cssVar: "--font-nunito-sans",
-  },
-  {
-    id: "libre-franklin",
-    label: "Libre Franklin",
-    description: "Editorial + clear hierarchy",
-    cssVar: "--font-libre-franklin",
-  },
-  {
-    id: "manrope",
-    label: "Manrope",
-    description: "Modern geometric sans",
-    cssVar: "--font-manrope",
-  },
-  {
-    id: "space-grotesk",
-    label: "Space Grotesk",
-    description: "Digital + distinctive",
-    cssVar: "--font-space-grotesk",
-  },
-  {
-    id: "fraunces",
-    label: "Fraunces",
-    description: "Warm display serif for UI",
-    cssVar: "--font-fraunces",
+    id: "inter",
+    label: "Inter",
+    description: "Neutral and compact",
+    cssVar: "--font-inter",
   },
 ];
 
-export const DEFAULT_WORKSPACE_FONT: WorkspaceFontId = "inter";
+export const DEFAULT_WORKSPACE_FONT: WorkspaceFontId = "ibm-plex";
 
 export function getWorkspaceFont(id: WorkspaceFontId | string | undefined | null): WorkspaceFontDef {
   return WORKSPACE_FONTS.find((f) => f.id === id) ?? WORKSPACE_FONTS[0];

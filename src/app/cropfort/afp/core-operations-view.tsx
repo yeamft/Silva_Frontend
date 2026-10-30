@@ -56,6 +56,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useOptionalSidebar } from "@/components/ui/sidebar";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
+import { moveRowStatus } from "@/lib/query/optimistic-status";
+import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { useActiveFarmId } from "@/store/farmWorkspaceStore";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import { canViewRateCard } from "@/lib/cropfortAccess";
@@ -71,8 +73,9 @@ import {
   scheduleStatusOf,
   useCoreOpsPlanStore,
 } from "@/store/coreOpsPlanStore";
-import { sharesTotal } from "@/lib/cropfort/month-shares";
+import { evenShares, scheduledMonths, sharesTotal, withSchedule } from "@/lib/cropfort/month-shares";
 import { ScheduleActivityCard, ScheduleActivityRow } from "@/components/cropfort/schedule-activity-card";
+import { PlanFilesCard } from "@/components/cropfort/plan-files-card";
 import {
   PLAN_PERIOD_MONTH_NAMES,
   PLAN_PERIOD_KINDS,
@@ -101,14 +104,6 @@ const PAGE_SIZES = [25, 50, 100];
 
 const IN_PLAN = "__plan";
 type ScheduleFilter = "all" | "todo" | "ready";
-
-/** Brushes double as the legend for the month grid. */
-const BRUSHES: { value: MonthIntensity; label: string; letter: string }[] = [
-  { value: "light", label: "Light", letter: "L" },
-  { value: "active", label: "Active", letter: "A" },
-  { value: "peak", label: "Peak", letter: "P" },
-  { value: "none", label: "Clear", letter: "·" },
-];
 
 function activityMatchesQuery(act: CoreOpsActivity, q: string) {
   if (!q) return true;
@@ -171,6 +166,10 @@ function categoryIcon(category: string) {
   if (c.includes("infill") || c.includes("plant")) return Shovel;
   if (c.includes("harvest")) return Coffee;
   return ListChecks;
+}
+
+function emptyMonths(): CoreOpsActivity["intensities"] {
+  return Object.fromEntries(PLAN_MONTHS.map((m) => [m, "none"])) as CoreOpsActivity["intensities"];
 }
 
 function stepIndex(step: CoreOpsStep) {
@@ -249,7 +248,7 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   const splitSharesEvenly = useCoreOpsPlanStore((s) => s.splitSharesEvenly);
   const setActivityMonths = useCoreOpsPlanStore((s) => s.setActivityMonths);
   const copySchedule = useCoreOpsPlanStore((s) => s.copySchedule);
-  const applyScheduleToActivities = useCoreOpsPlanStore((s) => s.applyScheduleToActivities);
+  const setSchedules = useCoreOpsPlanStore((s) => s.setSchedules);
   const planCompletion = useCoreOpsPlanStore((s) => s.planCompletion);
   const reviewIssues = useCoreOpsPlanStore((s) => s.reviewIssues);
   const saveDraft = useCoreOpsPlanStore((s) => s.saveDraft);
@@ -325,20 +324,18 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
   const [schedulePageSize, setSchedulePageSize] = useState(25);
   const [scheduleSelectedIds, setScheduleSelectedIds] = useState<Set<string>>(() => new Set());
   const [rangeOpen, setRangeOpen] = useState(false);
+  /** Months and percentages being set for every selected activity at once. */
+  const [bulkSchedule, setBulkSchedule] = useState<{
+    intensities: CoreOpsActivity["intensities"];
+    monthShares: Partial<Record<PlanMonth, number>>;
+  }>(() => ({ intensities: emptyMonths(), monthShares: {} }));
   /** Activity whose calendar is open in the Schedule modal. */
   const [calendarFor, setCalendarFor] = useState<string | null>(null);
   /** Order of activities for Previous / Next, fixed when the modal opens so filters don't shift it. */
   const [calendarList, setCalendarList] = useState<string[]>([]);
-  const [rangeFrom, setRangeFrom] = useState<PlanMonth>("oct");
-  const [rangeTo, setRangeTo] = useState<PlanMonth>("dec");
   // A six-month plan only schedules the months in its half of the year
   const planPeriod = planPeriodOf(plan ?? {});
   const periodMonths = monthsForPeriod(planPeriod);
-  useEffect(() => {
-    if (!periodMonths.includes(rangeFrom)) setRangeFrom(periodMonths[0]);
-    if (!periodMonths.includes(rangeTo)) setRangeTo(periodMonths[Math.min(2, periodMonths.length - 1)]);
-  }, [periodMonths, rangeFrom, rangeTo]);
-  const [rangeIntensity, setRangeIntensity] = useState<MonthIntensity>("active");
 
   useEffect(() => {
     if (!canView) return;
@@ -515,11 +512,19 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
     // The plan shows as submitted at once; the save runs behind it and is undone if it fails
     setSubmitOpen(false);
     toast.success("Submitted to the asset owner");
+    // Leave the planner straight away; the plans list already shows it as waiting for approval
+    if (plan) {
+      void moveRowStatus<ProgrammePlanDto>(queryClient, queryKeys.programmePlans.all, plan.id, "draft", {
+        statusRaw: "submitted",
+      });
+    }
+    router.push(CROPFORT_ROUTES.programmePlans);
     try {
       await submitToAfps();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.programmePlans.all });
     } catch (err) {
       toast.error(err instanceof Error ? `Not submitted: ${err.message}` : "Submit failed");
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.programmePlans.all });
     }
   };
 
@@ -1221,9 +1226,23 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
       {step === "calendar" && plan ? (
         <StepPanel icon={CalendarDays} title="Schedule" flush actions={stepActions}>
           {canEdit && scheduleSelectedIds.size > 0 ? (
-            <div className="flex items-center justify-end border-b border-border px-4 py-2 sm:px-5">
-              <Button size="sm" variant="outline" className="h-8" onClick={() => setRangeOpen(true)}>
-                Set months for {scheduleSelectedIds.size}…
+            <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-primary/30 bg-primary/[0.06] px-4 py-2.5 backdrop-blur sm:px-5">
+              <span className="text-sm font-semibold">
+                {scheduleSelectedIds.size} selected
+              </span>
+              <Button
+                size="sm"
+                className="ml-auto h-8"
+                onClick={() => {
+                  setBulkSchedule({ intensities: emptyMonths(), monthShares: {} });
+                  setRangeOpen(true);
+                }}
+              >
+                <CalendarDays className="mr-1.5 h-4 w-4" aria-hidden />
+                Schedule together
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8" onClick={() => setScheduleSelectedIds(new Set())}>
+                Clear
               </Button>
             </div>
           ) : null}
@@ -1353,6 +1372,7 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
             planYear={plan.budgetYearGc}
             canEdit={canEdit}
           />
+          <PlanFilesCard planId={plan.id} canEdit={canEdit} />
 
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-muted/40 px-4 py-3">
             <span className="text-sm text-muted-foreground">
@@ -1364,7 +1384,7 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
           {issues.length === 0 ? (
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden />
-              Everything looks good — ready to submit.
+              Everything looks good ready to submit.
             </div>
           ) : (
             <ul className="space-y-2">
@@ -1466,83 +1486,73 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
       </Dialog>
 
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              Set months for {scheduleSelectedIds.size} activit{scheduleSelectedIds.size === 1 ? "y" : "ies"}
+              Schedule {scheduleSelectedIds.size} activit{scheduleSelectedIds.size === 1 ? "y" : "ies"} together
             </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <FormField
-              label="From"
-              render={({ id }) => (
-                <Select value={rangeFrom} onValueChange={(v) => setRangeFrom(v as PlanMonth)}>
-                  <SelectTrigger id={id}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {periodMonths.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {PLAN_MONTH_LABELS[m]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+          {plan ? (
+            <ScheduleActivityCard
+              bare
+              hideAmounts
+              summary={includedActivities
+                .filter((a) => scheduleSelectedIds.has(a.id))
+                .map((a) => a.activityName)
+                .slice(0, 4)
+                .join(", ") + (scheduleSelectedIds.size > 4 ? ` +${scheduleSelectedIds.size - 4} more` : "")}
+              act={{
+                ...(includedActivities[0] as CoreOpsActivity),
+                id: "bulk",
+                activityName: "Same months for all",
+                intensities: bulkSchedule.intensities,
+                monthShares: bulkSchedule.monthShares,
+              }}
+              months={periodMonths}
+              yearOf={(m) => plan.budgetYearGc - (PLAN_MONTHS.indexOf(m) <= 2 ? 1 : 0)}
+              canEdit={canEdit}
+              selected={false}
+              focused={false}
+              onSelect={() => undefined}
+              onToggleMonth={(m) =>
+                setBulkSchedule((b) =>
+                  withSchedule(b, { ...b.intensities, [m]: b.intensities[m] === "none" ? "active" : "none" }),
+                )
+              }
+              onShare={(m, pct) =>
+                setBulkSchedule((b) => ({ ...b, monthShares: { ...b.monthShares, [m]: Math.min(100, Math.max(0, pct)) } }))
+              }
+              onSetMonths={(months) =>
+                setBulkSchedule({
+                  intensities: Object.fromEntries(PLAN_MONTHS.map((m) => [m, months.includes(m) ? "active" : "none"])) as CoreOpsActivity["intensities"],
+                  monthShares: evenShares(months),
+                })
+              }
+              onSplitEvenly={() =>
+                setBulkSchedule((b) => ({ ...b, monthShares: evenShares(scheduledMonths(b.intensities)) }))
+              }
+              onCopyToAll={() => undefined}
             />
-            <FormField
-              label="To"
-              render={({ id }) => (
-                <Select value={rangeTo} onValueChange={(v) => setRangeTo(v as PlanMonth)}>
-                  <SelectTrigger id={id}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {periodMonths.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {PLAN_MONTH_LABELS[m]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            <FormField
-              label="Intensity"
-              render={({ id }) => (
-                <Select value={rangeIntensity} onValueChange={(v) => setRangeIntensity(v as MonthIntensity)}>
-                  <SelectTrigger id={id}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRUSHES.map((b) => (
-                      <SelectItem key={b.value} value={b.value}>
-                        {b.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setRangeOpen(false)}>
               Cancel
             </Button>
             <Button
+              disabled={!(Math.abs(PLAN_MONTHS.reduce((t, m) => t + (bulkSchedule.intensities[m] !== "none" ? bulkSchedule.monthShares[m] ?? 0 : 0), 0) - 100) <= 0.01)}
               onClick={() => {
-                const n = applyScheduleToActivities([...scheduleSelectedIds], rangeFrom, rangeTo, rangeIntensity);
-                toast.success(n > 0 ? `Updated ${n} activit${n === 1 ? "y" : "ies"}` : "Nothing to update");
+                const months = scheduledMonths(bulkSchedule.intensities);
+                const n = setSchedules([...scheduleSelectedIds], months, bulkSchedule.monthShares);
+                toast.success(`Scheduled ${n} activit${n === 1 ? "y" : "ies"}`);
                 setRangeOpen(false);
                 setScheduleSelectedIds(new Set());
               }}
             >
-              Apply
+              Apply to {scheduleSelectedIds.size}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
 
       <Dialog open={Boolean(rateCardTarget && plan)} onOpenChange={(open) => !open && setRateCardFor(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
@@ -1589,7 +1599,7 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {completion.includedCount} activities · {fmtEtb(completion.budgetEtb)}
-            {SHOW_SPEND_BANDS ? ` · Band ${band}` : ""} — goes to the Silva asset owner for approval.
+            {SHOW_SPEND_BANDS ? ` · Band ${band}` : ""} goes to the Silva asset owner for approval.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitOpen(false)}>

@@ -218,6 +218,8 @@ type CoreOpsPlanStore = {
   splitSharesEvenly: (activityRowId: string) => void;
   /** Schedule exactly these months for one activity (others cleared), split evenly. */
   setActivityMonths: (activityRowId: string, months: PlanMonth[]) => void;
+  /** Give several activities the same months and percentages at once. Returns how many changed. */
+  setSchedules: (activityRowIds: string[], months: PlanMonth[], shares: Partial<Record<PlanMonth, number>>) => number;
   /** Give other activities the same months and percentages as one activity. Returns how many changed. */
   copySchedule: (fromRowId: string, toRowIds: string[]) => number;
   setMonthIntensity: (
@@ -884,6 +886,33 @@ export const useCoreOpsPlanStore = create<CoreOpsPlanStore>()(
             updatedAt: nowIso(),
           },
         });
+      },
+
+      setSchedules: (activityRowIds, months, shares) => {
+        const plan = get().plan;
+        if (!plan) return 0;
+        const activities = { ...plan.activities };
+        let changed = 0;
+        for (const id of activityRowIds) {
+          const act = activities[id];
+          if (!act) continue;
+          const intensities = Object.fromEntries(
+            PLAN_MONTHS.map((m) => [m, months.includes(m) ? (act.intensities[m] !== "none" ? act.intensities[m] : "active") : "none"]),
+          ) as CoreOpsActivity["intensities"];
+          activities[id] = { ...act, intensities, monthShares: { ...shares } };
+          changed += 1;
+        }
+        if (changed) {
+          set({
+            plan: {
+              ...plan,
+              activities,
+              status: plan.status === "submitted" ? plan.status : "draft",
+              updatedAt: nowIso(),
+            },
+          });
+        }
+        return changed;
       },
 
       copySchedule: (fromRowId, toRowIds) => {

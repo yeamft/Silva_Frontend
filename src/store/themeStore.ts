@@ -105,9 +105,11 @@ export const useThemeStore = create<ThemeStore>()(
         }
 
         const color = roleColor;
-        // "plus-jakarta" was the old default (nobody picks fonts in the app), so it moves to the new default
+        // Old defaults ("plus-jakarta", then "inter") were never picked on purpose, so they move to the new default
         const font =
-          existing.workspaceFont === "plus-jakarta" ? DEFAULT_WORKSPACE_FONT : resolveWorkspaceFontId(existing.workspaceFont);
+          (existing.workspaceFont as string) === "plus-jakarta" || existing.workspaceFont === "inter"
+            ? DEFAULT_WORKSPACE_FONT
+            : resolveWorkspaceFontId(existing.workspaceFont);
 
         set({
           activeUserId: user.id,

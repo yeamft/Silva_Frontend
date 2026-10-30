@@ -12,6 +12,23 @@ export function plannedOf(wo: WorkOrderDto): { qty: number | null; unit: string 
   return m ? { qty: Number(m[1]), unit: m[2] || "" } : { qty: null, unit: "" };
 }
 
+/** Actual − planned, and as a share of planned. Null until both are known. */
+export function varianceOf(item: { plannedQty: number | null; doneQty: number | null }) {
+  if (item.plannedQty == null || item.doneQty == null) return null;
+  const diff = Math.round((item.doneQty - item.plannedQty) * 100) / 100;
+  const pct = item.plannedQty > 0 ? Math.round((diff / item.plannedQty) * 1000) / 10 : null;
+  return { diff, pct };
+}
+
+/** "+2 ha (+10%)", "−3 ha (−15%)" or "On plan". */
+export function varianceLabel(item: { plannedQty: number | null; doneQty: number | null; unit: string }) {
+  const v = varianceOf(item);
+  if (!v) return "—";
+  if (v.diff === 0) return "On plan";
+  const sign = v.diff > 0 ? "+" : "−";
+  return `${sign}${Math.abs(v.diff)} ${item.unit}`.trim() + (v.pct != null ? ` (${sign}${Math.abs(v.pct)}%)` : "");
+}
+
 export function monthlyCodeOf(wo: WorkOrderDto) {
   return /\bFrom (MWO-[A-Za-z0-9-]+)/.exec(wo.instructions || "")?.[1] ?? null;
 }

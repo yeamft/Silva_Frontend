@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader, SectionCard } from "@/components/cropfort/page-shell";
-import { WorkOrderSummary, monthlyCodeOf } from "@/components/cropfort/work-order-report/work-order-summary";
+import {
+  WorkOrderSummary,
+  monthlyCodeOf,
+  varianceLabel,
+  varianceOf,
+} from "@/components/cropfort/work-order-report/work-order-summary";
 import { useCropfortAuth } from "@/components/navigation/auth-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,6 +77,7 @@ export default function WorkOrderReviewView({ id }: { id: string }) {
   const notes = report
     ? [
         { label: "Materials and tools used", value: report.materialsUsed },
+        { label: "Services used", value: report.servicesUsed ?? "" },
         { label: "Problems or delays", value: report.issues },
         { label: "Safety incidents", value: report.safety },
         { label: "Recommendations or follow-up", value: report.nextSteps },
@@ -152,13 +158,35 @@ export default function WorkOrderReviewView({ id }: { id: string }) {
                 <li key={i} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 flex-1 text-sm font-semibold">{item.label}</span>
-                    <span className="text-sm tabular-nums text-muted-foreground">
-                      {item.doneQty ?? "—"} / {item.plannedQty ?? "—"} {item.unit}
-                    </span>
                     <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", ITEM_STATUS[item.status].tone)}>
                       {ITEM_STATUS[item.status].label}
                     </span>
                   </div>
+                  <dl className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                    {(() => {
+                      const v = varianceOf(item);
+                      return [
+                        { label: "Planned", value: item.plannedQty != null ? `${item.plannedQty} ${item.unit}`.trim() : "—", tone: "" },
+                        { label: "Actual", value: item.doneQty != null ? `${item.doneQty} ${item.unit}`.trim() : "—", tone: "" },
+                        {
+                          label: "Variance",
+                          value: varianceLabel(item),
+                          tone: !v || v.diff === 0 ? "" : v.diff < 0 ? "text-amber-700 dark:text-amber-400" : "text-sky-700 dark:text-sky-300",
+                        },
+                      ].map((f) => (
+                        <div key={f.label} className="rounded-lg bg-muted/40 px-3 py-2">
+                          <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
+                          <dd className={cn("font-semibold tabular-nums", f.tone)}>{f.value}</dd>
+                        </div>
+                      ));
+                    })()}
+                  </dl>
+                  {item.remark ? (
+                    <p className="mt-1.5 text-sm">
+                      <span className="font-medium">Remark: </span>
+                      {item.remark}
+                    </p>
+                  ) : null}
                   {item.reason ? (
                     <p className="mt-1.5 rounded-lg bg-muted/50 px-3 py-2 text-sm">
                       <span className="font-medium">Reason: </span>

@@ -1,5 +1,7 @@
 "use client";
 
+import { listPlanFiles, downloadPlanFile, type PlanFileDto } from "@/lib/api/plan-files";
+import { fileIcon, fmtSize, planFilesKey } from "@/components/cropfort/plan-files-card";
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -44,6 +46,21 @@ export function PlanAttachments({ planId, farmEstateId }: { planId: string; farm
   const [downloading, setDownloading] = useState<string | null>(null);
   const { query, linked } = usePlanAssessments(planId, farmEstateId);
   const files = linked.filter((a) => a.reportName);
+  // Files SPX attached to the plan itself
+  const planFilesQuery = useQuery({ queryKey: planFilesKey(planId), queryFn: () => listPlanFiles(planId) });
+  const planFiles = planFilesQuery.data ?? [];
+  const total = linked.length + files.length + planFiles.length;
+
+  const downloadPlanAttachment = async (f: PlanFileDto) => {
+    setDownloading(f.id);
+    try {
+      await downloadPlanFile(planId, f);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not download the file");
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const download = async (id: string, name: string) => {
     setDownloading(id);
@@ -61,20 +78,43 @@ export function PlanAttachments({ planId, farmEstateId }: { planId: string; farm
       <h3 className="flex items-center gap-2 text-base font-semibold">
         <Paperclip className="h-4 w-4 text-muted-foreground" aria-hidden />
         Attachments
-        {linked.length ? (
+        {total ? (
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
-            {linked.length + files.length}
+            {total}
           </span>
         ) : null}
       </h3>
 
-      {query.isLoading ? (
+      {planFiles.length ? (
+        <ul className="space-y-1.5">
+          {planFiles.map((f) => {
+            const Icon = fileIcon(f.fileName);
+            return (
+              <li key={f.id} className="flex items-center gap-3 rounded-xl border border-border px-4 py-2.5">
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{f.fileName}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {[fmtSize(f.sizeBytes), f.uploadedByName].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
+                <Button size="sm" variant="ghost" disabled={downloading === f.id} onClick={() => void downloadPlanAttachment(f)}>
+                  <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                  {downloading === f.id ? "Downloading…" : "Download"}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {query.isLoading || planFilesQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : !linked.length ? (
+      ) : !total ? (
         <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
           No farm assessment or files attached.
         </p>
-      ) : (
+      ) : !linked.length ? null : (
         <ul className="space-y-2">
           {linked.map((a) => {
             const date = fmtDate(a.assessmentDate);

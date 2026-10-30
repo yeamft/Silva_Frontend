@@ -31,6 +31,8 @@ export function ScheduleActivityCard({
   onSplitEvenly,
   onCopyToAll,
   bare = false,
+  summary,
+  hideAmounts = false,
 }: {
   act: CoreOpsActivity;
   /** Months this plan covers, in order. */
@@ -47,6 +49,10 @@ export function ScheduleActivityCard({
   onCopyToAll: () => void;
   /** Inside a modal: no card border and no select box. */
   bare?: boolean;
+  /** Replaces the "quantity this year · cost" line (e.g. when scheduling several activities). */
+  summary?: string;
+  /** Hide the per-month amount and the "Copy to all" button. */
+  hideAmounts?: boolean;
 }) {
   const picked = scheduledMonths(act.intensities);
   const total = sharesTotal(act);
@@ -76,7 +82,7 @@ export function ScheduleActivityCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{act.activityName}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {fmtQty(act.plannedQty)} {act.uom} this year · {fmtEtb(act.plannedCost)}
+            {summary ?? `${fmtQty(act.plannedQty)} ${act.uom} this year · ${fmtEtb(act.plannedCost)}`}
           </p>
         </div>
         <span
@@ -148,9 +154,11 @@ export function ScheduleActivityCard({
                     />
                     <span className="pr-2 text-xs text-muted-foreground">%</span>
                   </label>
-                  <span className="mt-1 text-[11px] tabular-nums text-muted-foreground">
-                    {fmtQty((act.plannedQty * pct) / 100)} {act.uom}
-                  </span>
+                  {hideAmounts ? null : (
+                    <span className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+                      {fmtQty((act.plannedQty * pct) / 100)} {act.uom}
+                    </span>
+                  )}
                 </>
               ) : (
                 <span className="mt-1 text-[10px] text-muted-foreground/40">—</span>
@@ -176,7 +184,7 @@ export function ScheduleActivityCard({
             <QuickAction icon={CalendarCheck2} label="Every month" onClick={() => onSetMonths([...months])} />
             {picked.length && !ok ? <QuickAction icon={Scale} label="Split evenly" onClick={onSplitEvenly} /> : null}
             {picked.length ? <QuickAction icon={Eraser} label="Clear" onClick={() => onSetMonths([])} /> : null}
-            {ok ? <QuickAction icon={Copy} label="Copy to all" onClick={onCopyToAll} /> : null}
+            {ok && !hideAmounts ? <QuickAction icon={Copy} label="Copy to all" onClick={onCopyToAll} /> : null}
           </>
         ) : null}
       </div>
