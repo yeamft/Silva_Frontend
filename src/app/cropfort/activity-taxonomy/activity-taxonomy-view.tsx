@@ -40,6 +40,7 @@ import {
 } from "@/lib/api/activities";
 import { canProposeRateCard, canViewRateCard } from "@/lib/cropfortAccess";
 import { useActivities } from "@/lib/query";
+import { ActivityResourcesEditor } from "@/components/cropfort/activity-resources-editor";
 import { cn } from "@/lib/utils";
 
 const col = createColumnHelper<PlatformActivity>();
@@ -64,6 +65,7 @@ const BLANK_DRAFT: CreateActivityInput = {
   category: "",
   subgroup: "",
   unitOfMeasure: "",
+  resources: [],
   description: "",
   active: true,
   sortOrder: 0,
@@ -131,6 +133,7 @@ export default function ActivityTaxonomyView() {
             category: activity.category,
             subgroup: activity.subgroup ?? "",
             unitOfMeasure: activity.unitOfMeasure,
+            resources: activity.resources ?? [],
             description: activity.description ?? "",
             active: activity.active !== false,
             sortOrder: activity.sortOrder ?? 0,
@@ -165,6 +168,25 @@ export default function ActivityTaxonomyView() {
       }),
       col.accessor("category", { header: "Category" }),
       col.accessor("unitOfMeasure", { header: "Unit", size: 90 }),
+      col.accessor((r) => r.resources?.length ?? 0, {
+        id: "needs",
+        header: "Needs",
+        cell: (c) => {
+          const res = c.row.original.resources ?? [];
+          if (!res.length) return <span className="text-xs text-muted-foreground">—</span>;
+          const count = (kind: string) => res.filter((r) => r.kind === kind).length;
+          const parts = [
+            count("labour") && `${count("labour")} labour`,
+            count("material") && `${count("material")} material${count("material") === 1 ? "" : "s"}`,
+            count("service") && `${count("service")} service${count("service") === 1 ? "" : "s"}`,
+          ].filter(Boolean);
+          return (
+            <span className="text-xs text-muted-foreground" title={res.map((r) => r.name).join(", ")}>
+              {parts.join(" · ")}
+            </span>
+          );
+        },
+      }),
       col.accessor((r) => (r.active === false ? "inactive" : "active"), {
         id: "status",
         header: "Status",
@@ -205,6 +227,10 @@ export default function ActivityTaxonomyView() {
       category: draft.category.trim(),
       subgroup: draft.subgroup?.trim() || "",
       unitOfMeasure: draft.unitOfMeasure.trim(),
+      // Rows left without a name are dropped
+      resources: (draft.resources ?? [])
+        .map((r) => ({ ...r, name: r.name.trim(), unit: r.unit.trim() }))
+        .filter((r) => r.name),
       description: draft.description?.trim() || undefined,
     };
     setSaving(true);
@@ -375,27 +401,29 @@ export default function ActivityTaxonomyView() {
               void handleSave();
             }}
           >
-            <div className="space-y-2">
-              <Label htmlFor="ac-code">Activity code *</Label>
-              <Input
-                id="ac-code"
-                value={draft.code}
-                disabled={Boolean(editing)}
-                onChange={(e) => setDraft({ ...draft, code: e.target.value.toUpperCase() })}
-                placeholder="e.g. MC-03"
-              />
-              {editing ? (
-                <p className="text-xs text-muted-foreground">Codes can&apos;t change once rates and plans use them.</p>
-              ) : null}
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="ac-name">Activity name *</Label>
-              <Input
-                id="ac-name"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="e.g. Pruning"
-              />
+            {/* Code and name side by side */}
+            <div className="flex flex-col gap-4 sm:flex-row md:col-span-2">
+              <div className="space-y-2 sm:w-40 sm:shrink-0">
+                <Label htmlFor="ac-code">Activity code *</Label>
+                <Input
+                  id="ac-code"
+                  value={draft.code}
+                  disabled={Boolean(editing)}
+                  onChange={(e) => setDraft({ ...draft, code: e.target.value.toUpperCase() })}
+                  placeholder="e.g. MC-03"
+                  title={editing ? "Codes can't change once rates and plans use them" : undefined}
+                  className="font-mono"
+                />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <Label htmlFor="ac-name">Activity name *</Label>
+                <Input
+                  id="ac-name"
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  placeholder="e.g. Pruning"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="ac-category">Category *</Label>
@@ -442,6 +470,14 @@ export default function ActivityTaxonomyView() {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive — hidden from new plans and surveys</option>
               </select>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Labour, materials and services</Label>
+              <ActivityResourcesEditor
+                value={draft.resources ?? []}
+                unitOfMeasure={draft.unitOfMeasure.trim()}
+                onChange={(resources) => setDraft({ ...draft, resources })}
+              />
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="ac-desc">Description</Label>

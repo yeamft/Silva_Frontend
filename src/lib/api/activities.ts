@@ -16,6 +16,16 @@ async function call<T>(path: string, options?: Parameters<typeof apiFetch>[1]): 
   }
 }
 
+export type ActivityResourceKind = "labour" | "material" | "service";
+
+/** Something an activity needs per unit: labour (man-days), a material or a service (qty + unit). */
+export type ActivityResource = {
+  kind: ActivityResourceKind;
+  name: string;
+  qty: number | null;
+  unit: string;
+};
+
 export type PlatformActivity = {
   id: string;
   code: string;
@@ -25,6 +35,7 @@ export type PlatformActivity = {
   name: string;
   nameAm?: string;
   unitOfMeasure: string;
+  resources?: ActivityResource[];
   description?: string;
   defaultAnnualFrequency?: number | null;
   planningCategory?: string | null;
@@ -50,6 +61,7 @@ export type CreateActivityInput = {
   category: string;
   subgroup?: string;
   unitOfMeasure: string;
+  resources?: ActivityResource[];
   description?: string;
   defaultAnnualFrequency?: number | null;
   planningCategory?: string;

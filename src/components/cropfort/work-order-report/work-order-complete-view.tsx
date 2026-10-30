@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Send, Trash2 } from "lucide-react";
@@ -20,6 +20,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { CROPFORT_ROUTES } from "@/config/navigation";
 import type { CompletionItem, CompletionItemStatus, WorkOrderDto } from "@/lib/api/work-orders";
 import { useSubmitWorkOrderCompletion, useWorkOrder } from "@/lib/query/hooks/use-work-orders";
+import { useActivity } from "@/lib/query/hooks/use-activities";
+import { resourcesFor, type ResourceLine } from "@/lib/cropfort/resources";
+import { ResourceActualsEditor } from "@/components/cropfort/work-order-report/resource-actuals-editor";
 import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS: { value: CompletionItemStatus; label: string; tone: string }[] = [
@@ -33,6 +36,7 @@ type Draft = {
   startedOn: string;
   finishedOn: string;
   items: CompletionItem[];
+  resources: ResourceLine[];
   workers: string;
   mandays: string;
   materialsUsed: string;
@@ -50,6 +54,7 @@ function initialDraft(wo: WorkOrderDto): Draft {
       startedOn: r.startedOn || "",
       finishedOn: r.finishedOn || "",
       items: r.items,
+      resources: (r.resources ?? []).map((x) => ({ ...x, planned: x.planned ?? 0 })),
       workers: r.workers != null ? String(r.workers) : "",
       mandays: r.mandays != null ? String(r.mandays) : "",
       materialsUsed: r.materialsUsed,
@@ -66,6 +71,7 @@ function initialDraft(wo: WorkOrderDto): Draft {
     narrative: "",
     startedOn: "",
     finishedOn: new Date().toISOString().slice(0, 10),
+    resources: [],
     items: [{ label, plannedQty: planned.qty, unit: planned.unit, doneQty: planned.qty, status: "completed", reason: "" }],
     workers: "",
     mandays: "",
@@ -89,6 +95,15 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
   useEffect(() => {
     if (wo && !draft) setDraft(initialDraft(wo));
   }, [wo, draft]);
+  // New reports start from the activity's labour, materials and services × the planned quantity
+  const activityQuery = useActivity(wo?.activityId ?? null);
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!wo || !draft || seeded.current || wo.completionReport || !activityQuery.data) return;
+    seeded.current = true;
+    const lines = resourcesFor(activityQuery.data.resources, plannedOf(wo).qty ?? 0).map((l) => ({ ...l, actual: l.planned }));
+    if (lines.length) setDraft((d) => (d ? { ...d, resources: lines } : d));
+  }, [wo, draft, activityQuery.data]);
 
   if (!wo || !draft) {
     return (
@@ -130,6 +145,9 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
             reason: i.reason.trim(),
             remark: (i.remark ?? "").trim(),
           })),
+          resources: draft.resources
+            .filter((r) => r.name.trim())
+            .map((r) => ({ kind: r.kind, name: r.name.trim(), unit: r.unit, planned: r.planned || null, actual: r.actual ?? null })),
           workers: numOrNull(draft.workers),
           mandays: numOrNull(draft.mandays),
           materialsUsed: draft.materialsUsed.trim(),
@@ -361,23 +379,16 @@ export default function WorkOrderCompleteView({ id }: { id: string }) {
       </SectionCard>
 
       {/* 3. Resources and notes */}
-      <SectionCard title="Labour, materials and services" description="Optional, but it helps SPX approve faster.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
+      <SectionCard title="Labour, materials and services">
+        <div className="space-y-4">
+          <ResourceActualsEditor
+            lines={draft.resources}
+            disabled={!open}
+            onChange={(resources) => set("resources", resources)}
+          />
+          <div className="max-w-[12rem] space-y-1.5">
             <Label htmlFor="workers">Workers on site</Label>
             <Input id="workers" type="number" min={0} value={draft.workers} disabled={!open} onChange={(e) => set("workers", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="mandays">Man-days used</Label>
-            <Input id="mandays" type="number" min={0} value={draft.mandays} disabled={!open} onChange={(e) => set("mandays", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="materials">Materials and tools used</Label>
-            <Textarea id="materials" rows={2} value={draft.materialsUsed} disabled={!open} onChange={(e) => set("materialsUsed", e.target.value)} placeholder="e.g. 20 kg urea, 4 knapsack sprayers" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="services">Services used</Label>
-            <Textarea id="services" rows={2} value={draft.servicesUsed} disabled={!open} onChange={(e) => set("servicesUsed", e.target.value)} placeholder="e.g. Tractor hire 1 day, truck transport" />
           </div>
         </div>
       </SectionCard>

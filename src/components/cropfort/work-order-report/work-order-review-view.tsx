@@ -20,6 +20,7 @@ import type { CompletionItemStatus } from "@/lib/api/work-orders";
 import { isSpxDesk } from "@/lib/cropfort/platform-access";
 import { useReviewWorkOrder, useWorkOrder } from "@/lib/query/hooks/use-work-orders";
 import { cn } from "@/lib/utils";
+import { ResourceSummary } from "@/components/cropfort/resource-summary";
 
 const ITEM_STATUS: Record<CompletionItemStatus, { label: string; tone: string }> = {
   completed: { label: "Completed", tone: "bg-primary/10 text-primary" },
@@ -197,6 +198,15 @@ export default function WorkOrderReviewView({ id }: { id: string }) {
               ))}
             </ul>
           </SectionCard>
+
+          {report.resources?.length ? (
+            <SectionCard title="Labour, materials and services">
+              <ResourceSummary
+                showActual
+                lines={report.resources.map((r) => ({ ...r, planned: r.planned ?? 0 }))}
+              />
+            </SectionCard>
+          ) : null}
 
           {notes.length ? (
             <SectionCard title="Notes">

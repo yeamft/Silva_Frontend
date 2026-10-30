@@ -2,6 +2,7 @@ import { PLAN_MONTHS, PLAN_MONTH_LABELS, type PlanMonth } from "@/lib/cropfort/e
 import { monthShareOf } from "@/lib/cropfort/month-shares";
 import { planPeriodLabel, planPeriodOf } from "@/lib/cropfort/plan-period";
 import type { FarmAssessmentSummary } from "@/lib/api/farm-assessments";
+import { RESOURCE_KIND_LABEL, type ResourceLine } from "@/lib/cropfort/resources";
 import type { AfpPromotion, CoreOpsActivity, CoreOpsPlan } from "@/types/core-ops";
 
 const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -12,6 +13,8 @@ const day = (d: string | Date) =>
 
 type PdfExtras = {
   assessments?: FarmAssessmentSummary[];
+  /** Labour, materials and services the plan needs in total. */
+  resources?: ResourceLine[];
   /** Plan checks still open (empty = all passed). */
   issues?: string[];
   showBand?: boolean;
@@ -26,7 +29,7 @@ export function openPlanPdf(
   plan: CoreOpsPlan,
   promotion: AfpPromotion,
   included: CoreOpsActivity[],
-  { assessments = [], issues = [], showBand = false }: PdfExtras = {},
+  { assessments = [], issues = [], showBand = false, resources = [] }: PdfExtras = {},
 ): boolean {
   const win = window.open("", "_blank");
   if (!win) return false;
@@ -199,6 +202,18 @@ export function openPlanPdf(
   <thead><tr><th>#</th><th>Activity</th><th class="n">Quantity</th><th class="n">Rate</th><th>Months</th><th class="n">Cost</th></tr></thead>
   <tbody>${activityRows}</tbody>
   <tfoot><tr><td></td><td colspan="4">Total · ${included.length} activities</td><td class="n">${etb(total)}</td></tr></tfoot>
+</table>
+
+<h2>Labour, materials and services</h2>
+<table>
+  <thead><tr><th>Type</th><th>Item</th><th class="n">Planned</th></tr></thead>
+  <tbody>${
+    resources.length
+      ? resources
+          .map((r) => `<tr><td>${esc(RESOURCE_KIND_LABEL[r.kind])}</td><td class="name">${esc(r.name)}</td><td class="n">${esc(r.planned.toLocaleString())} <span class="unit">${esc(r.unit)}</span></td></tr>`)
+          .join("")
+      : `<tr><td colspan="3" class="muted">No labour, materials or services defined for these activities.</td></tr>`
+  }</tbody>
 </table>
 
 <h2>Monthly spend</h2>

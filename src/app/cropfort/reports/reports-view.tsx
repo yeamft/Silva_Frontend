@@ -48,6 +48,11 @@ import { monthsForPeriod, monthsLabel, planPeriodOf } from "@/lib/cropfort/plan-
 import type { ProgrammePlanDto } from "@/lib/api/programme-plans";
 import { monthShareOf } from "@/lib/cropfort/month-shares";
 import { useProgrammePlans } from "@/lib/query/hooks/use-programme-plans";
+import { useWorkOrders } from "@/lib/query/hooks/use-work-orders";
+import { useMonthlyWorkOrders } from "@/lib/query/hooks/use-monthly-work-orders";
+import { planResources, sumResources, useActivityResources, type ResourceLine } from "@/lib/cropfort/resources";
+import { ResourceSummary } from "@/components/cropfort/resource-summary";
+import type { CoreOpsActivity } from "@/types/core-ops";
 import type { OpsReport, ReportCadence } from "@/store/reportsStore";
 
 const CADENCE_LABEL: Record<ReportCadence, string> = {
@@ -128,9 +133,22 @@ function periodsForPlan(plan: ProgrammePlanDto, cadence: ReportCadence): string[
   );
 }
 
-type SourcedMetrics = OpsReport["metrics"] & { sourcePlanId?: string };
+type SourcedMetrics = OpsReport["metrics"] & {
+  sourcePlanId?: string;
+  /** Labour, materials and services: planned for the period vs reported by vendors. */
+  resourceLines?: ResourceLine[];
+};
 
 /** The plan's budget for the report period — one month, a half-year or the whole year. */
+/** Plan months a report period covers; null = the whole plan year. */
+function periodMonthsOf(cadence: ReportCadence, periodLabel: string): (typeof PLAN_MONTHS)[number][] | null {
+  if (cadence === "annual") return null;
+  let first = PLAN_MONTHS.findIndex((m) => periodLabel.startsWith(PLAN_MONTH_LABELS[m]));
+  if (first < 0) first = PLAN_MONTH_NAMES.findIndex((name) => periodLabel.startsWith(name));
+  if (first < 0) return null;
+  return cadence === "six_month" ? PLAN_MONTHS.slice(first, first + 6) : [PLAN_MONTHS[first]];
+}
+
 function periodBudget(plan: ProgrammePlanDto, cadence: ReportCadence, periodLabel: string) {
   if (cadence === "annual") return plan.plannedCostEtb ?? 0;
   // New labels start with the Gregorian month ("March 2027", "Oct 2026 – Mar 2027"); older ones with the EC name
@@ -171,6 +189,40 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
   );
   const plansQuery = useProgrammePlans(Boolean(activeProgram?.id), { status: "approved" });
   const plans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
+
+  // Labour, materials and services: activities' per-unit needs, and what vendors reported
+  const { byId: resourcesByActivity } = useActivityResources();
+  const woDtos = useWorkOrders(Boolean(activeProgram?.id)).data;
+  const monthlyDtos = useMonthlyWorkOrders(Boolean(activeProgram?.id)).data;
+  const resourceLinesFor = useCallback(
+    (plan: ProgrammePlanDto | null, reportCadence: ReportCadence, period: string): ResourceLine[] => {
+      if (!plan) return [];
+      const months = periodMonthsOf(reportCadence, period);
+      const planned = planResources(Object.values(plan.activities), resourcesByActivity, (a) =>
+        months ? months.reduce((t, m) => t + monthShareOf(a as CoreOpsActivity, m), 0) : 1,
+      );
+      const monthByCode = new Map((monthlyDtos ?? []).map((m) => [m.code, m.ethiopianMonth] as const));
+      const actual = (woDtos ?? [])
+        .filter((wo) => wo.farmName === plan.farmName && wo.completionReport?.resources?.length)
+        .filter((wo) => {
+          if (!months) return true;
+          const code = /\bFrom (MWO-[A-Za-z0-9-]+)/.exec(wo.instructions || "")?.[1];
+          const month = code ? monthByCode.get(code) : undefined;
+          return month ? months.includes(month) : false;
+        })
+        .flatMap((wo) =>
+          (wo.completionReport?.resources ?? []).map((r) => ({
+            kind: r.kind,
+            name: r.name,
+            unit: r.unit,
+            planned: 0,
+            actual: r.actual ?? 0,
+          })),
+        );
+      return sumResources([...planned.map((l) => ({ ...l, actual: 0 })), ...actual]);
+    },
+    [resourcesByActivity, woDtos, monthlyDtos],
+  );
 
   const params = useSearchParams();
   const selectedId = reportId ?? null;
@@ -266,7 +318,11 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
         planEtb: payload.metrics.planEtb,
         actualEtb: payload.metrics.actualEtb,
         variancePct: payload.metrics.variancePct,
-        metrics: { ...payload.metrics, sourcePlanId: sourcePlan.id } as SourcedMetrics,
+        metrics: {
+          ...payload.metrics,
+          sourcePlanId: sourcePlan.id,
+          resourceLines: resourceLinesFor(sourcePlan, cadence, periodLabel),
+        } as SourcedMetrics,
         activityLines: payload.activityLines,
         blockLines: payload.blockLines,
         attentionItems: payload.attentionItems,
@@ -298,7 +354,11 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
           planEtb: payload.metrics.planEtb,
           actualEtb: payload.metrics.actualEtb,
           variancePct: payload.metrics.variancePct,
-          metrics: { ...payload.metrics, sourcePlanId: reportPlan?.id } as SourcedMetrics,
+          metrics: {
+            ...payload.metrics,
+            sourcePlanId: reportPlan?.id,
+            resourceLines: resourceLinesFor(reportPlan, selected.cadence, selected.periodLabel),
+          } as SourcedMetrics,
           activityLines: payload.activityLines,
           blockLines: payload.blockLines,
           attentionItems: payload.attentionItems,
@@ -448,6 +508,12 @@ export default function ReportsView({ reportId }: { reportId?: string }) {
               )}
             </div>
           </SectionCard>
+
+          {(selected.metrics as SourcedMetrics)?.resourceLines?.length ? (
+            <SectionCard title="Labour, materials and services">
+              <ResourceSummary showActual lines={(selected.metrics as SourcedMetrics).resourceLines ?? []} />
+            </SectionCard>
+          ) : null}
 
           {(selected.activityLines?.length ?? 0) > 0 ? (
             <SectionCard title="Activities" flush>

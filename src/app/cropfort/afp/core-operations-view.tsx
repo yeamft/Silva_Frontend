@@ -76,6 +76,8 @@ import {
 import { evenShares, scheduledMonths, sharesTotal, withSchedule } from "@/lib/cropfort/month-shares";
 import { ScheduleActivityCard, ScheduleActivityRow } from "@/components/cropfort/schedule-activity-card";
 import { PlanFilesCard } from "@/components/cropfort/plan-files-card";
+import { ResourceSummary } from "@/components/cropfort/resource-summary";
+import { planResources, useActivityResources } from "@/lib/cropfort/resources";
 import {
   PLAN_PERIOD_MONTH_NAMES,
   PLAN_PERIOD_KINDS,
@@ -399,6 +401,12 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
     review: null,
   };
   const planBlocks = blocksForPlan();
+  // What the plan's activities need in total: per-unit needs × planned quantity
+  const { byId: resourcesByActivity } = useActivityResources();
+  const planResourceLines = useMemo(
+    () => (plan ? planResources(Object.values(plan.activities), resourcesByActivity) : []),
+    [plan, resourcesByActivity],
+  );
   const band = bandForEtb(completion.budgetEtb);
 
   const farmEligibleCount = useMemo(
@@ -1373,6 +1381,11 @@ export default function CoreOperationsView({ planId, isNew = false }: { planId?:
             canEdit={canEdit}
           />
           <PlanFilesCard planId={plan.id} canEdit={canEdit} />
+
+          <section className="mb-4 rounded-xl border border-border bg-card p-4">
+            <h3 className="mb-3 text-sm font-semibold">Labour, materials and services</h3>
+            <ResourceSummary lines={planResourceLines} />
+          </section>
 
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-muted/40 px-4 py-3">
             <span className="text-sm text-muted-foreground">

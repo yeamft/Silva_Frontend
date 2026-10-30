@@ -102,9 +102,16 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
     }
     return map;
   }, [orders]);
-  const approvedPlans = (approvedPlansQuery.data || []).filter(
-    (p) => (monthsByPlan.get(p.id)?.size ?? 0) < PLAN_MONTHS.length,
-  );
+  /** Months a plan has work in: any included activity scheduled that month. */
+  const workMonthsOf = (p: { activities?: Record<string, { included: boolean; intensities?: Record<string, string> }> }) =>
+    PLAN_MONTHS.filter((m) =>
+      Object.values(p.activities ?? {}).some((a) => a.included && a.intensities?.[m] && a.intensities[m] !== "none"),
+    );
+  /** Months that still need a work order: scheduled in the plan and not created yet. */
+  const openMonthsOf = (p: { id: string } & Parameters<typeof workMonthsOf>[0]) =>
+    workMonthsOf(p).filter((m) => !monthsByPlan.get(p.id)?.has(m));
+  // A plan is offered only while some scheduled month has no work order yet
+  const approvedPlans = (approvedPlansQuery.data || []).filter((p) => openMonthsOf(p).length > 0);
   const planHref = (key: string) => `${CROPFORT_ROUTES.monthlyWorkOrders}/plan/${encodeURIComponent(key)}`;
   const allPlansQuery = useProgrammePlans(enabled, {});
   const planNames = useMemo(
@@ -888,19 +895,17 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
                       type="button"
                       className="text-xs font-medium text-primary hover:underline"
                       onClick={() => {
-                        const open = PLAN_MONTHS.filter((m) => !monthsByPlan.get(createPlan.id)?.has(m));
+                        const open = openMonthsOf(createPlan);
                         setCreateMonths(createMonths.length === open.length ? [] : open);
                       }}
                     >
-                      {createMonths.length &&
-                      createMonths.length === PLAN_MONTHS.filter((m) => !monthsByPlan.get(createPlan.id)?.has(m)).length
-                        ? "Clear"
-                        : "Select all"}
+                      {createMonths.length && createMonths.length === openMonthsOf(createPlan).length ? "Clear" : "Select all"}
                     </button>
                   </div>
                   <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
                     {PLAN_MONTHS.map((m, i) => {
                       const taken = monthsByPlan.get(createPlan.id)?.has(m) ?? false;
+                      const noWork = !workMonthsOf(createPlan).includes(m);
                       const year = createPlan.budgetYearGc - (i <= 2 ? 1 : 0);
                       return (
                         <Button
@@ -909,15 +914,15 @@ export default function MonthlyWorkOrdersView({ orderId, planId }: { orderId?: s
                           size="sm"
                           variant={createMonths.includes(m) ? "default" : "outline"}
                           aria-pressed={createMonths.includes(m)}
-                          disabled={taken}
-                          title={taken ? "Already has a work order" : undefined}
+                          disabled={taken || noWork}
+                          title={taken ? "Already has a work order" : noWork ? "Nothing scheduled this month" : undefined}
                           className="h-auto flex-col py-1.5 leading-tight"
                           onClick={() =>
                             setCreateMonths((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]))
                           }
                         >
                           <span>{PLAN_MONTH_LABELS[m]}</span>
-                          <span className="text-[10px] opacity-70">{year}</span>
+                          <span className="text-[10px] opacity-70">{taken ? "Created" : noWork ? "No work" : year}</span>
                         </Button>
                       );
                     })}

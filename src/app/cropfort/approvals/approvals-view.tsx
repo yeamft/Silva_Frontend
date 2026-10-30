@@ -65,6 +65,8 @@ import {
 import { monthShareOf } from "@/lib/cropfort/month-shares";
 import { PlanAttachments, usePlanAssessments } from "@/components/cropfort/plan-attachments";
 import { openPlanPdf } from "@/lib/cropfort/plan-pdf";
+import { ResourceSummary } from "@/components/cropfort/resource-summary";
+import { planResources, useActivityResources } from "@/lib/cropfort/resources";
 import { useDecideProject, useProjects } from "@/lib/query/hooks/use-projects";
 import { useDecideWeeklyPlan, useWeeklyPlans } from "@/lib/query/hooks/use-weekly-plans";
 import { useOpsReports, useReleaseOpsReport, useReturnOpsReport } from "@/lib/query/hooks/use-ops-reports";
@@ -297,6 +299,8 @@ function AfpDetail({
   const included = activities.filter((a) => a.included);
   const choosing = Boolean(wanted && onToggleWanted);
   const { linked: linkedAssessments } = usePlanAssessments(plan.id, plan.farmEstateId);
+  const { byId: resourcesByActivity } = useActivityResources();
+  const resourceLines = useMemo(() => planResources(included, resourcesByActivity), [included, resourcesByActivity]);
   /** Activity whose month calendar is open under its row. */
   const [openId, setOpenId] = useState<string | null>(null);
   const wantedRows = choosing ? included.filter((a) => wanted!.has(a.id)) : included;
@@ -338,6 +342,7 @@ function AfpDetail({
           onClick={() => {
             const opened = openPlanPdf(plan, promotion, included, {
               assessments: linkedAssessments,
+              resources: resourceLines,
               issues,
               showBand: SHOW_SPEND_BANDS,
             });
@@ -369,6 +374,11 @@ function AfpDetail({
       </p>
 
       <PlanAttachments planId={plan.id} farmEstateId={plan.farmEstateId} />
+
+      <section className="space-y-3">
+        <h3 className="text-base font-semibold">Labour, materials and services</h3>
+        <ResourceSummary lines={resourceLines} />
+      </section>
 
       {/* Activities */}
       <div className="flex flex-wrap items-end justify-between gap-2">

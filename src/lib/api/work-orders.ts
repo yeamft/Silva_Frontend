@@ -55,6 +55,8 @@ export type CompletionReport = {
   startedOn: string | null;
   finishedOn: string | null;
   items: CompletionItem[];
+  /** Labour, materials and services: planned for the job and actually used. */
+  resources?: { kind: "labour" | "material" | "service"; name: string; unit: string; planned: number | null; actual: number | null }[];
   workers: number | null;
   mandays: number | null;
   materialsUsed: string;
@@ -97,6 +99,7 @@ export type WorkOrderDto = {
   completionReport?: CompletionReport | null;
   plannedQty?: number | null;
   unit?: string | null;
+  activityId?: string | null;
   blocks: { blockId: string; blockCode: string | null; blockName: string | null }[];
   block: string | null;
   ticketsDone: number;
